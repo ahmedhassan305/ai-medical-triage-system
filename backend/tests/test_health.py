@@ -1,4 +1,8 @@
+import os
+
 from fastapi.testclient import TestClient
+
+os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
 
 from app.main import app
 

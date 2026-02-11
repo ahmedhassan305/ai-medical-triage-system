@@ -11,7 +11,7 @@ python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 Copy-Item .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 19001
 ```
 
 Run tests:
@@ -30,7 +30,7 @@ npm run dev
 ```
 
 Default URLs:
-- API: `http://localhost:8000`
+- API: `http://localhost:19001`
 - Web: `http://localhost:5173`
 
 ## Git Init

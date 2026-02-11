@@ -20,5 +20,7 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    origins = _split_csv(os.getenv("CORS_ORIGINS")) or ["http://localhost:5173"]
+    origins = _split_csv(os.getenv("CORS_ORIGINS"))
+    if not origins:
+        raise RuntimeError("CORS_ORIGINS is required. Set it in backend/.env")
     return Settings(cors_origins=origins)
