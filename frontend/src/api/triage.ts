@@ -1,15 +1,11 @@
 import { api } from "./client";
+import type { TriageRequestDto, TriageResponseDto } from "./dto";
+import { apiPaths } from "./paths";
 
-export type TriageLevel = "low" | "medium" | "high";
+export type { TriageLevel, TriageResponseDto as TriageResponse } from "./dto";
 
-export type TriageResponse = {
-  triage_level: TriageLevel;
-  summary: string;
-  actions: string[];
-  disclaimer: string;
-};
-
-export async function triage(query: string): Promise<TriageResponse> {
-  const res = await api.post<TriageResponse>("/triage", { query });
+export async function triage(query: string): Promise<TriageResponseDto> {
+  const payload: TriageRequestDto = { query };
+  const res = await api.post<TriageResponseDto>(apiPaths.triage, payload);
   return res.data;
 }

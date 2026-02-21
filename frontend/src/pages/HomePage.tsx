@@ -40,15 +40,19 @@ export default function HomePage() {
 
       {result && (
         <div className="card">
-          <div className="row">
+          <p className="muted">Triage Level</p>
+          <p className="row">
             <span className="pill">{result.triage_level.toUpperCase()}</span>
-            <span className="muted">{result.summary}</span>
-          </div>
+          </p>
+          <p className="muted">Summary</p>
+          <p>{result.summary}</p>
+          <p className="muted">Recommended Actions</p>
           <ul>
             {result.actions.map((a) => (
               <li key={a}>{a}</li>
             ))}
           </ul>
+          <p className="muted">Disclaimer</p>
           <p className="muted">{result.disclaimer}</p>
         </div>
       )}

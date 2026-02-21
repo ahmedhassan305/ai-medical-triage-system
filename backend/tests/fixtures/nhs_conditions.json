@@ -1,0 +1,10 @@
+[
+  {
+    "source": "NHS",
+    "title": "Flu",
+    "url": "https://www.nhs.uk/conditions/flu/",
+    "overview": "Flu is a common viral infection.",
+    "symptoms": ["fever", "dry cough", "tiredness"],
+    "treatment": "Rest, hydration, and antipyretics can help."
+  }
+]
