@@ -4,15 +4,17 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
-from app.model.reasoner import Reasoner, StubReasoner
+from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
 from app.rag.embedding_retriever import EmbeddingRetriever
 from app.rag.retriever import Retriever, StubRetriever
 from app.rag.tfidf_retriever import TfidfRetriever
 from app.schemas.triage import TriageLevel, TriageResponse
+from app.services.patient_context import PatientContextProvider
 
 logger = logging.getLogger(__name__)
-reasoner: Reasoner = StubReasoner()
 
 HIGH_RISK_KEYWORDS: tuple[str, ...] = (
     "chest pain",
@@ -119,16 +121,84 @@ def get_retriever() -> Retriever:
     return _build_retriever()
 
 
+def _build_reasoner() -> Reasoner:
+    settings = get_settings()
+    mode = settings.reasoner_mode
+
+    if mode == "stub":
+        logger.info("reasoner_initialized mode=stub model=none")
+        return StubReasoner()
+
+    if mode == "ollama":
+        reasoner = OllamaReasoner(
+            host=settings.ollama_host,
+            model=settings.ollama_model,
+        )
+        if reasoner.ping():
+            logger.info(
+                "reasoner_initialized mode=ollama model=%s host=%s",
+                settings.ollama_model,
+                settings.ollama_host,
+            )
+            return reasoner
+
+        if settings.strict_reasoner:
+            raise RuntimeError(
+                f"Ollama reasoner is required but unreachable at {settings.ollama_host}"
+            )
+
+        logger.warning("reasoner_fallback_to_stub reason=ollama_unreachable")
+        return StubReasoner()
+
+    logger.warning("reasoner_mode_unknown value=%s fallback=stub", mode)
+    logger.info("reasoner_initialized mode=stub model=none")
+    return StubReasoner()
+
+
+@lru_cache
+def get_reasoner() -> Reasoner:
+    return _build_reasoner()
+
+
 def clear_runtime_state() -> None:
     get_retriever.cache_clear()
+    get_reasoner.cache_clear()
 
 
-def triage(query: str) -> TriageResponse:
+def triage(
+    query: str,
+    patient_id: int | None = None,
+    db: Session | None = None,
+) -> TriageResponse:
     normalized_query = query.strip()
     triage_level = _classify(normalized_query)
     settings = get_settings()
     contexts = get_retriever().retrieve(normalized_query, top_k=settings.rag_top_k)
-    summary = reasoner.reason(normalized_query, contexts, triage_level)
+    patient_context: str | None = None
+    history_used = False
+    if patient_id is not None and db is not None:
+        provider = PatientContextProvider(
+            visit_limit=settings.patient_history_visit_limit,
+            top_matches=settings.patient_history_top_matches,
+        )
+        patient_result = provider.build(db, patient_id, normalized_query)
+        patient_context = patient_result.context_text
+        history_used = patient_result.history_used
+        logger.info(
+            "triage_history_context_loaded patient_id=%s matches=%s",
+            patient_id,
+            len(patient_result.matched_visit_ids),
+        )
+    elif patient_id is not None:
+        patient_context = f"Patient ID {patient_id} was provided."
+        history_used = True
+
+    summary = get_reasoner().reason(
+        normalized_query,
+        contexts,
+        triage_level,
+        patient_context=patient_context,
+    )
     actions = _build_actions(triage_level)
 
     logger.info(
@@ -142,6 +212,7 @@ def triage(query: str) -> TriageResponse:
         triage_level=triage_level,
         summary=summary,
         actions=actions,
+        history_used=history_used,
         disclaimer=(
             "This is not medical advice. If you think you may have a medical "
             "emergency, seek immediate care."

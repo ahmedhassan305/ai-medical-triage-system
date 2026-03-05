@@ -6,6 +6,8 @@ from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import add_request_logging_middleware
+from app.db.session import create_all
+from app.services.triage_service import get_reasoner
 
 
 def create_app() -> FastAPI:
@@ -26,6 +28,13 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(api_v1_router)
     app.include_router(legacy_router, include_in_schema=False)
+
+    if settings.db_auto_create:
+        create_all()
+
+    if settings.strict_reasoner:
+        get_reasoner()
+
     return app
 
 

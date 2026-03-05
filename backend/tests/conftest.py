@@ -16,8 +16,10 @@ from app.services.triage_service import clear_runtime_state
 @pytest.fixture
 def client() -> TestClient:
     os.environ["CORS_ORIGINS"] = "http://localhost:5173,http://localhost:3000"
+    os.environ["REASONER_MODE"] = "stub"
     os.environ["RAG_RETRIEVER"] = "stub"
     os.environ["RAG_REBUILD_INDEX"] = "false"
+    os.environ["DB_AUTO_CREATE"] = "true"
     get_settings.cache_clear()
     clear_runtime_state()
     clear_embedding_model_cache()
