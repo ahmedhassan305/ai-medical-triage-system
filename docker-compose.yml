@@ -1,0 +1,67 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "19001:19001"
+    depends_on:
+      - ollama
+      - postgres
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4}
+      REASONER_MODE: ${REASONER_MODE:-ollama}
+      STRICT_REASONER: ${STRICT_REASONER:-false}
+      RAG_RETRIEVER: embedding
+      RAG_REBUILD_INDEX: ${RAG_REBUILD_INDEX:-false}
+      RAG_DATA_DIR: /app/data
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://triage:triage@postgres:5432/triage}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      DB_AUTO_CREATE: ${DB_AUTO_CREATE:-false}
+    volumes:
+      - ./backend/data:/app/data
+      - rag_cache:/app/.cache
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:19001}
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        ollama serve &
+        pid=$$!
+        until ollama list >/dev/null 2>&1; do sleep 2; done
+        ollama pull "$$OLLAMA_MODEL"
+        wait "$$pid"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-triage}
+      POSTGRES_USER: ${POSTGRES_USER:-triage}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triage}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  rag_cache:
+  ollama_models:
+  postgres_data:
