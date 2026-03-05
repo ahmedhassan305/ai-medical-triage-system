@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from app.rag.dataset_loader import MedicalCondition, load_conditions
-from app.rag.retriever import Retriever
+from app.rag.retriever import RetrievedChunk, Retriever
 from app.rag.tfidf_index import build_index, search
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,10 @@ class TfidfRetriever(Retriever):
         self._matrix: csr_matrix | None = None
 
     def retrieve(self, query: str, top_k: int = 3) -> list[str]:
+        chunks = self.retrieve_chunks(query, top_k=top_k)
+        return [self._format_context(chunk) for chunk in chunks]
+
+    def retrieve_chunks(self, query: str, top_k: int = 3) -> list[RetrievedChunk]:
         self._ensure_index()
         if not self._conditions or self._vectorizer is None or self._matrix is None:
             return []
@@ -40,7 +44,21 @@ class TfidfRetriever(Retriever):
             matrix=self._matrix,
             top_k=top_k,
         )
-        return [self._format_context(condition) for condition, _score in results]
+        chunks: list[RetrievedChunk] = []
+        for condition, score in results:
+            chunks.append(
+                RetrievedChunk(
+                    doc_id=condition.doc_id,
+                    source_file=condition.source_file,
+                    chunk_id=f"{condition.doc_id}:0",
+                    text=condition.full_text,
+                    source=condition.source,
+                    title=condition.title,
+                    url=condition.url,
+                    score=score,
+                )
+            )
+        return chunks
 
     def _ensure_index(self) -> None:
         if self._vectorizer is not None and self._matrix is not None:
@@ -64,12 +82,12 @@ class TfidfRetriever(Retriever):
                 self._vectorizer = None
                 self._matrix = None
 
-    def _format_context(self, condition: MedicalCondition) -> str:
-        header = f"({condition.source}) {condition.title}"
-        if condition.url:
-            header = f"{header} - {condition.url}"
+    def _format_context(self, chunk: RetrievedChunk) -> str:
+        header = f"({chunk.source}) {chunk.title}"
+        if chunk.url:
+            header = f"{header} - {chunk.url}"
 
-        context_text = condition.full_text
+        context_text = chunk.text
         if len(context_text) > 600:
             context_text = f"{context_text[:600].rstrip()}..."
         return f"{header}\n{context_text}"

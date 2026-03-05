@@ -80,6 +80,15 @@ def test_embedding_retriever_builds_index_and_returns_contexts(
     assert "https://" in contexts[0]
     assert "(" in contexts[0] and ")" in contexts[0]
 
+    chunks = retriever.retrieve_chunks(
+        "severe chest pain with breathing issues",
+        top_k=2,
+    )
+    assert chunks
+    assert chunks[0].doc_id
+    assert chunks[0].source_file.endswith(".json")
+    assert chunks[0].chunk_id
+
 
 def test_embedding_retriever_persists_and_reloads(monkeypatch, tmp_path) -> None:
     data_dir = Path(_fixture_data_dir())

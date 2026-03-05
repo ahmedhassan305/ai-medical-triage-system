@@ -8,6 +8,8 @@ from typing import Any
 
 @dataclass(frozen=True)
 class MedicalCondition:
+    doc_id: str
+    source_file: str
     source: str
     title: str
     url: str
@@ -25,8 +27,13 @@ def load_conditions(data_dir: str) -> list[MedicalCondition]:
 
         source_hint = _source_from_filename(json_file.name)
         payload = json.loads(json_file.read_text(encoding="utf-8"))
-        for record in _extract_records(payload):
-            condition = _to_condition(record, source_hint)
+        for index, record in enumerate(_extract_records(payload)):
+            condition = _to_condition(
+                record,
+                source_hint=source_hint,
+                source_file=json_file.name,
+                doc_id=f"{json_file.stem}:{index}",
+            )
             if condition:
                 conditions.append(condition)
 
@@ -57,7 +64,13 @@ def _extract_records(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _to_condition(record: dict[str, Any], source_hint: str) -> MedicalCondition | None:
+def _to_condition(
+    record: dict[str, Any],
+    *,
+    source_hint: str,
+    source_file: str,
+    doc_id: str,
+) -> MedicalCondition | None:
     title = _first_text(
         record,
         ["title", "name", "condition", "condition_name", "disease", "heading"],
@@ -84,6 +97,8 @@ def _to_condition(record: dict[str, Any], source_hint: str) -> MedicalCondition 
     ]
 
     return MedicalCondition(
+        doc_id=doc_id,
+        source_file=source_file,
         source=source,
         title=title,
         url=url,

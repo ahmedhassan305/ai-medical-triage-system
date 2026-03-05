@@ -16,7 +16,7 @@ from app.rag.faiss_store import (
     load_index,
     search_index,
 )
-from app.rag.retriever import Retriever
+from app.rag.retriever import RetrievedChunk, Retriever
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,10 @@ class EmbeddingRetriever(Retriever):
         self._ensure_index()
 
     def retrieve(self, query: str, top_k: int = 3) -> list[str]:
+        chunks = self.retrieve_chunks(query, top_k=top_k)
+        return [self._format_context(chunk) for chunk in chunks]
+
+    def retrieve_chunks(self, query: str, top_k: int = 3) -> list[RetrievedChunk]:
         self._ensure_index()
         if self._index is None or not self._metadata:
             return []
@@ -65,10 +69,21 @@ class EmbeddingRetriever(Retriever):
             metadata=self._metadata,
         )
 
-        contexts: list[str] = []
+        contexts: list[RetrievedChunk] = []
         for item, score in hits:
             logger.info("rag_retrieval score=%.4f title=%s", score, item["title"])
-            contexts.append(self._format_context(item, score))
+            contexts.append(
+                RetrievedChunk(
+                    doc_id=item["doc_id"],
+                    source_file=item["source_file"],
+                    chunk_id=item["chunk_id"],
+                    text=item["chunk_text"],
+                    source=item["source"],
+                    title=item["title"],
+                    url=item["url"],
+                    score=score,
+                )
+            )
         return contexts
 
     def _ensure_index(self) -> None:
@@ -112,9 +127,12 @@ class EmbeddingRetriever(Retriever):
         chunks: list[ChunkMetadata] = []
         for condition in conditions:
             pieces = chunk_text(condition.full_text, self.chunk_size, self.overlap)
-            for piece in pieces:
+            for piece_index, piece in enumerate(pieces):
                 chunks.append(
                     ChunkMetadata(
+                        doc_id=condition.doc_id,
+                        source_file=condition.source_file,
+                        chunk_id=f"{condition.doc_id}:{piece_index}",
                         source=condition.source,
                         title=condition.title,
                         url=condition.url,
@@ -123,8 +141,8 @@ class EmbeddingRetriever(Retriever):
                 )
         return chunks
 
-    def _format_context(self, item: ChunkMetadata, score: float) -> str:
-        header = f"({item['source']}) {item['title']}"
-        if item["url"]:
-            header = f"{header} - {item['url']}"
-        return f"{header}\n[score: {score:.4f}]\n{item['chunk_text']}"
+    def _format_context(self, item: RetrievedChunk) -> str:
+        header = f"({item.source}) {item.title}"
+        if item.url:
+            header = f"{header} - {item.url}"
+        return f"{header}\n[score: {item.score:.4f}]\n{item.text}"

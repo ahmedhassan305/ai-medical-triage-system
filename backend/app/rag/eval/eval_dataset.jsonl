@@ -1,0 +1,3 @@
+{"query":"chest pain with shortness of breath","relevant_doc_ids":["mayo_dataset_part_1:0","mayo_dataset_part_2:0"],"notes":"cardiopulmonary urgent symptoms"}
+{"query":"flu fever dry cough and fatigue","relevant_doc_ids":["mayo_dataset_part_3:0","mayo_dataset_part_4:0"],"notes":"flu-like syndrome"}
+{"query":"persistent migraine with nausea","relevant_doc_ids":["mayo_dataset_part_5:0","mayo_dataset_part_6:0"],"notes":"headache-related guidance"}

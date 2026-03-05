@@ -15,6 +15,9 @@ METADATA_FILENAME = "metadata.json"
 
 
 class ChunkMetadata(TypedDict):
+    doc_id: str
+    source_file: str
+    chunk_id: str
     source: str
     title: str
     url: str
@@ -111,5 +114,13 @@ def _cache_dir(value: str | None) -> Path:
 def _is_chunk_metadata(item: object) -> bool:
     if not isinstance(item, dict):
         return False
-    expected_keys = {"source", "title", "url", "chunk_text"}
+    expected_keys = {
+        "doc_id",
+        "source_file",
+        "chunk_id",
+        "source",
+        "title",
+        "url",
+        "chunk_text",
+    }
     return expected_keys.issubset(item.keys())

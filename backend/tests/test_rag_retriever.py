@@ -46,6 +46,21 @@ def test_tfidf_retriever_context_has_source_and_url() -> None:
     assert any("https://" in context for context in contexts)
 
 
+def test_tfidf_retriever_chunks_include_metadata() -> None:
+    retriever = TfidfRetriever(
+        data_dir=_fixture_data_dir(),
+        max_features=1000,
+        ngram_range=(1, 2),
+    )
+    chunks = retriever.retrieve_chunks("flu fever dry cough", top_k=2)
+    assert chunks
+    first = chunks[0]
+    assert first.doc_id
+    assert first.source_file.endswith(".json")
+    assert first.chunk_id
+    assert first.text
+
+
 def test_missing_data_dir_falls_back_to_stub(monkeypatch, tmp_path) -> None:
     missing_dir = tmp_path / "missing_dataset"
     monkeypatch.setenv("RAG_RETRIEVER", "tfidf")
