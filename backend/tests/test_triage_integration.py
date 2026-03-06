@@ -19,6 +19,18 @@ def _ollama_reachable(host: str) -> bool:
         return False
 
 
+def _ollama_model_available(host: str, model: str) -> bool:
+    try:
+        response = httpx.get(f"{host.rstrip('/')}/api/tags", timeout=2.0)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception:
+        return False
+
+    models = payload.get("models", [])
+    return any(item.get("name") == model for item in models if isinstance(item, dict))
+
+
 def test_triage_reasoner_mode_stub(monkeypatch) -> None:
     monkeypatch.setenv("REASONER_MODE", "stub")
     monkeypatch.setenv("RAG_RETRIEVER", "stub")
@@ -36,13 +48,19 @@ def test_triage_reasoner_mode_stub(monkeypatch) -> None:
 
 def test_triage_reasoner_mode_ollama_when_available(monkeypatch) -> None:
     host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    model = os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4")
     if not _ollama_reachable(host):
         pytest.skip("Ollama is not reachable; skipping integration test.")
+    if not _ollama_model_available(host, model):
+        pytest.skip(
+            f"Ollama model {model} is not available; skipping integration test."
+        )
 
     monkeypatch.setenv("REASONER_MODE", "ollama")
     monkeypatch.setenv("RAG_RETRIEVER", "stub")
     monkeypatch.setenv("STRICT_REASONER", "false")
     monkeypatch.setenv("OLLAMA_HOST", host)
+    monkeypatch.setenv("OLLAMA_MODEL", model)
     get_settings.cache_clear()
     clear_runtime_state()
 

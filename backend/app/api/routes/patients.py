@@ -11,6 +11,18 @@ from app.schemas.patient import PatientProfileResponse, PatientProfileUpsert
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 
+@router.get("/", response_model=list[PatientProfileResponse])
+def list_patients(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("doctor", "admin")),
+) -> list[PatientProfileResponse]:
+    profiles = db.query(PatientProfile).order_by(PatientProfile.full_name.asc()).all()
+    return [
+        PatientProfileResponse.model_validate(profile, from_attributes=True)
+        for profile in profiles
+    ]
+
+
 @router.post("/me", response_model=PatientProfileResponse)
 def upsert_my_profile(
     payload: PatientProfileUpsert,
