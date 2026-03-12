@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 
 def test_register_and_login_flow(client) -> None:
+    email = f"patient-{uuid4().hex}@example.com"
+
     register_response = client.post(
         "/api/v1/auth/register",
         json={
-            "email": "patient@example.com",
+            "email": email,
             "password": "password123",
             "role": "patient",
         },
@@ -13,13 +17,13 @@ def test_register_and_login_flow(client) -> None:
 
     assert register_response.status_code == 201
     register_payload = register_response.json()
-    assert register_payload["email"] == "patient@example.com"
+    assert register_payload["email"] == email
     assert register_payload["role"] == "patient"
 
     login_response = client.post(
         "/api/v1/auth/login",
         json={
-            "email": "patient@example.com",
+            "email": email,
             "password": "password123",
         },
     )

@@ -108,7 +108,7 @@ def get_settings() -> Settings:
         rag_chunk_overlap=_to_int(os.getenv("RAG_CHUNK_OVERLAP"), 200),
         rag_rebuild_index=_to_bool(os.getenv("RAG_REBUILD_INDEX"), False),
         ollama_host=os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/"),
-        ollama_model=os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4"),
+        ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
         reasoner_mode=os.getenv("REASONER_MODE", "ollama").strip().lower(),
         strict_reasoner=_to_bool(os.getenv("STRICT_REASONER"), False),
         patient_history_visit_limit=_to_int(

@@ -9,7 +9,7 @@ services:
       - postgres
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       REASONER_MODE: ${REASONER_MODE:-ollama}
       STRICT_REASONER: ${STRICT_REASONER:-false}
       RAG_RETRIEVER: embedding
@@ -39,7 +39,7 @@ services:
     volumes:
       - ollama_models:/root/.ollama
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |

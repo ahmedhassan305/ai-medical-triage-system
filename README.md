@@ -93,7 +93,7 @@ docker compose up --build
 ### Change Model (Ollama)
 Edit root `.env`:
 ```env
-OLLAMA_MODEL=llama3:8b-instruct-q4
+OLLAMA_MODEL=llama3.2
 ```
 Then restart:
 ```powershell
@@ -197,7 +197,7 @@ npm run build
 - `RAG_RETRIEVER=stub` (`stub`, `tfidf`, `embedding`)
 - `RAG_TOP_K=3`
 - `OLLAMA_HOST=http://localhost:11434`
-- `OLLAMA_MODEL=llama3:8b-instruct-q4`
+- `OLLAMA_MODEL=llama3.2`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
 - `TFIDF_MAX_FEATURES=1000`
@@ -215,7 +215,7 @@ npm run build
 - `VITE_API_BASE_URL=http://localhost:19001`
 
 ### Root `.env` (for Docker Compose)
-- `OLLAMA_MODEL=llama3:8b-instruct-q4`
+- `OLLAMA_MODEL=llama3.2`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
 - `RAG_REBUILD_INDEX=false`
