@@ -9,7 +9,7 @@ services:
       - postgres
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       REASONER_MODE: ${REASONER_MODE:-ollama}
       STRICT_REASONER: ${STRICT_REASONER:-false}
       RAG_RETRIEVER: embedding
@@ -39,14 +39,18 @@ services:
     volumes:
       - ollama_models:/root/.ollama
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4_K_M}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
           ollama serve &
           pid=$$!
           until ollama list >/dev/null 2>&1; do sleep 2; done
-          ollama pull "$$OLLAMA_MODEL"
+          if ! ollama list | grep -q "$$OLLAMA_MODEL"; then
+            ollama pull "$$OLLAMA_MODEL"
+          else
+            echo "Model $$OLLAMA_MODEL already exists, skipping pull."
+          fi
           wait "$$pid"
 
   postgres:
