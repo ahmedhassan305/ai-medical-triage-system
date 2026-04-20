@@ -5,7 +5,7 @@
 - `frontend/`: React + Vite + TypeScript app
 - `scripts/`: helper scripts for local dev and tests
 - `.github/workflows/ci.yml`: CI for backend and frontend
-- `docker-compose.yml`: local Docker stack (backend + frontend + Ollama + Postgres)
+- `docker-compose.yml`: local Docker stack for backend + Ollama + Postgres
 
 ## API Endpoints
 - Versioned:
@@ -48,7 +48,40 @@ npm install
 Copy-Item .env.example .env
 ```
 
-## Run Locally (Without Docker)
+## Preferred Local Development Workflow
+
+Run the frontend locally with Vite, and use Docker only for the backend dependencies.
+
+### 1. Start backend services with Docker
+```powershell
+cd D:\Personal\Projects\ai-medical-triage-system
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+docker compose up --build
+```
+
+This starts:
+- Backend API on `http://localhost:19001`
+- Ollama on `http://localhost:11434`
+- Postgres on `localhost:5432`
+
+### 2. Run the frontend locally
+```powershell
+cd frontend
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+npm install
+npm run dev
+```
+
+Frontend URL:
+- `http://localhost:5173`
+
+### 3. Apply database migrations
+```powershell
+cd backend
+alembic upgrade head
+```
+
+## Run Everything Locally Without Docker
 
 ### Option A: Root Scripts (PowerShell)
 ```powershell
@@ -77,7 +110,14 @@ npm run dev
 - Docker Desktop configured to use WSL2 backend
 - WSL2 enabled on Windows
 
-### First Run
+### What Docker Runs
+- `backend`
+- `ollama`
+- `postgres`
+
+The frontend is intentionally excluded from the default Docker workflow for development.
+
+### Backend Stack First Run
 ```powershell
 cd D:\Personal\Projects\ai-medical-triage-system
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
@@ -85,7 +125,6 @@ docker compose up --build
 ```
 
 ### Service URLs
-- Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:19001`
 - Ollama API: `http://localhost:11434`
 - Postgres: `localhost:5432`
@@ -93,7 +132,7 @@ docker compose up --build
 ### Change Model (Ollama)
 Edit root `.env`:
 ```env
-OLLAMA_MODEL=llama3:8b-instruct-q4
+OLLAMA_MODEL=llama3.2
 ```
 Then restart:
 ```powershell
@@ -162,6 +201,40 @@ cd D:\Personal\Projects\ai-medical-triage-system
 docker compose up --build
 ```
 
+## Hybrid Triage Response
+
+`POST /api/v1/triage` now returns a patient-friendly hybrid response that combines:
+- `urgency_level` and legacy-compatible `triage_level`
+- `urgency_label`
+- `patient_friendly_explanation`
+- `clinical_summary`
+- ranked `suspected_conditions`
+- `recommended_specialty`
+- `suggested_doctors`
+- `recommended_actions`
+- `supporting_references`
+- `history_used`
+
+Important behavior:
+- Anonymous triage is allowed when you send only `query`
+- If you send `patient_id`, the request must be authenticated and authorized to use that patient profile
+- Suspected conditions are a shortlist of possibilities, not a confirmed diagnosis
+
+## Patient National ID Parsing
+
+Patient profiles now support:
+- `national_id`
+- `date_of_birth`
+- `inferred_governorate_code`
+- `inferred_governorate`
+- `current_governorate`
+
+Behavior:
+- `national_id` must be a valid 14-digit Egyptian national ID
+- backend derives the birth date and the governorate encoded inside the ID
+- `current_governorate` stays editable because the governorate encoded in the ID should not be treated as guaranteed current residence
+- if `current_governorate` is empty during save, it is prefilled from the inferred governorate
+
 ## Tests And Lint
 
 ### Backend
@@ -197,7 +270,7 @@ npm run build
 - `RAG_RETRIEVER=stub` (`stub`, `tfidf`, `embedding`)
 - `RAG_TOP_K=3`
 - `OLLAMA_HOST=http://localhost:11434`
-- `OLLAMA_MODEL=llama3:8b-instruct-q4`
+- `OLLAMA_MODEL=llama3.2`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
 - `TFIDF_MAX_FEATURES=1000`
@@ -215,11 +288,10 @@ npm run build
 - `VITE_API_BASE_URL=http://localhost:19001`
 
 ### Root `.env` (for Docker Compose)
-- `OLLAMA_MODEL=llama3:8b-instruct-q4`
+- `OLLAMA_MODEL=llama3.2`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
 - `RAG_REBUILD_INDEX=false`
-- `VITE_API_BASE_URL=http://localhost:19001`
 - `DATABASE_URL=postgresql+psycopg2://triage:triage@postgres:5432/triage`
 - `POSTGRES_DB=triage`
 - `POSTGRES_USER=triage`

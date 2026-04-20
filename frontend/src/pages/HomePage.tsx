@@ -77,6 +77,11 @@ export default function HomePage() {
 
   const [triageQuery, setTriageQuery] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResponse | null>(null);
+  
+  // Appointment pre-fill state (for booking from triage)
+  const [preFillDoctorId, setPreFillDoctorId] = useState<number | null>(null);
+  const [preFillReason, setPreFillReason] = useState("");
+  const [preFillSpecialty, setPreFillSpecialty] = useState("");
 
   useEffect(() => {
     if (!user) {
@@ -120,12 +125,16 @@ export default function HomePage() {
           nextPatients,
           nextAppointments,
         ] = await Promise.all([
-          fetchMyPatientProfile().catch((error) =>
-            isStatus(error, 404) ? null : Promise.reject(error),
-          ),
-          fetchMyDoctorProfile().catch((error) =>
-            isStatus(error, 404) ? null : Promise.reject(error),
-          ),
+          currentUser.role === "patient" || currentUser.role === "admin"
+            ? fetchMyPatientProfile().catch((error) =>
+                isStatus(error, 404) ? null : Promise.reject(error),
+              )
+            : Promise.resolve(null),
+          currentUser.role === "doctor" || currentUser.role === "admin"
+            ? fetchMyDoctorProfile().catch((error) =>
+                isStatus(error, 404) ? null : Promise.reject(error),
+              )
+            : Promise.resolve(null),
           listDoctors().catch(() => []),
           currentUser.role === "patient"
             ? Promise.resolve([])
@@ -249,6 +258,9 @@ export default function HomePage() {
     email: string;
     password: string;
     role: RoleType;
+    full_name?: string;
+    national_id?: string;
+    sex?: string;
   }) {
     setAuthLoading(true);
     setAuthError(null);
@@ -271,6 +283,8 @@ export default function HomePage() {
     full_name: string;
     age: number;
     sex: string;
+    national_id?: string | null;
+    current_governorate?: string | null;
     smoker: boolean;
     alcoholic: boolean;
     chronic_conditions: string[];
@@ -324,6 +338,18 @@ export default function HomePage() {
     } finally {
       setTriageLoading(false);
     }
+  }
+
+  function handleReserveAppointment(
+    doctorId: number,
+    specialty: string,
+    reason: string
+  ) {
+    // Pre-fill the appointment form and navigate to appointments tab
+    setPreFillDoctorId(doctorId);
+    setPreFillReason(reason);
+    setPreFillSpecialty(specialty);
+    setSelectedTab("appointments");
   }
 
   async function handleCreateAppointment(payload: {
@@ -446,10 +472,10 @@ export default function HomePage() {
             key={`overview-${currentUser.role}`}
             patientProfile={patientProfile}
             doctorProfile={doctorProfile}
-            doctorsCount={doctors.length}
-            patientsCount={patients.length}
-            appointmentsCount={appointments.length}
-            visitsCount={visits.length}
+            appointments={appointments}
+            patients={patients}
+            visits={visits}
+            doctors={doctors}
           />
         );
       case "profile":
@@ -481,6 +507,7 @@ export default function HomePage() {
             onQueryChange={setTriageQuery}
             onPatientChange={refreshVisits}
             onSubmit={handleRunTriage}
+            onReserveAppointment={handleReserveAppointment}
           />
         );
       case "appointments":
@@ -496,6 +523,14 @@ export default function HomePage() {
             error={appointmentsError}
             onCreate={handleCreateAppointment}
             onUpdateStatus={handleUpdateAppointmentStatus}
+            preFillDoctorId={preFillDoctorId}
+            preFillReason={preFillReason}
+            preFillSpecialty={preFillSpecialty}
+            onClearPreFill={() => {
+              setPreFillDoctorId(null);
+              setPreFillReason("");
+              setPreFillSpecialty("");
+            }}
           />
         );
       case "visits":

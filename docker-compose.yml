@@ -22,16 +22,6 @@ services:
       - ./backend/data:/app/data
       - rag_cache:/app/.cache
 
-  frontend:
-    build:
-      context: ./frontend
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:19001}
-
   ollama:
     image: ollama/ollama
     ports:
@@ -39,7 +29,7 @@ services:
     volumes:
       - ollama_models:/root/.ollama
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4_K_M}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |

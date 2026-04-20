@@ -18,7 +18,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("heart failure", "Heart failure"),
     ("high blood pressure", "Hypertension"),
     ("blood pressure", "Hypertension"),
-    
     # RESPIRATORY CONDITIONS - Patient language
     ("can't breathe", "Dyspnea/Asthma/COPD"),
     ("can't catch my breath", "Dyspnea/Asthma"),
@@ -46,7 +45,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("stuffy", "Common cold/Sinusitis"),
     ("runny nose", "Common cold/Sinusitis"),
     ("sore throat", "Pharyngitis/Common cold"),
-    
     # NEUROLOGICAL CONDITIONS - Patient language
     ("bad headache", "Migraine/Tension headache"),
     ("worst headache", "Meningitis/Subarachnoid hemorrhage"),
@@ -79,7 +77,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("stroke", "Acute ischemic stroke"),
     ("weakness", "Neurological disorder/Stroke"),
     ("paralysis", "Stroke/Neurological disorder"),
-    
     # GASTROINTESTINAL CONDITIONS - Patient language
     ("stomach pain", "Gastritis/GERD/IBS"),
     ("stomach ache", "Gastritis/GERD/IBS"),
@@ -117,7 +114,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("heartburn", "GERD/Gastritis"),
     ("reflux", "GERD"),
     ("acid reflux", "GERD"),
-    
     # GENERAL/SYSTEMIC - Patient language
     ("fever", "Infection/Flu/Common cold"),
     ("high fever", "Serious infection/Meningitis"),
@@ -149,7 +145,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("infection", "Bacterial/Viral infection"),
     ("flu", "Influenza"),
     ("cold", "Common cold"),
-    
     # MUSCULOSKELETAL CONDITIONS - Patient language
     ("broke my leg", "Fracture"),
     ("broke my arm", "Fracture"),
@@ -181,7 +176,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("arthritis", "Osteoarthritis/Rheumatoid arthritis"),
     ("joint pain", "Arthritis"),
     ("dislocation", "Joint dislocation"),
-    
     # DERMATOLOGICAL CONDITIONS - Patient language
     ("rash", "Dermatitis/Eczema/Allergic reaction"),
     ("I have a rash", "Dermatitis/Eczema"),
@@ -199,7 +193,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("acne", "Acne vulgaris"),
     ("psoriasis", "Psoriasis"),
     ("eczema", "Eczema"),
-    
     # PSYCHIATRIC/EMOTIONAL - Patient language
     ("panic attack", "Panic disorder"),
     ("panic", "Panic disorder"),
@@ -221,7 +214,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("suicidal", "Suicidal ideation/Depression"),
     ("want to hurt myself", "Suicidal ideation"),
     ("hopeless", "Major depressive disorder"),
-    
     # ALLERGIES - Patient language
     ("allergic reaction", "Allergic reaction"),
     ("allergic", "Allergic reaction"),
@@ -231,7 +223,6 @@ PATIENT_SYMPTOM_KEYWORDS = [
     ("can't swallow", "Anaphylaxis/Throat swelling"),
     ("throat closing", "Anaphylaxis"),
     ("anaphylaxis", "Anaphylactic shock"),
-    
     # OTHER CONDITIONS - Patient language
     ("kidney pain", "Kidney disease/Nephrolithiasis"),
     ("kidney stone", "Kidney stone"),

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import require_roles
 from app.db.models import DoctorProfile, User
 from app.db.session import get_db
 from app.schemas.doctor import DoctorProfileResponse, DoctorProfileUpsert
@@ -66,7 +66,7 @@ def upsert_my_profile(
 @router.get("/me", response_model=DoctorProfileResponse)
 def get_my_profile(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> DoctorProfileResponse:
     profile = (
         db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()

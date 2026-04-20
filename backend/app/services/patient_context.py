@@ -62,6 +62,7 @@ class PatientContextProvider:
         demographics = (
             f"Patient demographics: age={patient.age}, sex={patient.sex}, "
             f"smoker={patient.smoker}, alcoholic={patient.alcoholic}, "
+            f"current_governorate={patient.current_governorate or 'unknown'}, "
             "chronic_conditions="
             f"{', '.join(patient.chronic_conditions or []) or 'none'}."
         )
