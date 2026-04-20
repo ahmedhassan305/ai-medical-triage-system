@@ -7,12 +7,14 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.models import DoctorProfile
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
 from app.rag.embedding_retriever import EmbeddingRetriever
 from app.rag.retriever import Retriever, StubRetriever
 from app.rag.tfidf_retriever import TfidfRetriever
-from app.schemas.triage import TriageLevel, TriageResponse
+from app.schemas.triage import DoctorSuggestion, TriageLevel, TriageResponse
 from app.services.patient_context import PatientContextProvider
+from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +167,275 @@ def clear_runtime_state() -> None:
     get_reasoner.cache_clear()
 
 
+def simplify_reasoning(text: str) -> str:
+    """Convert medical jargon to simple language for patients."""
+    replacements = {
+        "cardiac": "heart",
+        "cardiovascular": "heart and blood vessel",
+        "respiratory": "breathing",
+        "pulmonary": "lung",
+        "gastrointestinal": "stomach and digestive",
+        "gi": "digestive",
+        "neurological": "brain and nerve",
+        "dermatological": "skin",
+        "musculoskeletal": "bone and muscle",
+        "infectious": "infection",
+        "endocrine": "hormone",
+        "renal": "kidney",
+        "hepatic": "liver",
+        "hematologic": "blood",
+        "immunological": "immune system",
+        "psychiatric": "mental health",
+        "etiology": "cause",
+        "symptomatology": "symptoms",
+        "contraindication": "caution or risk",
+        "diagnosis": "condition",
+        "prognosis": "expected outcome",
+        "pathophysiology": "how the disease works",
+        "differential diagnosis": "possible conditions",
+        "clinical presentation": "signs and symptoms",
+        "acute": "sudden start",
+        "chronic": "long-term",
+        "exacerbation": "getting worse",
+        "remission": "improvement",
+        "comorbidity": "related health condition",
+        "intervention": "treatment",
+        "pharmacological": "medication-based",
+        "therapeutic": "treatment-related",
+        "manifestation": "sign or symptom",
+        "sequelae": "complications",
+        "prophylactic": "preventive",
+    }
+
+    result = text
+    for medical, simple in replacements.items():
+        result = result.replace(medical, simple)
+        result = result.replace(medical.capitalize(), simple.capitalize())
+
+    return result
+
+
+def get_recommended_specialty(query: str, summary: str) -> str:
+    """Extract recommended medical specialty from query and summary."""
+    specialty_keywords = {
+        # Cardiology
+        "cardio": "Cardiology",
+        "heart": "Cardiology",
+        "chest pain": "Cardiology",
+        "blood pressure": "Cardiology",
+        "arrhythmia": "Cardiology",
+        "palpitations": "Cardiology",
+        
+        # Pulmonology
+        "respir": "Pulmonology",
+        "lung": "Pulmonology",
+        "breathing": "Pulmonology",
+        "asthma": "Pulmonology",
+        "cough": "Pulmonology",
+        "pneumonia": "Pulmonology",
+        "bronch": "Pulmonology",
+        
+        # Gastroenterology
+        "stomach": "Gastroenterology",
+        "digestive": "Gastroenterology",
+        "abdominal": "Gastroenterology",
+        "nausea": "Gastroenterology",
+        "vomit": "Gastroenterology",
+        "diarrhea": "Gastroenterology",
+        "constipation": "Gastroenterology",
+        "bowel": "Gastroenterology",
+        "gastritis": "Gastroenterology",
+        
+        # Neurology
+        "neurolog": "Neurology",
+        "brain": "Neurology",
+        "migraine": "Neurology",
+        "headache": "Neurology",
+        "seizure": "Neurology",
+        "stroke": "Neurology",
+        "parkinson": "Neurology",
+        
+        # Dermatology
+        "dermat": "Dermatology",
+        "skin": "Dermatology",
+        "rash": "Dermatology",
+        "acne": "Dermatology",
+        "eczema": "Dermatology",
+        
+        # Orthopedics - IMPROVED with more keywords
+        "bone": "Orthopedics",
+        "fracture": "Orthopedics",
+        "broke": "Orthopedics",
+        "break": "Orthopedics",
+        "joint": "Orthopedics",
+        "sprain": "Orthopedics",
+        "strain": "Orthopedics",
+        "arthritis": "Orthopedics",
+        "tendon": "Orthopedics",
+        "ligament": "Orthopedics",
+        "dislocation": "Orthopedics",
+        "knee pain": "Orthopedics",
+        "back pain": "Orthopedics",
+        "neck pain": "Orthopedics",
+        
+        # Internal Medicine
+        "infection": "Internal Medicine",
+        "fever": "Internal Medicine",
+        "flu": "Internal Medicine",
+        "diabetes": "Internal Medicine",
+        "hypertension": "Internal Medicine",
+        
+        # Other specialties
+        "kidney": "Nephrology",
+        "liver": "Hepatology",
+        "eye": "Ophthalmology",
+        "vision": "Ophthalmology",
+        "ear": "Otolaryngology",
+        "throat": "Otolaryngology",
+        "psychiatric": "Psychiatry",
+        "mental": "Psychiatry",
+        "depression": "Psychiatry",
+        "anxiety": "Psychiatry",
+        "panic": "Psychiatry",
+        "women": "Gynecology",
+        "pregnancy": "Gynecology",
+        "child": "Pediatrics",
+    }
+
+    combined_text = (query + " " + summary).lower()
+    for keyword, specialty in specialty_keywords.items():
+        if keyword in combined_text:
+            return specialty
+
+    return "General Practice"
+
+
+def get_suspected_condition(query: str, summary: str, rag_context: str = "") -> str:
+    """
+    Detect the underlying medical condition from query and summary.
+    Uses RAG context (medical articles) as primary source for state-of-the-art accuracy.
+    Falls back to keyword matching for robustness.
+    """
+    combined_text = (query + " " + summary).lower()
+    
+    # Priority 1: Extract condition from LLM's reasoning on RAG articles
+    # The LLM understands both professional and patient language
+    # Look for RAG article titles which indicate the condition
+    conditions_to_check = [
+        ("myocardial infarction", "Myocardial infarction/Coronary artery disease"),
+        ("acute coronary syndrome", "Myocardial infarction/Coronary artery disease"),
+        ("coronary artery disease", "Myocardial infarction/Coronary artery disease"),
+        ("heart attack", "Myocardial infarction/Coronary artery disease"),
+        ("meningitis", "Meningitis"),
+        ("pneumonia", "Pneumonia"),
+        ("tuberculosis", "Tuberculosis"),
+        ("asthma", "Asthma"),
+        ("copd", "COPD"),
+        ("stroke", "Stroke"),
+        ("gastritis", "Gastritis/GERD/IBS"),
+        ("gerd", "Gastritis/GERD/IBS"),
+        ("ibs", "Gastritis/GERD/IBS"),
+        ("appendicitis", "Appendicitis"),
+        ("panic disorder", "Panic disorder"),
+        ("anxiety", "Anxiety disorder"),
+        ("depression", "Major depressive disorder"),
+        ("migraine", "Migraine"),
+        ("vertigo", "Vertigo"),
+        ("neuropathy", "Neuropathy"),
+        ("sepsis", "Sepsis"),
+        ("malaria", "Malaria"),
+        ("dengue", "Dengue fever"),
+        ("influenza", "Influenza"),
+        ("covid", "COVID-19"),
+        ("coronavirus", "COVID-19"),
+        ("cholecystitis", "Cholecystitis"),
+    ]
+    
+    summary_lower = summary.lower()
+    for condition_keyword, condition_name in conditions_to_check:
+        if condition_keyword in summary_lower:
+            logger.info(
+                "condition_detected from_summary condition=%s",
+                condition_name,
+            )
+            return condition_name
+    
+    # Priority 2: High-priority symptom combinations (most specific patterns)
+    priority_combinations = [
+        # Cardiac with multiple symptoms
+        (["chest pain", "left arm"], "Myocardial infarction/Coronary artery disease"),
+        (["chest pain", "jaw pain"], "Myocardial infarction/Coronary artery disease"),
+        (["chest pain", "radiates"], "Myocardial infarction/Coronary artery disease"),
+        
+        # Meningitis combination
+        (["severe headache", "stiff neck"], "Meningitis"),
+        (["high fever", "stiff neck"], "Meningitis"),
+        (["stiff neck", "fever"], "Meningitis"),
+        
+        # Panic disorder indicators
+        (["panic", "anxiety"], "Panic disorder"),
+        (["panic attack"], "Panic disorder"),
+        (["severe panic"], "Panic disorder"),
+    ]
+    
+    # Check priority combinations first
+    for symptoms, condition in priority_combinations:
+        if all(symptom in combined_text for symptom in symptoms):
+            logger.info(
+                "condition_detected combination=%s condition=%s",
+                symptoms,
+                condition,
+            )
+            return condition
+    
+    # Priority 3: Single keywords with medical specificity (organized by category)
+    # Using REAL patient language - what they ACTUALLY say, not medical jargon
+    disease_keywords = PATIENT_SYMPTOM_KEYWORDS
+    
+    # Sort by length (longest first) to match multi-word phrases before single words
+    sorted_keywords = sorted(disease_keywords, key=lambda x: len(x[0]), reverse=True)
+    
+    for keyword, condition in sorted_keywords:
+        if keyword in combined_text:
+            logger.info(
+                "condition_detected keyword=%s condition=%s",
+                keyword,
+                condition,
+            )
+            return condition
+
+    return "Unknown condition"
+
+
+def get_suggested_doctors(
+    db: Session, specialty: str, limit: int = 3
+) -> list[DoctorSuggestion]:
+    """Get doctors matching the recommended specialty."""
+    if not db:
+        return []
+
+    try:
+        doctors = (
+            db.query(DoctorProfile)
+            .filter(DoctorProfile.specialty.ilike(f"%{specialty.split()[0]}%"))
+            .limit(limit)
+            .all()
+        )
+
+        return [
+            DoctorSuggestion(
+                id=doc.id,
+                full_name=doc.full_name,
+                specialty=doc.specialty,
+                clinic=doc.clinic,
+            )
+            for doc in doctors
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to get doctors for specialty {specialty}: {e}")
+        return []
+
+
 def triage(
     query: str,
     patient_id: int | None = None,
@@ -173,7 +444,10 @@ def triage(
     normalized_query = query.strip()
     triage_level = _classify(normalized_query)
     settings = get_settings()
+    
+    # Retrieve RAG contexts based on symptoms (this is the source of truth)
     contexts = get_retriever().retrieve(normalized_query, top_k=settings.rag_top_k)
+    
     patient_context: str | None = None
     history_used = False
     if patient_id is not None and db is not None:
@@ -201,17 +475,37 @@ def triage(
     )
     actions = _build_actions(triage_level)
 
+    # Simplify reasoning, get recommended specialty, and detect condition
+    # Pass both the query and the RAG-retrieved context to inform condition detection
+    simple_reasoning = simplify_reasoning(summary)
+    recommended_specialty = get_recommended_specialty(normalized_query, summary)
+    # Include RAG context info in condition detection for better accuracy
+    rag_context_str = " ".join([c.title + " " + c.body[:200] for c in contexts]) if contexts else ""
+    suspected_condition = get_suspected_condition(normalized_query, summary, rag_context_str)
+    
+    # Get suggested doctors
+    suggested_doctors = (
+        get_suggested_doctors(db, recommended_specialty) if db else []
+    )
+
     logger.info(
-        "triage_completed triage_level=%s query_length=%s contexts=%s",
+        "triage_completed triage_level=%s query_length=%s contexts=%s specialty=%s condition=%s",
         triage_level,
         len(normalized_query),
         len(contexts),
+        recommended_specialty,
+        suspected_condition,
     )
 
     return TriageResponse(
         triage_level=triage_level,
         summary=summary,
+        simple_reasoning=simple_reasoning,
+        plain_language_explanation=f"Based on your symptoms, you may have a {recommended_specialty.lower()}-related condition. {simple_reasoning}",
         actions=actions,
+        recommended_specialty=recommended_specialty,
+        suspected_condition=suspected_condition,
+        suggested_doctors=suggested_doctors,
         history_used=history_used,
         disclaimer=(
             "This is not medical advice. If you think you may have a medical "

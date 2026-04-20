@@ -1,3 +1,4 @@
+// Force recompile with new doctor suggestions feature
 import type { PatientProfileResponseDto, TriageResponseDto } from "../api/dto";
 import TriageForm from "./TriageForm";
 import SectionPanel from "./SectionPanel";
@@ -59,6 +60,40 @@ export default function TriagePanel({
           </div>
 
           <div className="stack-md">
+            {result.simple_reasoning ? (
+              <div>
+                <p className="micro-label">Simple reasoning</p>
+                <p>{result.simple_reasoning}</p>
+              </div>
+            ) : null}
+
+            {result.suspected_condition ? (
+              <div>
+                <p className="micro-label">Suspected condition</p>
+                <p>{result.suspected_condition}</p>
+              </div>
+            ) : null}
+
+            {result.recommended_specialty ? (
+              <div>
+                <p className="micro-label">Recommended specialty</p>
+                <p>{result.recommended_specialty}</p>
+              </div>
+            ) : null}
+
+            {result.suggested_doctors && result.suggested_doctors.length > 0 ? (
+              <div>
+                <p className="micro-label">Suggested doctors</p>
+                <ul className="list">
+                  {result.suggested_doctors.map((doctor) => (
+                    <li key={doctor.id}>
+                      <strong>{doctor.full_name}</strong> ({doctor.specialty}) - {doctor.clinic}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div>
               <p className="micro-label">Summary</p>
               <p>{result.summary}</p>

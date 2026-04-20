@@ -23,6 +23,25 @@ def list_doctors(
     ]
 
 
+@router.get("/specialty/{specialty}", response_model=list[DoctorProfileResponse])
+def list_doctors_by_specialty(
+    specialty: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> list[DoctorProfileResponse]:
+    """Get doctors by specialty."""
+    profiles = (
+        db.query(DoctorProfile)
+        .filter(DoctorProfile.specialty.ilike(f"%{specialty}%"))
+        .order_by(DoctorProfile.full_name.asc())
+        .all()
+    )
+    return [
+        DoctorProfileResponse.model_validate(profile, from_attributes=True)
+        for profile in profiles
+    ]
+
+
 @router.post("/me", response_model=DoctorProfileResponse)
 def upsert_my_profile(
     payload: DoctorProfileUpsert,

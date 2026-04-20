@@ -37,22 +37,29 @@ class StubReasoner:
         patient_context: str | None = None,
     ) -> str:
         if not contexts:
-            context_note = (
-                " Patient history context was included." if patient_context else ""
-            )
-            return (
-                f"Triage level: {triage_level}. "
-                f"No medical references were retrieved.{context_note}"
-            )
+            if triage_level == "high":
+                return "Your symptoms need urgent care right away. Please go to an emergency room or call emergency services."
+            elif triage_level == "medium":
+                return "You should see a doctor soon, preferably today. Your symptoms need professional assessment."
+            else:
+                return "Monitor your symptoms. See a doctor if things get worse or don't improve."
 
         citations = self._extract_citations(contexts)
         if not citations:
-            return f"Triage level: {triage_level}. Retrieved supporting context."
+            if triage_level == "high":
+                return "Your symptoms are serious. Seek emergency care immediately."
+            elif triage_level == "medium":
+                return "You need to see a doctor soon about your symptoms."
+            else:
+                return "Rest and stay hydrated. See a doctor if symptoms don't improve."
 
-        joined_citations = "; ".join(citations)
-        return (
-            f"Triage level: {triage_level}. Supporting references: {joined_citations}."
-        )
+        # Return simple explanation based on urgency
+        if triage_level == "high":
+            return f"Your symptoms suggest a serious condition. You need emergency care right away. Your main concerns: {citations[0]}"
+        elif triage_level == "medium":
+            return f"Your symptoms need urgent attention. See a doctor soon. Key concern: {citations[0]}"
+        else:
+            return f"Your symptoms may improve with rest. Monitor yourself. Related: {citations[0]}"
 
 
 class OllamaReasoner:
@@ -90,14 +97,23 @@ class OllamaReasoner:
         )
         patient_block = patient_context or "No patient history provided."
         prompt = (
-            "You are a medical triage assistant. "
-            "Return one concise paragraph with: risk rationale, key warning signs, "
-            "and recommended next action. Avoid diagnosis certainty.\n\n"
-            f"Triage level: {triage_level}\n"
-            f"Query: {query}\n\n"
-            f"Patient context:\n{patient_block}\n\n"
-            f"Knowledge context:\n{context_text}\n\n"
-            "Output format: Summary: <text>"
+            "You are a medical triage assistant helping regular people understand their symptoms. "
+            "Use SIMPLE, PLAIN LANGUAGE - explain like you're talking to a non-doctor.\n\n"
+            "Write ONE SHORT paragraph (3-4 sentences) explaining:\n"
+            "1. What might be happening (in simple terms)\n"
+            "2. Why it matters (in simple terms)\n"
+            "3. What they should do next\n\n"
+            "IMPORTANT:\n"
+            "- NO medical jargon\n"
+            "- NO Latin terms\n"
+            "- Use everyday words\n"
+            "- Be brief and clear\n"
+            "- Don't say 'diagnosis' or claim certainty\n\n"
+            f"Symptoms: {query}\n"
+            f"Urgency level: {triage_level}\n\n"
+            f"Patient information:\n{patient_block}\n\n"
+            f"Medical information:\n{context_text}\n\n"
+            "Explain simply:"
         )
 
         payload = {

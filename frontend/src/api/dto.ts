@@ -100,10 +100,22 @@ export type TriageRequestDto = {
   patient_id?: number;
 };
 
+export type DoctorSuggestionDto = {
+  id: number;
+  full_name: string;
+  specialty: string;
+  clinic: string;
+};
+
 export type TriageResponseDto = {
   triage_level: TriageLevel;
   summary: string;
   actions: string[];
   disclaimer: string;
   history_used: boolean;
+  simple_reasoning?: string;
+  plain_language_explanation?: string;
+  recommended_specialty?: string;
+  suspected_condition?: string;
+  suggested_doctors?: DoctorSuggestionDto[];
 };
