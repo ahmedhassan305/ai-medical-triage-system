@@ -30,7 +30,8 @@ def test_api_v1_triage_with_tfidf_has_summary(monkeypatch) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["summary"]
-    assert "Triage level:" in body["summary"]
+    assert body["supporting_references"]
+    assert body["suspected_conditions"]
 
 
 def test_tfidf_retriever_context_has_source_and_url() -> None:

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type {
   DoctorProfileResponseDto,
@@ -7,6 +7,7 @@ import type {
   PatientProfileUpsertDto,
   RoleType,
 } from "../api/dto";
+import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
 import SectionPanel from "./SectionPanel";
 
 type ProfilePanelProps = {
@@ -23,6 +24,8 @@ const EMPTY_PATIENT_FORM: PatientProfileUpsertDto = {
   full_name: "",
   age: 0,
   sex: "",
+  national_id: "",
+  current_governorate: "",
   smoker: false,
   alcoholic: false,
   chronic_conditions: [],
@@ -49,6 +52,8 @@ export default function ProfilePanel({
           full_name: patientProfile.full_name,
           age: patientProfile.age,
           sex: patientProfile.sex,
+          national_id: patientProfile.national_id ?? "",
+          current_governorate: patientProfile.current_governorate ?? "",
           smoker: patientProfile.smoker,
           alcoholic: patientProfile.alcoholic,
           chronic_conditions: patientProfile.chronic_conditions,
@@ -68,6 +73,14 @@ export default function ProfilePanel({
     patientProfile?.chronic_conditions.join(", ") ?? "",
   );
 
+  const parsedNationalId = useMemo(
+    () =>
+      patientForm.national_id
+        ? parseEgyptianNationalId(patientForm.national_id)
+        : null,
+    [patientForm.national_id],
+  );
+
   async function submitPatientProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onSavePatient({
@@ -84,13 +97,20 @@ export default function ProfilePanel({
     await onSaveDoctor(doctorForm);
   }
 
+  const dateOfBirth =
+    parsedNationalId?.dateOfBirth ?? patientProfile?.date_of_birth ?? "Derived after validation";
+  const inferredGovernorate =
+    parsedNationalId?.governorate ?? patientProfile?.inferred_governorate ?? "Will be inferred from the national ID";
+  const nationalIdHasValue = Boolean(patientForm.national_id?.trim());
+  const nationalIdInvalid = nationalIdHasValue && !parsedNationalId;
+
   return (
     <div className="stack-lg">
       {role === "patient" || role === "admin" ? (
         <SectionPanel
           eyebrow="Patient profile"
-          title="Demographics and risk factors"
-          description="These fields drive history-aware triage and patient record workflows."
+          title="Demographics and identity"
+          description="This profile powers patient-aware triage, appointments, and visit history. The national ID can derive date of birth and the governorate encoded inside the ID, while current residence stays editable."
         >
           <form className="form-grid" onSubmit={submitPatientProfile}>
             <div className="field">
@@ -108,6 +128,66 @@ export default function ProfilePanel({
             </div>
 
             <div className="field">
+              <label htmlFor="patient-sex">Gender</label>
+              <select
+                id="patient-sex"
+                value={patientForm.sex}
+                onChange={(event) =>
+                  setPatientForm((current) => ({
+                    ...current,
+                    sex: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="patient-national-id">Egyptian national ID</label>
+              <input
+                id="patient-national-id"
+                inputMode="numeric"
+                maxLength={14}
+                value={patientForm.national_id ?? ""}
+                onChange={(event) => {
+                  const nextValue = event.target.value.replace(/\D/g, "").slice(0, 14);
+                  const parsed = parseEgyptianNationalId(nextValue);
+                  setPatientForm((current) => ({
+                    ...current,
+                    ...(() => {
+                      const previousParsed = current.national_id
+                        ? parseEgyptianNationalId(current.national_id)
+                        : null;
+                      const shouldPrefillGovernorate =
+                        !current.current_governorate ||
+                        current.current_governorate === previousParsed?.governorate;
+                      return {
+                        current_governorate:
+                          parsed && shouldPrefillGovernorate
+                            ? parsed.governorate
+                            : current.current_governorate,
+                      };
+                    })(),
+                    national_id: nextValue,
+                    age: parsed?.age ?? current.age,
+                  }));
+                }}
+                placeholder="14-digit الرقم القومي"
+              />
+              <small className="field__hint">
+                Used to derive date of birth and the governorate encoded in the ID.
+              </small>
+              {nationalIdInvalid ? (
+                <small className="field__error">
+                  Enter a valid 14-digit Egyptian national ID to derive date of birth and governorate.
+                </small>
+              ) : null}
+            </div>
+
+            <div className="field">
               <label htmlFor="patient-age">Age</label>
               <input
                 id="patient-age"
@@ -122,20 +202,45 @@ export default function ProfilePanel({
                   }))
                 }
               />
+              <small className="field__hint">
+                If the national ID is valid, age is updated automatically.
+              </small>
             </div>
 
             <div className="field">
-              <label htmlFor="patient-sex">Sex</label>
+              <label htmlFor="patient-dob">Date of birth from national ID</label>
+              <input id="patient-dob" value={dateOfBirth} readOnly />
+            </div>
+
+            <div className="field">
+              <label htmlFor="patient-inferred-governorate">
+                Governorate from national ID
+              </label>
               <input
-                id="patient-sex"
-                value={patientForm.sex}
+                id="patient-inferred-governorate"
+                value={inferredGovernorate}
+                readOnly
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="patient-current-governorate">
+                Current governorate / residence
+              </label>
+              <input
+                id="patient-current-governorate"
+                value={patientForm.current_governorate ?? ""}
                 onChange={(event) =>
                   setPatientForm((current) => ({
                     ...current,
-                    sex: event.target.value,
+                    current_governorate: event.target.value,
                   }))
                 }
+                placeholder="Editable current residence"
               />
+              <small className="field__hint">
+                This may match the ID-based governorate, but it should reflect the patient’s current residence.
+              </small>
             </div>
 
             <div className="field field--full">
@@ -181,6 +286,7 @@ export default function ProfilePanel({
               className="button button--primary"
               disabled={
                 savingPatient ||
+                nationalIdInvalid ||
                 !patientForm.full_name.trim() ||
                 !patientForm.sex.trim()
               }
@@ -195,7 +301,7 @@ export default function ProfilePanel({
         <SectionPanel
           eyebrow="Doctor profile"
           title="Clinical identity"
-          description="This profile is used in visit creation, approvals, and doctor selection flows."
+          description="This profile is used in visit creation, approvals, and doctor suggestions after triage."
         >
           <form className="form-grid" onSubmit={submitDoctorProfile}>
             <div className="field">

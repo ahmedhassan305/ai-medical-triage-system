@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type {
   AppointmentResponseDto,
@@ -27,6 +27,10 @@ type AppointmentsPanelProps = {
     appointmentId: number,
     payload: { status: "approved" | "rejected"; notes?: string },
   ) => Promise<void>;
+  preFillDoctorId?: number | null;
+  preFillReason?: string;
+  preFillSpecialty?: string;
+  onClearPreFill?: () => void;
 };
 
 export default function AppointmentsPanel({
@@ -39,12 +43,31 @@ export default function AppointmentsPanel({
   error,
   onCreate,
   onUpdateStatus,
+  preFillDoctorId,
+  preFillReason,
+  preFillSpecialty,
+  onClearPreFill,
 }: AppointmentsPanelProps) {
   const [doctorId, setDoctorId] = useState<number | "">("");
   const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
+
+  // Handle pre-fill from triage
+  useEffect(() => {
+    if (preFillDoctorId) {
+      setDoctorId(preFillDoctorId);
+      setReason(preFillReason || "");
+      // Auto-clear pre-fill after setting it
+      const timer = setTimeout(() => {
+        if (onClearPreFill) {
+          onClearPreFill();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [preFillDoctorId, preFillReason, onClearPreFill]);
 
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,15 +98,15 @@ export default function AppointmentsPanel({
           {role === "admin" ? (
             <div className="field">
               <label htmlFor="appointment-patient">Patient</label>
-            <select
-              id="appointment-patient"
-              value={patientId}
-              onChange={(event) =>
-                setPatientId(
-                  event.target.value ? Number(event.target.value) : "",
-                )
-              }
-            >
+              <select
+                id="appointment-patient"
+                value={patientId}
+                onChange={(event) =>
+                  setPatientId(
+                    event.target.value ? Number(event.target.value) : "",
+                  )
+                }
+              >
                 <option value="">Select patient</option>
                 {patients.map((patient) => (
                   <option key={patient.id} value={patient.id}>

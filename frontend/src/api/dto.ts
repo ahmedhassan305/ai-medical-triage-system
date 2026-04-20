@@ -5,6 +5,9 @@ export type RegisterRequestDto = {
   email: string;
   password: string;
   role: RoleType;
+  full_name?: string;
+  national_id?: string;
+  sex?: "Male" | "Female";
 };
 
 export type LoginRequestDto = {
@@ -29,7 +32,9 @@ export type TokenResponseDto = {
 export type PatientProfileUpsertDto = {
   full_name: string;
   age: number;
-  sex: string;
+  sex: "Male" | "Female";
+  national_id?: string | null;
+  current_governorate?: string | null;
   smoker: boolean;
   alcoholic: boolean;
   chronic_conditions: string[];
@@ -38,6 +43,9 @@ export type PatientProfileUpsertDto = {
 export type PatientProfileResponseDto = PatientProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  date_of_birth?: string | null;
+  inferred_governorate_code?: string | null;
+  inferred_governorate?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -46,11 +54,16 @@ export type DoctorProfileUpsertDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  area?: string | null;
+  city?: string | null;
 };
 
 export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  booking_url?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -100,10 +113,50 @@ export type TriageRequestDto = {
   patient_id?: number;
 };
 
+export type DoctorSuggestionDto = {
+  id: number;
+  full_name: string;
+  specialty: string;
+  clinic: string;
+  area?: string | null;
+  city?: string | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  booking_url?: string | null;
+};
+
+export type SuspectedConditionDto = {
+  name: string;
+  likelihood: "more_likely" | "possible" | "less_likely";
+  explanation: string;
+};
+
+export type SupportingReferenceDto = {
+  title: string;
+  source: string;
+  url?: string | null;
+  snippet: string;
+};
+
 export type TriageResponseDto = {
   triage_level: TriageLevel;
+  urgency_level: TriageLevel;
+  urgency_label: string;
+  urgency_reason?: string | null;
   summary: string;
+  clinical_summary: string;
+  patient_friendly_explanation: string;
   actions: string[];
+  recommended_actions: string[];
+  red_flags: string[];
   disclaimer: string;
   history_used: boolean;
+  simple_reasoning: string;
+  plain_language_explanation: string;
+  recommended_specialty?: string | null;
+  specialty_reason?: string | null;
+  suspected_condition?: string | null;
+  suspected_conditions: SuspectedConditionDto[];
+  suggested_doctors: DoctorSuggestionDto[];
+  supporting_references: SupportingReferenceDto[];
 };

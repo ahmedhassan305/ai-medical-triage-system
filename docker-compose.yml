@@ -22,16 +22,6 @@ services:
       - ./backend/data:/app/data
       - rag_cache:/app/.cache
 
-  frontend:
-    build:
-      context: ./frontend
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:19001}
-
   ollama:
     image: ollama/ollama
     ports:
@@ -46,7 +36,11 @@ services:
           ollama serve &
           pid=$$!
           until ollama list >/dev/null 2>&1; do sleep 2; done
-          ollama pull "$$OLLAMA_MODEL"
+          if ! ollama list | grep -q "$$OLLAMA_MODEL"; then
+            ollama pull "$$OLLAMA_MODEL"
+          else
+            echo "Model $$OLLAMA_MODEL already exists, skipping pull."
+          fi
           wait "$$pid"
 
   postgres:

@@ -33,18 +33,18 @@ export default function TriageForm({
       }}
     >
       <div className="field field--full">
-        <label htmlFor="triage-query">Medical query</label>
+        <label htmlFor="triage-query">Describe what you are feeling</label>
         <textarea
           id="triage-query"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Describe symptoms, onset, severity, and any concerns..."
+          placeholder="Example: I have chest tightness and shortness of breath since this morning, and it gets worse when I walk."
           rows={5}
         />
       </div>
 
       <div className="field">
-        <label htmlFor="triage-patient">Patient context</label>
+        <label htmlFor="triage-patient">Linked patient profile</label>
         <select
           id="triage-patient"
           value={patientId ?? ""}
@@ -69,7 +69,7 @@ export default function TriageForm({
         className="button button--primary"
         disabled={loading || query.trim().length === 0}
       >
-        {loading ? "Running triage..." : "Run triage"}
+        {loading ? "Reviewing symptoms..." : "Check symptoms"}
       </button>
     </form>
   );

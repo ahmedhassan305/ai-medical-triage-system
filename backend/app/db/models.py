@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -41,6 +41,25 @@ class PatientProfile(Base):
     full_name: Mapped[str] = mapped_column(String(200))
     age: Mapped[int] = mapped_column(Integer)
     sex: Mapped[str] = mapped_column(String(20))
+    national_id: Mapped[str | None] = mapped_column(
+        String(14),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    inferred_governorate_code: Mapped[str | None] = mapped_column(
+        String(2),
+        nullable=True,
+    )
+    inferred_governorate: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+    current_governorate: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
     smoker: Mapped[bool] = mapped_column(Boolean, default=False)
     alcoholic: Mapped[bool] = mapped_column(Boolean, default=False)
     chronic_conditions: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -69,6 +88,11 @@ class DoctorProfile(Base):
     full_name: Mapped[str] = mapped_column(String(200))
     specialty: Mapped[str] = mapped_column(String(120))
     clinic: Mapped[str] = mapped_column(String(200))
+    area: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    booking_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -1,11 +1,40 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Protocol
 
 import httpx
 
-from app.schemas.triage import TriageLevel
+from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
+from app.schemas.triage import (
+    ReasonerCondition,
+    StructuredReasoningOutput,
+    TriageLevel,
+)
+
+HIGH_RISK_TERMS: tuple[str, ...] = (
+    "chest pain",
+    "shortness of breath",
+    "difficulty breathing",
+    "stroke",
+    "seizure",
+    "unconscious",
+    "severe bleeding",
+    "overdose",
+    "suicidal",
+    "throat closing",
+)
+
+MEDIUM_RISK_TERMS: tuple[str, ...] = (
+    "fever",
+    "vomiting",
+    "dehydration",
+    "fracture",
+    "burn",
+    "infection",
+    "migraine",
+)
 
 
 class Reasoner(Protocol):
@@ -15,43 +44,42 @@ class Reasoner(Protocol):
         contexts: list[str],
         triage_level: TriageLevel,
         patient_context: str | None = None,
-    ) -> str: ...
+    ) -> StructuredReasoningOutput: ...
 
 
 class StubReasoner:
-    def _extract_citations(self, contexts: list[str]) -> list[str]:
-        citations: list[str] = []
-        for context in contexts:
-            first_line = context.splitlines()[0].strip()
-            if first_line and first_line not in citations:
-                citations.append(first_line)
-            if len(citations) >= 2:
-                break
-        return citations
-
     def reason(
         self,
         query: str,
         contexts: list[str],
         triage_level: TriageLevel,
         patient_context: str | None = None,
-    ) -> str:
-        if not contexts:
-            context_note = (
-                " Patient history context was included." if patient_context else ""
-            )
-            return (
-                f"Triage level: {triage_level}. "
-                f"No medical references were retrieved.{context_note}"
+    ) -> StructuredReasoningOutput:
+        possible_conditions = _guess_conditions(query)
+        red_flags = _extract_red_flags(query)
+        explanation = _fallback_explanation(
+            triage_level, possible_conditions, red_flags
+        )
+        actions = _fallback_actions(triage_level)
+        specialty = _fallback_specialty(possible_conditions)
+
+        if patient_context and "Relevant history" in patient_context:
+            explanation = (
+                f"{explanation} Your recent health history was considered while "
+                "reviewing this complaint."
             )
 
-        citations = self._extract_citations(contexts)
-        if not citations:
-            return f"Triage level: {triage_level}. Retrieved supporting context."
-
-        joined_citations = "; ".join(citations)
-        return (
-            f"Triage level: {triage_level}. Supporting references: {joined_citations}."
+        return StructuredReasoningOutput(
+            urgency_level=triage_level,
+            clinical_summary=_fallback_clinical_summary(
+                triage_level,
+                possible_conditions,
+            ),
+            patient_friendly_explanation=explanation,
+            possible_conditions=possible_conditions,
+            recommended_specialty=specialty,
+            recommended_actions=actions,
+            red_flags=red_flags,
         )
 
 
@@ -84,35 +112,27 @@ class OllamaReasoner:
         contexts: list[str],
         triage_level: TriageLevel,
         patient_context: str | None = None,
-    ) -> str:
-        context_text = (
-            "\n\n".join(contexts[:3]) if contexts else "No retrieved context."
+    ) -> StructuredReasoningOutput:
+        prompt = self._build_prompt(
+            query=query,
+            contexts=contexts,
+            triage_level=triage_level,
+            patient_context=patient_context,
         )
-        patient_block = patient_context or "No patient history provided."
-        prompt = (
-            "You are a medical triage assistant. "
-            "Return one concise paragraph with: risk rationale, key warning signs, "
-            "and recommended next action. Avoid diagnosis certainty.\n\n"
-            f"Triage level: {triage_level}\n"
-            f"Query: {query}\n\n"
-            f"Patient context:\n{patient_block}\n\n"
-            f"Knowledge context:\n{context_text}\n\n"
-            "Output format: Summary: <text>"
-        )
-
         payload = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "format": "json",
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(f"{self.host}/api/generate", json=payload)
                 response.raise_for_status()
-            body = response.json()
-            generated = str(body.get("response", "")).strip()
-            if generated:
-                return generated
+            generated = str(response.json().get("response", "")).strip()
+            parsed = _parse_reasoner_payload(generated)
+            if parsed is not None:
+                return parsed
         except Exception:
             pass
 
@@ -122,3 +142,221 @@ class OllamaReasoner:
             triage_level,
             patient_context=patient_context,
         )
+
+    def _build_prompt(
+        self,
+        *,
+        query: str,
+        contexts: list[str],
+        triage_level: TriageLevel,
+        patient_context: str | None,
+    ) -> str:
+        example_payload = {
+            "urgency_level": "medium",
+            "clinical_summary": (
+                "Respiratory symptoms with fever could reflect an acute lower "
+                "respiratory infection."
+            ),
+            "patient_friendly_explanation": (
+                "Your symptoms may be related to a chest or breathing infection. "
+                "Because you have fever and cough, it would be safer to speak "
+                "with a doctor soon rather than waiting several days."
+            ),
+            "possible_conditions": [
+                {
+                    "name": "Bronchitis",
+                    "explanation": "Cough and fever can fit this pattern.",
+                },
+                {
+                    "name": "Pneumonia",
+                    "explanation": (
+                        "Fever with persistent cough can sometimes point to a "
+                        "lung infection."
+                    ),
+                },
+            ],
+            "recommended_specialty": "Pulmonology",
+            "recommended_actions": [
+                "Arrange a same-day medical review if symptoms are worsening.",
+                "Seek urgent help if breathing becomes difficult.",
+            ],
+            "red_flags": ["trouble breathing", "blue lips"],
+        }
+        context_text = (
+            "\n\n".join(contexts[:3]) if contexts else "No retrieved evidence."
+        )
+        patient_block = patient_context or "No patient history provided."
+        return (
+            "You are a careful medical triage assistant. "
+            "You do not give a confirmed diagnosis. "
+            "Use plain, reassuring language for non-doctors. "
+            "Use the retrieved evidence when it is relevant.\n\n"
+            "Return ONLY valid JSON with this exact shape:\n"
+            "{\n"
+            '  "urgency_level": "low|medium|high",\n'
+            '  "clinical_summary": "short clinician-style summary",\n'
+            '  "patient_friendly_explanation": "simple explanation for the patient",\n'
+            '  "possible_conditions": [\n'
+            '    {"name": "condition", "explanation": "why it may fit"}\n'
+            "  ],\n"
+            '  "recommended_specialty": "specialty name or null",\n'
+            '  "recommended_actions": ["action 1", "action 2"],\n'
+            '  "red_flags": ["warning sign 1", "warning sign 2"]\n'
+            "}\n\n"
+            "Rules:\n"
+            "- possible_conditions must contain 1 to 3 possibilities.\n"
+            "- Use wording such as 'possible condition' or 'may be related to'.\n"
+            "- Do not overstate certainty.\n"
+            "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
+            "- If symptoms sound dangerous, set urgency_level to high.\n\n"
+            "Example JSON:\n"
+            f"{json.dumps(example_payload, indent=2)}\n\n"
+            f"Symptoms: {query}\n"
+            f"Safety baseline urgency: {triage_level}\n\n"
+            f"Patient context:\n{patient_block}\n\n"
+            f"Retrieved evidence:\n{context_text}\n"
+        )
+
+
+def _parse_reasoner_payload(raw_text: str) -> StructuredReasoningOutput | None:
+    candidate = raw_text.strip()
+    if not candidate:
+        return None
+
+    if not candidate.startswith("{"):
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        candidate = candidate[start : end + 1]
+
+    try:
+        payload = json.loads(candidate)
+        return StructuredReasoningOutput.model_validate(payload)
+    except Exception:
+        return None
+
+
+def _guess_conditions(query: str) -> list[ReasonerCondition]:
+    lowered = query.lower()
+    conditions: list[ReasonerCondition] = []
+    seen: set[str] = set()
+    for keyword, condition_text in PATIENT_SYMPTOM_KEYWORDS:
+        if keyword not in lowered:
+            continue
+        for condition_name in _split_condition_text(condition_text):
+            normalized = condition_name.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            conditions.append(
+                ReasonerCondition(
+                    name=condition_name,
+                    explanation="This possibility matches symptoms you described.",
+                )
+            )
+            if len(conditions) >= 3:
+                return conditions
+    return conditions
+
+
+def _split_condition_text(condition_text: str) -> list[str]:
+    return [item.strip() for item in condition_text.split("/") if item.strip()]
+
+
+def _extract_red_flags(query: str) -> list[str]:
+    lowered = query.lower()
+    matches = [term for term in HIGH_RISK_TERMS if term in lowered]
+    if matches:
+        return matches[:3]
+    return [term for term in MEDIUM_RISK_TERMS if term in lowered][:2]
+
+
+def _fallback_explanation(
+    triage_level: TriageLevel,
+    possible_conditions: list[ReasonerCondition],
+    red_flags: list[str],
+) -> str:
+    if triage_level == "high":
+        return (
+            "Your symptoms could reflect a serious problem and should be checked "
+            "urgently. Please seek emergency care now, especially if the symptoms "
+            "are getting worse."
+        )
+    if triage_level == "medium":
+        if possible_conditions:
+            return (
+                f"Your symptoms may be related to {possible_conditions[0].name}. "
+                "This does not look trivial, so arranging medical review soon would "
+                "be the safer step."
+            )
+        return (
+            "Your symptoms do not sound like a minor issue. It would be safer to "
+            "speak with a doctor soon rather than waiting."
+        )
+
+    explanation = (
+        "Your symptoms may be related to a less urgent condition, but they still "
+        "deserve attention if they continue or get worse."
+    )
+    if red_flags:
+        explanation += " If warning signs develop, seek urgent care sooner."
+    return explanation
+
+
+def _fallback_clinical_summary(
+    triage_level: TriageLevel,
+    possible_conditions: list[ReasonerCondition],
+) -> str:
+    if possible_conditions:
+        return (
+            f"{triage_level.title()} urgency presentation with possible "
+            f"{possible_conditions[0].name.lower()}."
+        )
+    return f"{triage_level.title()} urgency symptom presentation."
+
+
+def _fallback_actions(triage_level: TriageLevel) -> list[str]:
+    if triage_level == "high":
+        return [
+            "Seek emergency care immediately.",
+            "Call local emergency services if symptoms escalate.",
+        ]
+    if triage_level == "medium":
+        return [
+            "Arrange urgent medical review today or as soon as possible.",
+            "Seek faster care if symptoms worsen or new warning signs appear.",
+        ]
+    return [
+        "Rest, stay hydrated, and monitor how you feel.",
+        "Book a routine review if symptoms persist or you are worried.",
+    ]
+
+
+def _fallback_specialty(
+    possible_conditions: list[ReasonerCondition],
+) -> str | None:
+    if not possible_conditions:
+        return None
+
+    lowered = " ".join(condition.name.lower() for condition in possible_conditions)
+    if any(token in lowered for token in ("heart", "cardiac", "coronary")):
+        return "Cardiology"
+    if any(
+        token in lowered
+        for token in ("asthma", "copd", "pneumonia", "bronchitis", "lung")
+    ):
+        return "Pulmonology"
+    if any(
+        token in lowered
+        for token in ("stomach", "appendicitis", "gastritis", "gerd", "bowel")
+    ):
+        return "Gastroenterology"
+    if any(
+        token in lowered
+        for token in ("migraine", "stroke", "meningitis", "neuropathy", "vertigo")
+    ):
+        return "Neurology"
+    if any(token in lowered for token in ("fracture", "sprain", "arthritis")):
+        return "Orthopedics"
+    return "General Practice"

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import require_roles
 from app.db.models import DoctorProfile, User
 from app.db.session import get_db
 from app.schemas.doctor import DoctorProfileResponse, DoctorProfileUpsert
@@ -17,6 +17,25 @@ def list_doctors(
     _current_user: User = Depends(require_roles("patient", "doctor", "admin")),
 ) -> list[DoctorProfileResponse]:
     profiles = db.query(DoctorProfile).order_by(DoctorProfile.full_name.asc()).all()
+    return [
+        DoctorProfileResponse.model_validate(profile, from_attributes=True)
+        for profile in profiles
+    ]
+
+
+@router.get("/specialty/{specialty}", response_model=list[DoctorProfileResponse])
+def list_doctors_by_specialty(
+    specialty: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> list[DoctorProfileResponse]:
+    """Get doctors by specialty."""
+    profiles = (
+        db.query(DoctorProfile)
+        .filter(DoctorProfile.specialty.ilike(f"%{specialty}%"))
+        .order_by(DoctorProfile.full_name.asc())
+        .all()
+    )
     return [
         DoctorProfileResponse.model_validate(profile, from_attributes=True)
         for profile in profiles
@@ -47,7 +66,7 @@ def upsert_my_profile(
 @router.get("/me", response_model=DoctorProfileResponse)
 def get_my_profile(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> DoctorProfileResponse:
     profile = (
         db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()

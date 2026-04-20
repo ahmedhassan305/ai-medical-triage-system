@@ -11,6 +11,9 @@ type AuthPanelProps = {
     email: string;
     password: string;
     role: RoleType;
+    full_name?: string;
+    national_id?: string;
+    sex?: string;
   }) => Promise<void>;
 };
 
@@ -24,6 +27,11 @@ export default function AuthPanel({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<RoleType>("patient");
+  
+  // Patient registration fields
+  const [fullName, setFullName] = useState("");
+  const [nationalId, setNationalId] = useState("");
+  const [sex, setSex] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,8 +41,30 @@ export default function AuthPanel({
       return;
     }
 
-    await onRegister({ email: email.trim(), password, role });
+    const registerPayload: any = {
+      email: email.trim(),
+      password,
+      role,
+    };
+
+    if (role === "patient") {
+      registerPayload.full_name = fullName.trim();
+      registerPayload.national_id = nationalId.trim();
+      registerPayload.sex = sex;
+    }
+
+    await onRegister(registerPayload);
   }
+
+  const isPatientMode = mode === "register" && role === "patient";
+  const canSubmit =
+    mode === "login"
+      ? !loading && !!email.trim() && password.length >= 8
+      : !loading &&
+        !!email.trim() &&
+        password.length >= 8 &&
+        (!isPatientMode ||
+          (!!fullName.trim() && !!nationalId.trim() && !!sex));
 
   return (
     <div className="auth-shell">
@@ -107,18 +137,82 @@ export default function AuthPanel({
           </div>
 
           {mode === "register" ? (
-            <div className="field">
-              <label htmlFor="auth-role">Role</label>
-              <select
-                id="auth-role"
-                value={role}
-                onChange={(event) => setRole(event.target.value as RoleType)}
-              >
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+            <>
+              <div className="field">
+                <label htmlFor="auth-role">Account type</label>
+                <select
+                  id="auth-role"
+                  value={role}
+                  onChange={(event) => {
+                    setRole(event.target.value as RoleType);
+                    // Clear patient fields when switching roles
+                    if (event.target.value !== "patient") {
+                      setFullName("");
+                      setNationalId("");
+                      setSex("");
+                    }
+                  }}
+                >
+                  <option value="patient">Patient</option>
+                  <option value="doctor">Doctor</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              {isPatientMode ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="auth-full-name">Full name</label>
+                    <input
+                      id="auth-full-name"
+                      type="text"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
+                      placeholder="Your full name"
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="auth-national-id">
+                      Egyptian national ID
+                    </label>
+                    <input
+                      id="auth-national-id"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={14}
+                      value={nationalId}
+                      onChange={(event) => {
+                        const cleaned = event.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 14);
+                        setNationalId(cleaned);
+                      }}
+                      placeholder="14-digit الرقم القومي"
+                      required
+                    />
+                    <small className="field__hint">
+                      Used to derive date of birth and governorate information.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="auth-sex">Gender</label>
+                    <select
+                      id="auth-sex"
+                      value={sex}
+                      onChange={(event) => setSex(event.target.value)}
+                      required
+                    >
+                      <option value="">Select gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+                </>
+              ) : null}
+            </>
           ) : null}
 
           {error ? <div className="notice notice--error">{error}</div> : null}
@@ -126,7 +220,7 @@ export default function AuthPanel({
           <button
             type="submit"
             className="button button--primary"
-            disabled={loading || !email.trim() || password.length < 8}
+            disabled={!canSubmit}
           >
             {loading
               ? "Working..."
