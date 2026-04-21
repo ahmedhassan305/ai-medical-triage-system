@@ -548,6 +548,29 @@ textarea {
   align-items: flex-start;
 }
 
+.button-row--align-end {
+  justify-content: flex-end;
+  align-self: end;
+  flex-wrap: wrap;
+}
+
+.patient-lookup-card {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.86));
+}
+
+.patient-lookup-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
 .appointment-prefill {
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: var(--radius-md);

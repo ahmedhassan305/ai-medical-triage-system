@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { TriageResponseDto } from "../src/api/dto";
+import type {
+  PatientProfileResponseDto,
+  TriageResponseDto,
+  VisitResponseDto,
+} from "../src/api/dto";
 import AppointmentsPanel from "../src/components/AppointmentsPanel";
 import TriagePanel from "../src/components/TriagePanel";
 
@@ -55,17 +59,56 @@ const triageResult: TriageResponseDto = {
 
 describe("triage handoff rendering", () => {
   it("renders reserve appointment action for suggested doctors", () => {
+    const linkedPatient: PatientProfileResponseDto = {
+      id: 10,
+      user_id: null,
+      full_name: "Mariam Hassan",
+      age: 24,
+      sex: "Female",
+      national_id: "30101010212345",
+      current_governorate: "Alexandria",
+      smoker: false,
+      alcoholic: false,
+      chronic_conditions: ["Asthma"],
+      date_of_birth: "2001-01-01",
+      inferred_governorate_code: "02",
+      inferred_governorate: "Alexandria",
+      created_at: "2026-04-21T10:00:00Z",
+      updated_at: "2026-04-21T10:00:00Z",
+    };
+    const latestVisit: VisitResponseDto = {
+      id: 99,
+      patient_id: 10,
+      doctor_id: 5,
+      symptoms: "Severe headache after head injury",
+      diagnosis: "Observation for concussion",
+      notes: "Recent head trauma requires follow-up.",
+      prescriptions: null,
+      vitals: null,
+      attachments: null,
+      created_at: "2026-04-20T15:00:00Z",
+    };
+
     const markup = renderToStaticMarkup(
       <TriagePanel
+        role="doctor"
         loading={false}
         error={null}
         result={triageResult}
-        patientOptions={[]}
-        patientId={1}
-        lockPatientSelection={true}
+        patientProfile={null}
+        linkedPatient={linkedPatient}
+        linkedPatientLatestVisit={latestVisit}
+        patientLookupNationalId="30101010212345"
+        patientLookupLoading={false}
+        patientLookupError={null}
+        patientCreateLoading={false}
+        patientCreateError={null}
         query="head injury"
         onQueryChange={vi.fn()}
-        onPatientChange={vi.fn()}
+        onLookupNationalIdChange={vi.fn()}
+        onLookupPatient={vi.fn(async () => {})}
+        onClearLinkedPatient={vi.fn()}
+        onCreatePatientProfile={vi.fn(() => Promise.resolve())}
         onSubmit={vi.fn()}
         onReserveAppointment={vi.fn()}
       />,
@@ -74,6 +117,8 @@ describe("triage handoff rendering", () => {
     expect(markup).toContain("Reserve Appointment");
     expect(markup).toContain("Supporting medical references");
     expect(markup).toContain("Possible conditions");
+    expect(markup).toContain("Matched patient");
+    expect(markup).toContain("Latest visit summary");
   });
 
   it("renders prefilled appointment banner", () => {

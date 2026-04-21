@@ -40,6 +40,16 @@ export type PatientProfileUpsertDto = {
   chronic_conditions: string[];
 };
 
+export type ManagedPatientProfileCreateDto = {
+  full_name: string;
+  sex: "Male" | "Female";
+  national_id: string;
+  current_governorate?: string | null;
+  smoker: boolean;
+  alcoholic: boolean;
+  chronic_conditions: string[];
+};
+
 export type PatientProfileResponseDto = PatientProfileUpsertDto & {
   id: number;
   user_id: number | null;

@@ -10,7 +10,10 @@ export const apiPaths = {
   },
   patients: {
     list: `${API_V1_PREFIX}/patients/`,
+    create: `${API_V1_PREFIX}/patients/`,
     me: `${API_V1_PREFIX}/patients/me`,
+    byNationalId: (nationalId: string) =>
+      `${API_V1_PREFIX}/patients/by-national-id/${nationalId}`,
     byId: (patientId: number) => `${API_V1_PREFIX}/patients/${patientId}`,
   },
   doctors: {

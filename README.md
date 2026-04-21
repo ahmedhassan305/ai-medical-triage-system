@@ -71,14 +71,20 @@ cd ..
 .\backend\.venv\Scripts\python scripts\seed_doctors.py
 ```
 
-#### 7. Start the backend locally
+#### 7. Reset local demo data to a clean Egypt-like dataset
+```powershell
+cd ..
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
+```
+
+#### 8. Start the backend locally
 ```powershell
 cd backend
 .\.venv\Scripts\activate
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 19001
 ```
 
-#### 8. Start the frontend locally
+#### 9. Start the frontend locally
 ```powershell
 cd ..\frontend
 npm run dev
@@ -114,6 +120,7 @@ pip install -r requirements.txt
 alembic upgrade head
 cd ..
 .\backend\.venv\Scripts\python scripts\seed_doctors.py
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
 cd frontend
 npm install
 npm run dev
@@ -195,6 +202,32 @@ What it does:
 Public data source used in this branch:
 - Vezeeta public doctor directory/profile pages
 - specialty coverage in the canonical seed includes Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, and Family Medicine
+
+## Clean local demo dataset
+
+Canonical local cleanup + reseed command:
+```powershell
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
+```
+
+What it does:
+- removes local smoke-test and dummy records from:
+  - `users`
+  - `patient_profiles`
+  - `doctor_profiles`
+  - `appointments`
+  - `visits`
+- recreates the schema if the local SQLite file is empty
+- reimports the canonical Alexandria public doctor directory seed
+- seeds valid local login accounts for one admin, several doctors, and several patients
+- populates the database with Egypt-like patient profiles, visit history, and 76 appointments with 58 past appointments
+
+Seeded local credentials after reset:
+- admin: `admin.ops@aimts-eg.com` / `AdminPass123!`
+- doctor: `doctor.neurology@aimts-eg.com` / `DoctorPass123!`
+- patient: `patient.mariam.hassan@aimts-eg.com` / `PatientPass123!`
+
+Use this script for local/demo data only. It is intended to replace residue from smoke tests and previous manual experiments.
 
 ## Hybrid triage response
 

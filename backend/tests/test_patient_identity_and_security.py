@@ -145,6 +145,71 @@ def test_patient_profile_derives_birth_date_and_governorate(client: TestClient) 
     assert payload["current_governorate"] == "Cairo"
 
 
+def test_doctor_can_create_and_lookup_patient_by_national_id(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="managed-patient-doctor@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers,
+        full_name="Managed Patient Doctor",
+        specialty="Internal Medicine",
+    )
+
+    create_response = client.post(
+        "/api/v1/patients/",
+        headers=doctor_headers,
+        json={
+            "full_name": "Mona Adel",
+            "sex": "Female",
+            "national_id": "30101010254321",
+            "current_governorate": "",
+            "smoker": False,
+            "alcoholic": False,
+            "chronic_conditions": ["Asthma"],
+        },
+    )
+    assert create_response.status_code == 201
+    created_patient = create_response.json()
+    assert created_patient["date_of_birth"] == "2001-01-01"
+    assert created_patient["inferred_governorate"] == "Alexandria"
+    assert created_patient["current_governorate"] == "Alexandria"
+
+    lookup_response = client.get(
+        "/api/v1/patients/by-national-id/30101010254321",
+        headers=doctor_headers,
+    )
+    assert lookup_response.status_code == 200
+    assert lookup_response.json()["id"] == created_patient["id"]
+
+
+def test_managed_patient_create_rejects_invalid_sex(client: TestClient) -> None:
+    admin_headers = _register_and_login(
+        client,
+        email="managed-patient-admin@example.com",
+        role="admin",
+    )
+
+    create_response = client.post(
+        "/api/v1/patients/",
+        headers=admin_headers,
+        json={
+            "full_name": "Invalid Sex Profile",
+            "sex": "Unknown",
+            "national_id": "30101010133333",
+            "current_governorate": "Cairo",
+            "smoker": False,
+            "alcoholic": False,
+            "chronic_conditions": [],
+        },
+    )
+    assert create_response.status_code == 422
+
+
 def test_patient_cannot_use_other_patient_history_in_triage(client: TestClient) -> None:
     headers_one = _register_and_login(
         client,

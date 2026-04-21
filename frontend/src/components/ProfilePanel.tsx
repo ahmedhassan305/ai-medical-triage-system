@@ -1,13 +1,21 @@
 import { useMemo, useState } from "react";
 
 import type {
+  AppointmentResponseDto,
   DoctorProfileResponseDto,
   DoctorProfileUpsertDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
   RoleType,
+  VisitResponseDto,
 } from "../api/dto";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import {
+  composeDoctorSpecialty,
+  MEDICAL_SPECIALTY_GROUPS,
+  splitDoctorSpecialty,
+} from "../lib/medicalSpecialties";
+import type { DashboardTab } from "./DashboardNav";
 import SectionPanel from "./SectionPanel";
 
 type ProfilePanelProps = {
@@ -16,6 +24,11 @@ type ProfilePanelProps = {
   doctorProfile: DoctorProfileResponseDto | null;
   savingPatient: boolean;
   savingDoctor: boolean;
+  patients: PatientProfileResponseDto[];
+  doctors: DoctorProfileResponseDto[];
+  appointments: AppointmentResponseDto[];
+  recentVisits: VisitResponseDto[];
+  onNavigate: (tab: DashboardTab) => void;
   onSavePatient: (payload: PatientProfileUpsertDto) => Promise<void>;
   onSaveDoctor: (payload: DoctorProfileUpsertDto) => Promise<void>;
 };
@@ -35,11 +48,255 @@ const EMPTY_PATIENT_FORM: PatientProfileFormState = {
   chronic_conditions: [],
 };
 
-const EMPTY_DOCTOR_FORM: DoctorProfileUpsertDto = {
-  full_name: "",
-  specialty: "",
-  clinic: "",
-};
+function formatDateTime(dateValue?: string | null): string {
+  if (!dateValue) {
+    return "Not scheduled";
+  }
+  try {
+    return new Date(dateValue).toLocaleString("en-GB", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateValue;
+  }
+}
+
+function summarize(text?: string | null, fallback = "No summary available."): string {
+  if (!text) {
+    return fallback;
+  }
+  const normalized = text.trim();
+  if (normalized.length <= 120) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 117).trimEnd()}...`;
+}
+
+function AdminOperationsPanel({
+  patients,
+  doctors,
+  appointments,
+  recentVisits,
+  onNavigate,
+}: {
+  patients: PatientProfileResponseDto[];
+  doctors: DoctorProfileResponseDto[];
+  appointments: AppointmentResponseDto[];
+  recentVisits: VisitResponseDto[];
+  onNavigate: (tab: DashboardTab) => void;
+}) {
+  const completedAppointments = appointments.filter(
+    (appointment) =>
+      appointment.status === "approved" &&
+      appointment.scheduled_for &&
+      new Date(appointment.scheduled_for) < new Date(),
+  );
+  const futureAppointments = appointments.filter(
+    (appointment) =>
+      appointment.status !== "rejected" &&
+      (!appointment.scheduled_for ||
+        new Date(appointment.scheduled_for) >= new Date()),
+  );
+  const recentPatients = [...patients]
+    .sort(
+      (left, right) =>
+        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+    )
+    .slice(0, 8);
+  const recentDoctors = [...doctors]
+    .sort(
+      (left, right) =>
+        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+    )
+    .slice(0, 8);
+
+  return (
+    <div className="stack-lg">
+      <SectionPanel
+        eyebrow="Admin records"
+        title="Operational records center"
+        description="Review all patient profiles, doctor profiles, appointments, and recent medical history without patient-facing demographic forms."
+      >
+        <div className="admin-metric-grid">
+          <article className="metric-card">
+            <span>Patients on record</span>
+            <strong>{patients.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Doctors on record</span>
+            <strong>{doctors.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Future appointments</span>
+            <strong>{futureAppointments.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Completed appointments</span>
+            <strong>{completedAppointments.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Recent visits</span>
+            <strong>{recentVisits.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Pending approvals</span>
+            <strong>
+              {
+                appointments.filter((appointment) => appointment.status === "requested")
+                  .length
+              }
+            </strong>
+          </article>
+        </div>
+
+        <div className="action-grid">
+          <button
+            type="button"
+            className="action-shortcut"
+            onClick={() => onNavigate("appointments")}
+          >
+            <strong>Review appointments</strong>
+            <span>Open future and previous bookings in one scheduling workspace.</span>
+          </button>
+          <button
+            type="button"
+            className="action-shortcut action-shortcut--ghost"
+            onClick={() => onNavigate("visits")}
+          >
+            <strong>Open medical history</strong>
+            <span>Inspect recent visits and add clinician records when needed.</span>
+          </button>
+          <button
+            type="button"
+            className="action-shortcut action-shortcut--ghost"
+            onClick={() => onNavigate("records")}
+          >
+            <strong>Manage record imports</strong>
+            <span>Import structured medical records into the visit history.</span>
+          </button>
+        </div>
+      </SectionPanel>
+
+      <div className="activity-columns">
+        <SectionPanel
+          eyebrow="Patients"
+          title="Recent patient profiles"
+          description="The latest updated patient records available to the admin workspace."
+        >
+          <div className="activity-list compact">
+            {recentPatients.map((patient) => (
+              <article key={patient.id} className="activity-item">
+                <div>
+                  <strong>{patient.full_name}</strong>
+                  <p>
+                    {patient.national_id
+                      ? `National ID: ${patient.national_id}`
+                      : "National ID not recorded"}
+                  </p>
+                  <p>
+                    {patient.current_governorate ||
+                      patient.inferred_governorate ||
+                      "Governorate pending"}
+                  </p>
+                </div>
+                <div className="activity-meta">
+                  <small>{formatDateTime(patient.updated_at)}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        </SectionPanel>
+
+        <SectionPanel
+          eyebrow="Doctors"
+          title="Recent doctor profiles"
+          description="Operational doctor profiles and public directory entries currently in the system."
+        >
+          <div className="activity-list compact">
+            {recentDoctors.map((doctor) => (
+              <article key={doctor.id} className="activity-item">
+                <div>
+                  <strong>{doctor.full_name}</strong>
+                  <p>{doctor.specialty}</p>
+                  <p>
+                    {doctor.area || doctor.city
+                      ? [doctor.area, doctor.city].filter(Boolean).join(", ")
+                      : doctor.clinic}
+                  </p>
+                </div>
+                <div className="activity-meta">
+                  <small>{formatDateTime(doctor.updated_at)}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        </SectionPanel>
+      </div>
+
+      <div className="activity-columns">
+        <SectionPanel
+          eyebrow="Appointments"
+          title="Future and previous appointments"
+          description="Latest appointments across all statuses."
+        >
+          <div className="activity-list compact">
+            {[...appointments]
+              .sort(
+                (left, right) =>
+                  new Date(
+                    right.scheduled_for || right.requested_at,
+                  ).getTime() -
+                  new Date(left.scheduled_for || left.requested_at).getTime(),
+              )
+              .slice(0, 10)
+              .map((appointment) => (
+                <article key={appointment.id} className="activity-item">
+                  <div>
+                    <strong>{summarize(appointment.reason)}</strong>
+                    <p>
+                      Patient #{appointment.patient_id} · Doctor #{appointment.doctor_id}
+                    </p>
+                  </div>
+                  <div className="activity-meta">
+                    <span className={`badge badge--status-${appointment.status}`}>
+                      {appointment.status}
+                    </span>
+                    <small>
+                      {formatDateTime(appointment.scheduled_for || appointment.requested_at)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+          </div>
+        </SectionPanel>
+
+        <SectionPanel
+          eyebrow="Medical history"
+          title="Recent patient visit records"
+          description="The latest visit notes, diagnoses, and follow-up records."
+        >
+          <div className="activity-list compact">
+            {recentVisits.slice(0, 10).map((visit) => (
+              <article key={visit.id} className="activity-item">
+                <div>
+                  <strong>{visit.diagnosis || "Visit note"}</strong>
+                  <p>{summarize(visit.symptoms)}</p>
+                  <p>{summarize(visit.notes, "No additional notes recorded.")}</p>
+                </div>
+                <div className="activity-meta">
+                  <small>{formatDateTime(visit.created_at)}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        </SectionPanel>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePanel({
   role,
@@ -47,6 +304,11 @@ export default function ProfilePanel({
   doctorProfile,
   savingPatient,
   savingDoctor,
+  patients,
+  doctors,
+  appointments,
+  recentVisits,
+  onNavigate,
   onSavePatient,
   onSaveDoctor,
 }: ProfilePanelProps) {
@@ -64,14 +326,32 @@ export default function ProfilePanel({
         }
       : EMPTY_PATIENT_FORM,
   );
+  const doctorSpecialtyParts = useMemo(
+    () => splitDoctorSpecialty(doctorProfile?.specialty ?? ""),
+    [doctorProfile?.specialty],
+  );
+  const [doctorPrimarySpecialty, setDoctorPrimarySpecialty] = useState(
+    doctorSpecialtyParts.primarySpecialty,
+  );
+  const [doctorSpecialtyScope, setDoctorSpecialtyScope] = useState(
+    doctorSpecialtyParts.specialtyScope,
+  );
   const [doctorForm, setDoctorForm] = useState<DoctorProfileUpsertDto>(
     doctorProfile
       ? {
           full_name: doctorProfile.full_name,
           specialty: doctorProfile.specialty,
           clinic: doctorProfile.clinic,
+          area: doctorProfile.area ?? "",
+          city: doctorProfile.city ?? "",
         }
-      : EMPTY_DOCTOR_FORM,
+      : {
+          full_name: "",
+          specialty: "",
+          clinic: "",
+          area: "",
+          city: "",
+        },
   );
   const [chronicConditionsInput, setChronicConditionsInput] = useState(
     patientProfile?.chronic_conditions.join(", ") ?? "",
@@ -83,6 +363,14 @@ export default function ProfilePanel({
         ? parseEgyptianNationalId(patientForm.national_id)
         : null,
     [patientForm.national_id],
+  );
+
+  const specialtyOptions = useMemo(
+    () =>
+      MEDICAL_SPECIALTY_GROUPS.find(
+        (option) => option.label === doctorPrimarySpecialty,
+      )?.scopes ?? [],
+    [doctorPrimarySpecialty],
   );
 
   async function submitPatientProfile(event: React.FormEvent<HTMLFormElement>) {
@@ -102,19 +390,44 @@ export default function ProfilePanel({
 
   async function submitDoctorProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSaveDoctor(doctorForm);
+    const specialty = composeDoctorSpecialty(
+      doctorPrimarySpecialty,
+      doctorSpecialtyScope,
+    );
+    await onSaveDoctor({
+      ...doctorForm,
+      specialty,
+      area: doctorForm.area?.trim() || null,
+      city: doctorForm.city?.trim() || null,
+    });
   }
 
   const dateOfBirth =
-    parsedNationalId?.dateOfBirth ?? patientProfile?.date_of_birth ?? "Derived after validation";
+    parsedNationalId?.dateOfBirth ??
+    patientProfile?.date_of_birth ??
+    "Derived after validation";
   const inferredGovernorate =
-    parsedNationalId?.governorate ?? patientProfile?.inferred_governorate ?? "Will be inferred from the national ID";
+    parsedNationalId?.governorate ??
+    patientProfile?.inferred_governorate ??
+    "Will be inferred from the national ID";
   const nationalIdHasValue = Boolean(patientForm.national_id?.trim());
   const nationalIdInvalid = nationalIdHasValue && !parsedNationalId;
 
+  if (role === "admin") {
+    return (
+      <AdminOperationsPanel
+        patients={patients}
+        doctors={doctors}
+        appointments={appointments}
+        recentVisits={recentVisits}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
   return (
     <div className="stack-lg">
-      {role === "patient" || role === "admin" ? (
+      {role === "patient" ? (
         <SectionPanel
           eyebrow="Patient profile"
           title="Demographics and identity"
@@ -137,16 +450,16 @@ export default function ProfilePanel({
 
             <div className="field">
               <label htmlFor="patient-sex">Gender</label>
-                <select
-                  id="patient-sex"
-                  value={patientForm.sex}
-                  onChange={(event) =>
-                    setPatientForm((current) => ({
-                      ...current,
-                      sex: event.target.value as PatientProfileFormState["sex"],
-                    }))
-                  }
-                >
+              <select
+                id="patient-sex"
+                value={patientForm.sex}
+                onChange={(event) =>
+                  setPatientForm((current) => ({
+                    ...current,
+                    sex: event.target.value as PatientProfileFormState["sex"],
+                  }))
+                }
+              >
                 <option value="">Select gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -185,14 +498,6 @@ export default function ProfilePanel({
                 }}
                 placeholder="14-digit الرقم القومي"
               />
-              <small className="field__hint">
-                Used to derive date of birth and the governorate encoded in the ID.
-              </small>
-              {nationalIdInvalid ? (
-                <small className="field__error">
-                  Enter a valid 14-digit Egyptian national ID to derive date of birth and governorate.
-                </small>
-              ) : null}
             </div>
 
             <div className="field">
@@ -210,9 +515,6 @@ export default function ProfilePanel({
                   }))
                 }
               />
-              <small className="field__hint">
-                If the national ID is valid, age is updated automatically.
-              </small>
             </div>
 
             <div className="field">
@@ -244,11 +546,7 @@ export default function ProfilePanel({
                     current_governorate: event.target.value,
                   }))
                 }
-                placeholder="Editable current residence"
               />
-              <small className="field__hint">
-                This may match the ID-based governorate, but it should reflect the patient’s current residence.
-              </small>
             </div>
 
             <div className="field field--full">
@@ -289,6 +587,13 @@ export default function ProfilePanel({
               Alcohol use
             </label>
 
+            {nationalIdInvalid ? (
+              <div className="notice notice--error field--full">
+                Enter a valid 14-digit Egyptian national ID to derive date of birth and
+                governorate.
+              </div>
+            ) : null}
+
             <button
               type="submit"
               className="button button--primary"
@@ -305,11 +610,11 @@ export default function ProfilePanel({
         </SectionPanel>
       ) : null}
 
-      {role === "doctor" || role === "admin" ? (
+      {role === "doctor" ? (
         <SectionPanel
           eyebrow="Doctor profile"
           title="Clinical identity"
-          description="This profile is used in visit creation, approvals, and doctor suggestions after triage."
+          description="Choose a primary field from the controlled medical specialty list, then optionally add a more specific scope."
         >
           <form className="form-grid" onSubmit={submitDoctorProfile}>
             <div className="field">
@@ -327,21 +632,80 @@ export default function ProfilePanel({
             </div>
 
             <div className="field">
-              <label htmlFor="doctor-specialty">Specialty</label>
+              <label htmlFor="doctor-primary-specialty">Primary specialty</label>
+              <select
+                id="doctor-primary-specialty"
+                value={doctorPrimarySpecialty}
+                onChange={(event) => {
+                  const nextPrimary = event.target.value;
+                  setDoctorPrimarySpecialty(nextPrimary);
+                  setDoctorSpecialtyScope("");
+                  setDoctorForm((current) => ({
+                    ...current,
+                    specialty: nextPrimary,
+                  }));
+                }}
+              >
+                <option value="">Select specialty</option>
+                {MEDICAL_SPECIALTY_GROUPS.map((option) => (
+                  <option key={option.label} value={option.label}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-specialty-scope">
+                Specific scope (optional)
+              </label>
               <input
-                id="doctor-specialty"
-                value={doctorForm.specialty}
+                id="doctor-specialty-scope"
+                list="doctor-specialty-scope-options"
+                value={doctorSpecialtyScope}
+                onChange={(event) => setDoctorSpecialtyScope(event.target.value)}
+                placeholder="Optional narrower scope"
+                disabled={!doctorPrimarySpecialty}
+              />
+              <datalist id="doctor-specialty-scope-options">
+                {specialtyOptions.map((scope) => (
+                  <option key={scope} value={scope} />
+                ))}
+              </datalist>
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-city">City</label>
+              <input
+                id="doctor-city"
+                value={doctorForm.city ?? ""}
                 onChange={(event) =>
                   setDoctorForm((current) => ({
                     ...current,
-                    specialty: event.target.value,
+                    city: event.target.value,
                   }))
                 }
+                placeholder="Alexandria"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-area">Area</label>
+              <input
+                id="doctor-area"
+                value={doctorForm.area ?? ""}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    area: event.target.value,
+                  }))
+                }
+                placeholder="Smouha"
               />
             </div>
 
             <div className="field field--full">
-              <label htmlFor="doctor-clinic">Clinic</label>
+              <label htmlFor="doctor-clinic">Clinic / hospital</label>
               <input
                 id="doctor-clinic"
                 value={doctorForm.clinic}
@@ -354,13 +718,21 @@ export default function ProfilePanel({
               />
             </div>
 
+            <div className="callout field--full">
+              <p className="micro-label">Saved display</p>
+              <p>
+                {composeDoctorSpecialty(doctorPrimarySpecialty, doctorSpecialtyScope) ||
+                  "Select a primary specialty first"}
+              </p>
+            </div>
+
             <button
               type="submit"
               className="button button--primary"
               disabled={
                 savingDoctor ||
                 !doctorForm.full_name.trim() ||
-                !doctorForm.specialty.trim() ||
+                !doctorPrimarySpecialty.trim() ||
                 !doctorForm.clinic.trim()
               }
             >

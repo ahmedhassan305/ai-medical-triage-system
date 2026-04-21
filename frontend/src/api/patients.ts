@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type {
+  ManagedPatientProfileCreateDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
 } from "./dto";
@@ -22,6 +23,25 @@ export async function upsertMyPatientProfile(
 ): Promise<PatientProfileResponseDto> {
   const response = await api.post<PatientProfileResponseDto>(
     apiPaths.patients.me,
+    payload,
+  );
+  return response.data;
+}
+
+export async function findPatientByNationalId(
+  nationalId: string,
+): Promise<PatientProfileResponseDto> {
+  const response = await api.get<PatientProfileResponseDto>(
+    apiPaths.patients.byNationalId(nationalId),
+  );
+  return response.data;
+}
+
+export async function createManagedPatientProfile(
+  payload: ManagedPatientProfileCreateDto,
+): Promise<PatientProfileResponseDto> {
+  const response = await api.post<PatientProfileResponseDto>(
+    apiPaths.patients.create,
     payload,
   );
   return response.data;
