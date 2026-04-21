@@ -8,6 +8,9 @@ def test_register_and_login_flow(client) -> None:
             "email": "patient@example.com",
             "password": "password123",
             "role": "patient",
+            "full_name": "Patient Example",
+            "national_id": "30101010154321",
+            "sex": "Female",
         },
     )
 

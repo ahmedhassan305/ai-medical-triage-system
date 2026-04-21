@@ -7,9 +7,23 @@ from app.db.session import SessionLocal
 
 def _auth_headers(client: TestClient, email: str, role: str) -> dict[str, str]:
     password = "password123"
+    register_payload: dict[str, str] = {
+        "email": email,
+        "password": password,
+        "role": role,
+    }
+    if role == "patient":
+        suffix = sum(ord(character) for character in email) % 100000
+        register_payload.update(
+            {
+                "full_name": "Test Patient",
+                "national_id": f"301010101{suffix:05d}",
+                "sex": "Female",
+            }
+        )
     register_response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": password, "role": role},
+        json=register_payload,
     )
     assert register_response.status_code == 201
 
@@ -99,7 +113,7 @@ def test_triage_with_patient_history_flag(client: TestClient) -> None:
     assert res.status_code == 200
     payload = res.json()
     assert payload["history_used"] is True
-    assert payload["suggested_doctors"] == []
+    assert isinstance(payload["suggested_doctors"], list)
 
 
 def test_anonymous_triage_cannot_use_patient_context(client: TestClient) -> None:

@@ -1,4 +1,8 @@
-import type { PatientProfileResponseDto, TriageResponseDto } from "../api/dto";
+import type {
+  DoctorSuggestionDto,
+  PatientProfileResponseDto,
+  TriageResponseDto,
+} from "../api/dto";
 import SectionPanel from "./SectionPanel";
 import TriageForm from "./TriageForm";
 
@@ -13,7 +17,11 @@ type TriagePanelProps = {
   onQueryChange: (value: string) => void;
   onPatientChange: (value: number | null) => void;
   onSubmit: () => void;
-  onReserveAppointment?: (doctorId: number, specialty: string, reason: string) => void;
+  onReserveAppointment?: (
+    doctor: DoctorSuggestionDto,
+    specialty: string,
+    reason: string,
+  ) => void;
 };
 
 const LIKELIHOOD_LABELS: Record<
@@ -81,6 +89,20 @@ export default function TriagePanel({
                 <p>{result.patient_friendly_explanation}</p>
               </div>
 
+              {result.urgency_reason ? (
+                <div className="callout callout--next-step">
+                  <p className="micro-label">Why this needs attention</p>
+                  <p>{result.urgency_reason}</p>
+                </div>
+              ) : null}
+
+              {result.recommended_actions[0] ? (
+                <div className="callout">
+                  <p className="micro-label">What to do now</p>
+                  <p>{result.recommended_actions[0]}</p>
+                </div>
+              ) : null}
+
               {result.red_flags.length > 0 ? (
                 <div className="callout callout--warning">
                   <p className="micro-label">Warning signs to watch for</p>
@@ -103,6 +125,13 @@ export default function TriagePanel({
             <section className="result-card">
               <p className="micro-label">Recommended specialty</p>
               <p>{result.recommended_specialty ?? "General Practice"}</p>
+              {result.specialty_reason ? (
+                <p className="muted-copy">{result.specialty_reason}</p>
+              ) : (
+                <p className="muted-copy">
+                  The leading possible conditions and supporting references fit this specialty best.
+                </p>
+              )}
             </section>
           </div>
 
@@ -152,23 +181,40 @@ export default function TriagePanel({
                               {doctor.city && `, ${doctor.city}`}
                             </p>
                           )}
+                          {doctor.source_name ? (
+                            <p className="muted-copy">
+                              Public listing: {doctor.source_name}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
-                      {onReserveAppointment && (
-                        <button
-                          type="button"
-                          className="button button--primary button--small"
-                          onClick={() =>
-                            onReserveAppointment(
-                              doctor.id,
-                              result.recommended_specialty || "General Practice",
-                              query,
-                            )
-                          }
-                        >
-                          Reserve Appointment
-                        </button>
-                      )}
+                      <div className="doctor-suggestion-card__actions">
+                        {(doctor.booking_url || doctor.source_url) && (
+                          <a
+                            className="button button--ghost button--small"
+                            href={doctor.booking_url || doctor.source_url || "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open public listing
+                          </a>
+                        )}
+                        {onReserveAppointment && (
+                          <button
+                            type="button"
+                            className="button button--primary button--small"
+                            onClick={() =>
+                              onReserveAppointment(
+                                doctor,
+                                result.recommended_specialty || "General Practice",
+                                query,
+                              )
+                            }
+                          >
+                            Reserve Appointment
+                          </button>
+                        )}
+                      </div>
                     </article>
                   ))}
                 </div>

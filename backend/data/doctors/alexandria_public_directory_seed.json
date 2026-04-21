@@ -1,0 +1,125 @@
+{
+  "metadata": {
+    "dataset_name": "alexandria_public_directory_seed",
+    "source_name": "Vezeeta public directory",
+    "focus": "Alexandria first, Egypt public-directory fallback where needed",
+    "captured_on": "2026-04-21",
+    "notes": [
+      "Each entry was curated from a public Vezeeta listing/profile page.",
+      "The clinic field stores the best public practice label visible on the listing when a separate clinic brand was not exposed before booking.",
+      "This file is the canonical team seed source for doctor directory data."
+    ]
+  },
+  "doctors": [
+    {
+      "full_name": "Waleed Etman",
+      "specialty": "Cardiology",
+      "clinic": "Consultant Cardiologist, Vascular and Interventional Catheterization, Faculty of Medicine, Alexandria University",
+      "area": "Glym",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-waleed-etman-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-waleed-etman-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Rasha Daabis",
+      "specialty": "Pulmonology",
+      "clinic": "Professor of Pulmonology and allergology - faculty of medicine - Alexandria University",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-rasha--daabis-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-rasha--daabis-chest-and-respiratory"
+    },
+    {
+      "full_name": "Hussein Saad",
+      "specialty": "Internal Medicine",
+      "clinic": "Lecturer of Internal Medicine, Faculty of Medicine Alexandria University",
+      "area": "El-Mandara",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hussien-saad-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hussien-saad-internal-medicine"
+    },
+    {
+      "full_name": "Eslam Aboutaleb",
+      "specialty": "Gastroenterology",
+      "clinic": "Gastroentrology, Hepatology and Advanced Endoscopy specialist",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-eslam-aboutaleb-gastroenterology-and-endoscopy",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-eslam-aboutaleb-gastroenterology-and-endoscopy"
+    },
+    {
+      "full_name": "Maher El kamhawy",
+      "specialty": "Orthopedics",
+      "clinic": "Senior Consultant of Orthopedic Surgery MD - Alexandria university",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Maher-El-kamhawy-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Maher-El-kamhawy-Orthopedics"
+    },
+    {
+      "full_name": "hesham elhenawy",
+      "specialty": "Neurology",
+      "clinic": "Senior Consultant in Neurological Diseases",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hesham-elhenawy-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hesham-elhenawy-neurology"
+    },
+    {
+      "full_name": "Dareen amr Sadek",
+      "specialty": "Neurology",
+      "clinic": "specialist of Neurologist and Psychiatrist - Faculty of Medicine - Alexandria University.",
+      "area": "Bulkly",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-dareen-sadek-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-dareen-sadek-neurology"
+    },
+    {
+      "full_name": "Saifeldin Youssef",
+      "specialty": "Psychiatry",
+      "clinic": "Specialist Psychiatrist, Manager of Nozha specialised Hospital, Manager of SafeSpace Center for psychiatric wellness",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-saifeldin--youssef-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-saifeldin--youssef-psychiatry"
+    },
+    {
+      "full_name": "Sherif Marouf",
+      "specialty": "Psychiatry",
+      "clinic": "Consultant in psychiatry and addiction treatment",
+      "area": "Roshdy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sherif-marouf-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sherif-marouf-psychiatry"
+    },
+    {
+      "full_name": "Ahmed Abd Alla hablas",
+      "specialty": "Neurosurgery",
+      "clinic": "Professor of neurosurgery",
+      "area": "Glym",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Abd-Alla-hablas-Neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Abd-Alla-hablas-Neurology"
+    },
+    {
+      "full_name": "Ahmed Ayad",
+      "specialty": "Dermatology",
+      "clinic": "Consultant in dermatological diseases, genital dermatology, and cosmo dermatology",
+      "area": "Damanhur",
+      "city": "Damanhur",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-ayad-dermatology-3",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-ayad-dermatology-3"
+    }
+  ]
+}

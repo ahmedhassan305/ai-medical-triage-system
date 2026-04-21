@@ -337,9 +337,7 @@ def _assess_red_flags(
         term in combined_text for term in ALTERED_MENTAL_STATUS_TERMS
     )
     chest_pain = "chest pain" in combined_text or "chest tightness" in combined_text
-    breathing_distress = any(
-        term in combined_text for term in BREATHING_DISTRESS_TERMS
-    )
+    breathing_distress = any(term in combined_text for term in BREATHING_DISTRESS_TERMS)
     stroke_symptoms = any(term in combined_text for term in STROKE_TERMS)
     severe_bleeding = any(term in combined_text for term in BLEEDING_TERMS)
     seizure_like = "seizure" in combined_text or "convulsion" in combined_text
@@ -350,7 +348,9 @@ def _assess_red_flags(
     if head_trauma and (severe_headache or nausea_or_vomiting or altered_mental_status):
         urgency_floor = "high"
         specialty_override = "Neurology"
-        warnings.append("Recent head injury with severe headache, vomiting, or drowsiness")
+        warnings.append(
+            "Recent head injury with severe headache, vomiting, or drowsiness"
+        )
         conditions.extend(
             [
                 "Intracranial hematoma",
@@ -361,8 +361,14 @@ def _assess_red_flags(
         evidence_keywords.extend(NEURO_EMERGENCY_EVIDENCE_TERMS)
         actions.extend(
             [
-                "Go to the emergency department now for urgent brain injury assessment.",
-                "Do not drive yourself if you feel drowsy, confused, or are vomiting.",
+                (
+                    "Go to the emergency department now for urgent brain injury "
+                    "assessment."
+                ),
+                (
+                    "Do not drive yourself if you feel drowsy, confused, or are "
+                    "vomiting."
+                ),
             ]
         )
         patient_message = (
@@ -383,8 +389,14 @@ def _assess_red_flags(
         evidence_keywords.extend(CARDIO_EMERGENCY_EVIDENCE_TERMS)
         actions.extend(
             [
-                "Seek urgent or emergency care now for chest pain with breathing trouble.",
-                "Call emergency services if the pain is severe, crushing, or worsening.",
+                (
+                    "Seek urgent or emergency care now for chest pain with breathing "
+                    "trouble."
+                ),
+                (
+                    "Call emergency services if the pain is severe, crushing, or "
+                    "worsening."
+                ),
             ]
         )
         patient_message = patient_message or (
@@ -392,7 +404,8 @@ def _assess_red_flags(
             "or lung emergency. Please seek urgent medical care now."
         )
         clinical_note = clinical_note or (
-            "Chest pain with dyspnea requires urgent exclusion of cardiac or pulmonary emergencies."
+            "Chest pain with dyspnea requires urgent exclusion of cardiac or "
+            "pulmonary emergencies."
         )
 
     if stroke_symptoms:
@@ -403,7 +416,10 @@ def _assess_red_flags(
         actions.extend(
             [
                 "Seek emergency care immediately for possible stroke symptoms.",
-                "Do not wait to see if weakness or speech problems improve on their own.",
+                (
+                    "Do not wait to see if weakness or speech problems improve on "
+                    "their own."
+                ),
             ]
         )
         patient_message = patient_message or (
@@ -422,7 +438,10 @@ def _assess_red_flags(
         evidence_keywords.extend(RESPIRATORY_EMERGENCY_EVIDENCE_TERMS)
         actions.extend(
             [
-                "Seek urgent care immediately if breathing is difficult or getting worse.",
+                (
+                    "Seek urgent care immediately if breathing is difficult or "
+                    "getting worse."
+                ),
                 "Call emergency services if lips turn blue or speaking becomes hard.",
             ]
         )
@@ -439,7 +458,9 @@ def _assess_red_flags(
         patient_message = patient_message or (
             "Heavy bleeding is an emergency and should be treated immediately."
         )
-        clinical_note = clinical_note or "Uncontrolled bleeding requires emergency assessment."
+        clinical_note = (
+            clinical_note or "Uncontrolled bleeding requires emergency assessment."
+        )
 
     if seizure_like:
         urgency_floor = "high"
@@ -448,7 +469,10 @@ def _assess_red_flags(
         conditions.append("Seizure disorder")
         actions.extend(
             [
-                "Seek emergency care if a seizure has occurred or if recovery is incomplete.",
+                (
+                    "Seek emergency care if a seizure has occurred or if recovery is "
+                    "incomplete."
+                ),
                 "Urgent review is needed, especially if this is the first seizure.",
             ]
         )
@@ -459,13 +483,19 @@ def _assess_red_flags(
         warnings.append("Thoughts of self-harm")
         actions.extend(
             [
-                "Seek emergency psychiatric help now or contact a crisis line immediately.",
-                "Stay with a trusted person and avoid being alone until help is in place.",
+                (
+                    "Seek emergency psychiatric help now or contact a crisis line "
+                    "immediately."
+                ),
+                (
+                    "Stay with a trusted person and avoid being alone until help is "
+                    "in place."
+                ),
             ]
         )
         patient_message = patient_message or (
-            "Thoughts of self-harm need urgent support right away. Please contact emergency "
-            "or crisis services now."
+            "Thoughts of self-harm need urgent support right away. Please contact "
+            "emergency or crisis services now."
         )
 
     if severe_allergy:
@@ -475,8 +505,14 @@ def _assess_red_flags(
         conditions.append("Anaphylaxis")
         actions.extend(
             [
-                "Use emergency allergy treatment if prescribed and seek emergency care now.",
-                "Call emergency services if throat swelling or breathing difficulty is present.",
+                (
+                    "Use emergency allergy treatment if prescribed and seek emergency "
+                    "care now."
+                ),
+                (
+                    "Call emergency services if throat swelling or breathing "
+                    "difficulty is present."
+                ),
             ]
         )
 
@@ -491,18 +527,25 @@ def _assess_red_flags(
         conditions.extend(["Appendicitis", "Bowel obstruction", "Peritonitis"])
         actions.extend(
             [
-                "Seek urgent same-day assessment for severe abdominal pain with vomiting.",
+                (
+                    "Seek urgent same-day assessment for severe abdominal pain with "
+                    "vomiting."
+                ),
                 "Go sooner if fever, fainting, or worsening pain develops.",
             ]
         )
         patient_message = patient_message or (
-            "Severe abdominal pain together with vomiting needs prompt medical review today."
+            "Severe abdominal pain together with vomiting needs prompt medical "
+            "review today."
         )
 
-    if any(
-        _chunk_contains_terms(chunk, NEURO_EMERGENCY_EVIDENCE_TERMS)
-        for chunk in chunks[:3]
-    ) and head_trauma:
+    if (
+        any(
+            _chunk_contains_terms(chunk, NEURO_EMERGENCY_EVIDENCE_TERMS)
+            for chunk in chunks[:3]
+        )
+        and head_trauma
+    ):
         urgency_floor = "high"
         if specialty_override is None:
             specialty_override = "Neurology"
@@ -750,14 +793,14 @@ def _context_penalty(
     red_flag_assessment: RedFlagAssessment,
 ) -> float:
     """Apply context-aware penalties to condition scores.
-    
+
     Strongly penalizes conditions that don't match the clinical context
     raised by red flags. This prevents shallow keyword matching from
     incorrectly dominating the final ranking.
     """
     lowered = condition_name.lower()
     penalty = 0.0
-    
+
     # Neurology red flags: penalize GI and non-neurological conditions
     if red_flag_assessment.specialty_override == "Neurology":
         if any(
@@ -785,7 +828,7 @@ def _context_penalty(
             )
         ):
             penalty = -2.8  # Demote psychiatric conditions
-    
+
     # Cardiology red flags: penalize GI and psychiatric conditions
     if red_flag_assessment.specialty_override == "Cardiology":
         if any(
@@ -798,8 +841,8 @@ def _context_penalty(
             )
         ):
             penalty = -2.4
-    
-    # Pulmonology red flags: penalize cardiac and GI conditions  
+
+    # Pulmonology red flags: penalize cardiac and GI conditions
     if red_flag_assessment.specialty_override == "Pulmonology":
         if any(
             token in lowered
@@ -810,7 +853,7 @@ def _context_penalty(
             )
         ):
             penalty = -2.0
-    
+
     return penalty
 
 
@@ -822,7 +865,7 @@ def _collect_condition_scores(
     red_flag_assessment: RedFlagAssessment,
 ) -> dict[str, RankedCondition]:
     """Collect and score suspected conditions.
-    
+
     Scoring combines:
     1. Red flag priority conditions (highest weight)
     2. Retrieved medical evidence (weighted by rank and relevance)
@@ -851,14 +894,14 @@ def _collect_condition_scores(
     for index, chunk in enumerate(chunks[:6]):
         # Base weight decreases slightly with rank, but evidence is still valuable
         base_weight = max(1.0, 4.2 - (index * 0.35)) + max(chunk.score, 0.0)
-        
+
         # Boost if evidence explicitly mentions red flag keywords
         if red_flag_assessment.evidence_keywords and _chunk_contains_terms(
             chunk,
             red_flag_assessment.evidence_keywords,
         ):
             base_weight += 3.2  # Increased from 2.5
-        
+
         _add_condition_score(
             scores,
             chunk.title,
@@ -871,14 +914,14 @@ def _collect_condition_scores(
     for keyword, condition_text in PATIENT_SYMPTOM_KEYWORDS:
         if keyword not in combined_text:
             continue
-        
+
         # Skip misleading keyword matches in high-context scenarios
         if (
             red_flag_assessment.specialty_override == "Neurology"
             and keyword in GI_MISLEADING_KEYWORDS_DURING_HEAD_TRAUMA
         ):
             continue
-        
+
         for condition_name in _split_condition_names(condition_text):
             _add_condition_score(
                 scores,
@@ -906,7 +949,8 @@ def _collect_condition_scores(
             condition.score += penalty
             if penalty < 0:
                 reason = (
-                    "This became less likely after applying the higher-risk symptom context."
+                    "This became less likely after applying the higher-risk symptom "
+                    "context."
                 )
                 if reason not in condition.reasons:
                     condition.reasons.append(reason)
@@ -950,7 +994,7 @@ def _determine_specialty(
     chunks: list[RetrievedChunk],
 ) -> tuple[str, str | None]:
     """Determine recommended specialty based on clinical context.
-    
+
     Priority order:
     1. Red flag assessment specialty override (highest priority - safety-critical)
     2. Suspected condition specialty rules
@@ -987,7 +1031,9 @@ def _determine_specialty(
 
     # Incorporate LLM reasoning specialty suggestion
     if reasoning.recommended_specialty and reasoning.recommended_specialty.strip():
-        specialty_scores[reasoning.recommended_specialty.strip()] += 1.5  # Increased from 1.2
+        specialty_scores[
+            reasoning.recommended_specialty.strip()
+        ] += 1.5  # Increased from 1.2
 
     # If no meaningful scores, fall back to LLM or general practice
     if not specialty_scores or max(specialty_scores.values()) < 0.1:
@@ -1067,27 +1113,27 @@ def _combine_urgency(
     chunks: list[RetrievedChunk],
 ) -> TriageLevel:
     """Determine final urgency level, prioritizing safety.
-    
+
     The final urgency must reflect:
     1. Red flag urgency floor (highest priority)
     2. Retrieved evidence supporting dangerous conditions
     3. Heuristic and LLM reasoning
-    
+
     Safety rules ensure serious cases aren't downgraded.
     """
     # Start with the red flag urgency floor as the baseline
     final_level: TriageLevel = red_flag_assessment.urgency_floor
-    
+
     # Never downgrade from high urgency due to conflicting signals
     if red_flag_assessment.urgency_floor == "high":
         return "high"
-    
+
     # Incorporate heuristic and model signals
     signals = [heuristic_level, model_level]
     for signal in signals:
         if LEVEL_PRIORITY[signal] > LEVEL_PRIORITY[final_level]:
             final_level = signal
-    
+
     # If dangerous evidence keywords were found, ensure at least MEDIUM
     if red_flag_assessment.evidence_keywords and any(
         _chunk_contains_terms(chunk, red_flag_assessment.evidence_keywords)
@@ -1095,11 +1141,11 @@ def _combine_urgency(
     ):
         if LEVEL_PRIORITY.get("medium", 0) > LEVEL_PRIORITY.get(final_level, -1):
             final_level = "medium"
-    
+
     # Red flags present but not yet elevated? Bump to medium
     if red_flags and final_level == "low":
         final_level = "medium"
-    
+
     return final_level
 
 

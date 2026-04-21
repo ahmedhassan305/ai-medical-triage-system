@@ -20,7 +20,11 @@ type ProfilePanelProps = {
   onSaveDoctor: (payload: DoctorProfileUpsertDto) => Promise<void>;
 };
 
-const EMPTY_PATIENT_FORM: PatientProfileUpsertDto = {
+type PatientProfileFormState = Omit<PatientProfileUpsertDto, "sex"> & {
+  sex: "" | PatientProfileUpsertDto["sex"];
+};
+
+const EMPTY_PATIENT_FORM: PatientProfileFormState = {
   full_name: "",
   age: 0,
   sex: "",
@@ -46,7 +50,7 @@ export default function ProfilePanel({
   onSavePatient,
   onSaveDoctor,
 }: ProfilePanelProps) {
-  const [patientForm, setPatientForm] = useState<PatientProfileUpsertDto>(
+  const [patientForm, setPatientForm] = useState<PatientProfileFormState>(
     patientProfile
       ? {
           full_name: patientProfile.full_name,
@@ -83,8 +87,12 @@ export default function ProfilePanel({
 
   async function submitPatientProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (patientForm.sex !== "Male" && patientForm.sex !== "Female") {
+      return;
+    }
     await onSavePatient({
       ...patientForm,
+      sex: patientForm.sex,
       chronic_conditions: chronicConditionsInput
         .split(",")
         .map((item) => item.trim())
@@ -129,16 +137,16 @@ export default function ProfilePanel({
 
             <div className="field">
               <label htmlFor="patient-sex">Gender</label>
-              <select
-                id="patient-sex"
-                value={patientForm.sex}
-                onChange={(event) =>
-                  setPatientForm((current) => ({
-                    ...current,
-                    sex: event.target.value,
-                  }))
-                }
-              >
+                <select
+                  id="patient-sex"
+                  value={patientForm.sex}
+                  onChange={(event) =>
+                    setPatientForm((current) => ({
+                      ...current,
+                      sex: event.target.value as PatientProfileFormState["sex"],
+                    }))
+                  }
+                >
                 <option value="">Select gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>

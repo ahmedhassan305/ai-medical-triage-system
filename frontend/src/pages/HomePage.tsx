@@ -23,8 +23,11 @@ import { triage, type TriageResponse } from "../api/triage";
 import { createVisit, listPatientVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
+  DoctorSuggestionDto,
   DoctorProfileResponseDto,
   PatientProfileResponseDto,
+  PatientProfileUpsertDto,
+  RegisterRequestDto,
   RoleType,
   TokenResponseDto,
   UserResponseDto,
@@ -38,6 +41,10 @@ import ProfilePanel from "../components/ProfilePanel";
 import RecordsImportPanel from "../components/RecordsImportPanel";
 import TriagePanel from "../components/TriagePanel";
 import VisitsPanel from "../components/VisitsPanel";
+import {
+  buildAppointmentPrefill,
+  type AppointmentPrefill,
+} from "../lib/appointmentPrefill";
 import { clearSession, readSession, writeSession } from "../lib/session";
 
 function isStatus(error: unknown, statusCode: number): boolean {
@@ -77,11 +84,8 @@ export default function HomePage() {
 
   const [triageQuery, setTriageQuery] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResponse | null>(null);
-  
-  // Appointment pre-fill state (for booking from triage)
-  const [preFillDoctorId, setPreFillDoctorId] = useState<number | null>(null);
-  const [preFillReason, setPreFillReason] = useState("");
-  const [preFillSpecialty, setPreFillSpecialty] = useState("");
+  const [appointmentPrefill, setAppointmentPrefill] =
+    useState<AppointmentPrefill | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -106,6 +110,7 @@ export default function HomePage() {
     setSelectedPatientId(null);
     setTriageResult(null);
     setTriageQuery("");
+    setAppointmentPrefill(null);
     setPageError(null);
     setRecordsSuccess(null);
   }
@@ -260,7 +265,7 @@ export default function HomePage() {
     role: RoleType;
     full_name?: string;
     national_id?: string;
-    sex?: string;
+    sex?: RegisterRequestDto["sex"];
   }) {
     setAuthLoading(true);
     setAuthError(null);
@@ -282,7 +287,7 @@ export default function HomePage() {
   async function handleSavePatientProfile(payload: {
     full_name: string;
     age: number;
-    sex: string;
+    sex: PatientProfileUpsertDto["sex"];
     national_id?: string | null;
     current_governorate?: string | null;
     smoker: boolean;
@@ -341,14 +346,11 @@ export default function HomePage() {
   }
 
   function handleReserveAppointment(
-    doctorId: number,
+    doctor: DoctorSuggestionDto,
     specialty: string,
-    reason: string
+    reason: string,
   ) {
-    // Pre-fill the appointment form and navigate to appointments tab
-    setPreFillDoctorId(doctorId);
-    setPreFillReason(reason);
-    setPreFillSpecialty(specialty);
+    setAppointmentPrefill(buildAppointmentPrefill(doctor, reason, specialty));
     setSelectedTab("appointments");
   }
 
@@ -507,13 +509,15 @@ export default function HomePage() {
             onQueryChange={setTriageQuery}
             onPatientChange={refreshVisits}
             onSubmit={handleRunTriage}
-            onReserveAppointment={handleReserveAppointment}
+            onReserveAppointment={
+              currentUser.role === "doctor" ? undefined : handleReserveAppointment
+            }
           />
         );
       case "appointments":
         return (
           <AppointmentsPanel
-            key={`appointments-${currentPatientId ?? "none"}`}
+            key={`appointments-${currentPatientId ?? "none"}-${appointmentPrefill?.doctorId ?? "none"}`}
             role={currentUser.role}
             doctors={doctors}
             patients={patients}
@@ -523,14 +527,8 @@ export default function HomePage() {
             error={appointmentsError}
             onCreate={handleCreateAppointment}
             onUpdateStatus={handleUpdateAppointmentStatus}
-            preFillDoctorId={preFillDoctorId}
-            preFillReason={preFillReason}
-            preFillSpecialty={preFillSpecialty}
-            onClearPreFill={() => {
-              setPreFillDoctorId(null);
-              setPreFillReason("");
-              setPreFillSpecialty("");
-            }}
+            preFill={appointmentPrefill}
+            onClearPreFill={() => setAppointmentPrefill(null)}
           />
         );
       case "visits":

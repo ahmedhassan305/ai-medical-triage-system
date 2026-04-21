@@ -374,6 +374,11 @@ textarea {
   transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 
+.button--small {
+  padding: 9px 14px;
+  font-size: 0.92rem;
+}
+
 .button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
@@ -447,6 +452,11 @@ textarea {
   background: linear-gradient(135deg, rgba(217, 119, 6, 0.12), rgba(255, 241, 237, 0.72));
 }
 
+.callout--next-step {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(216, 242, 238, 0.76));
+  border-color: rgba(15, 118, 110, 0.16);
+}
+
 .notice {
   border-radius: var(--radius-md);
   padding: 14px 16px;
@@ -506,6 +516,46 @@ textarea {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.72);
   padding: 16px;
+}
+
+.doctor-suggestion-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.doctor-suggestion-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.doctor-suggestion-card__actions,
+.appointment-prefill {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.appointment-prefill {
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.09), rgba(255, 214, 165, 0.14));
+  padding: 18px;
+}
+
+.appointment-prefill h3 {
+  margin: 8px 0 6px;
+  font-size: 1.1rem;
+}
+
+.appointment-prefill p {
+  margin: 0;
 }
 
 .condition-card__header {
@@ -620,7 +670,10 @@ textarea {
   .entity-card__header,
   .result-card__meta,
   .button-row,
-  .inline-filter {
+  .inline-filter,
+  .doctor-suggestion-card__header,
+  .doctor-suggestion-card__actions,
+  .appointment-prefill {
     flex-direction: column;
     align-items: flex-start;
   }

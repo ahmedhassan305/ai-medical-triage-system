@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   AppointmentResponseDto,
@@ -6,6 +6,7 @@ import type {
   PatientProfileResponseDto,
   RoleType,
 } from "../api/dto";
+import type { AppointmentPrefill } from "../lib/appointmentPrefill";
 import SectionPanel from "./SectionPanel";
 
 type AppointmentsPanelProps = {
@@ -27,9 +28,7 @@ type AppointmentsPanelProps = {
     appointmentId: number,
     payload: { status: "approved" | "rejected"; notes?: string },
   ) => Promise<void>;
-  preFillDoctorId?: number | null;
-  preFillReason?: string;
-  preFillSpecialty?: string;
+  preFill?: AppointmentPrefill | null;
   onClearPreFill?: () => void;
 };
 
@@ -43,31 +42,22 @@ export default function AppointmentsPanel({
   error,
   onCreate,
   onUpdateStatus,
-  preFillDoctorId,
-  preFillReason,
-  preFillSpecialty,
+  preFill,
   onClearPreFill,
 }: AppointmentsPanelProps) {
-  const [doctorId, setDoctorId] = useState<number | "">("");
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [doctorId, setDoctorId] = useState<number | "">(preFill?.doctorId ?? "");
   const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
-  const [reason, setReason] = useState("");
-  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState(preFill?.reason ?? "");
+  const [notes, setNotes] = useState(preFill?.notes ?? "");
   const [scheduledFor, setScheduledFor] = useState("");
 
-  // Handle pre-fill from triage
   useEffect(() => {
-    if (preFillDoctorId) {
-      setDoctorId(preFillDoctorId);
-      setReason(preFillReason || "");
-      // Auto-clear pre-fill after setting it
-      const timer = setTimeout(() => {
-        if (onClearPreFill) {
-          onClearPreFill();
-        }
-      }, 100);
-      return () => clearTimeout(timer);
+    if (!preFill) {
+      return;
     }
-  }, [preFillDoctorId, preFillReason, onClearPreFill]);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [preFill]);
 
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,6 +75,9 @@ export default function AppointmentsPanel({
     setReason("");
     setNotes("");
     setScheduledFor("");
+    if (onClearPreFill) {
+      onClearPreFill();
+    }
   }
 
   return (
@@ -94,7 +87,32 @@ export default function AppointmentsPanel({
       description="Patients and admins can request appointments. Doctors and admins can approve or reject requests."
     >
       {role !== "doctor" ? (
-        <form className="form-grid" onSubmit={handleCreate}>
+        <form ref={formRef} className="form-grid" onSubmit={handleCreate}>
+          {preFill ? (
+            <div className="field field--full">
+              <div className="appointment-prefill">
+                <div>
+                  <p className="micro-label">Ready from triage</p>
+                  <h3>Dr. {preFill.doctorName} is preselected</h3>
+                  <p>
+                    The appointment request was prepared from the triage result for{" "}
+                    {preFill.specialty}. Review the details below, adjust them if needed,
+                    and submit the booking request.
+                  </p>
+                </div>
+                {onClearPreFill ? (
+                  <button
+                    type="button"
+                    className="button button--ghost button--small"
+                    onClick={onClearPreFill}
+                  >
+                    Clear recommendation
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {role === "admin" ? (
             <div className="field">
               <label htmlFor="appointment-patient">Patient</label>
@@ -132,9 +150,15 @@ export default function AppointmentsPanel({
               {doctors.map((doctor) => (
                 <option key={doctor.id} value={doctor.id}>
                   {doctor.full_name} · {doctor.specialty}
+                  {preFill?.doctorId === doctor.id ? " · Recommended" : ""}
                 </option>
               ))}
             </select>
+            {preFill ? (
+              <small className="field__hint">
+                Preselected from the triage recommendation so the patient does not need to search again.
+              </small>
+            ) : null}
           </div>
 
           <div className="field field--full">
@@ -166,6 +190,11 @@ export default function AppointmentsPanel({
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Optional extra context"
             />
+            {preFill ? (
+              <small className="field__hint">
+                The notes were prefilled from the triage handoff and can be edited before submission.
+              </small>
+            ) : null}
           </div>
 
           <button

@@ -12,9 +12,23 @@ def _register_and_login(
     role: str,
 ) -> dict[str, str]:
     password = "password123"
+    register_payload: dict[str, str] = {
+        "email": email,
+        "password": password,
+        "role": role,
+    }
+    if role == "patient":
+        suffix = sum(ord(character) for character in email) % 100000
+        register_payload.update(
+            {
+                "full_name": f"Patient {suffix}",
+                "national_id": f"301010101{suffix:05d}",
+                "sex": "Female",
+            }
+        )
     register_response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": password, "role": role},
+        json=register_payload,
     )
     assert register_response.status_code == 201
 
@@ -121,7 +135,7 @@ def test_patient_profile_derives_birth_date_and_governorate(client: TestClient) 
         full_name="National ID Patient",
         age=12,
         sex="female",
-        national_id="30101010112345",
+        national_id="30101010167890",
         current_governorate="",
     )
     assert payload["age"] >= 20
