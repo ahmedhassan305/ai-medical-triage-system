@@ -149,6 +149,47 @@ function countAppointmentDemand(
   return Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
 }
 
+function normalizeStatus(status: string): "good" | "pending" | "problem" | "info" {
+  if (status === "approved" || status === "completed") {
+    return "good";
+  }
+  if (status === "requested") {
+    return "pending";
+  }
+  if (status === "rejected") {
+    return "problem";
+  }
+  return "info";
+}
+
+function primaryPatientAction(
+  triageResult: TriageResponseDto | null,
+  nextAppointment: AppointmentResponseDto | null,
+): QuickAction {
+  if (!triageResult) {
+    return {
+      label: "Run triage",
+      description: "Start with symptom review to get urgency and specialty guidance.",
+      tab: "triage",
+      tone: "primary",
+    };
+  }
+  if (!nextAppointment) {
+    return {
+      label: "Book appointment",
+      description: "Convert the latest triage result into a confirmed doctor follow-up.",
+      tab: "appointments",
+      tone: "primary",
+    };
+  }
+  return {
+    label: "Prepare for appointment",
+    description: "Review the booking status and latest notes before the visit.",
+    tab: "appointments",
+    tone: "primary",
+  };
+}
+
 function QuickActions({
   title,
   actions,
@@ -263,6 +304,7 @@ function PatientOverview({
     triageResult?.recommended_actions[0] ||
     "Run triage if symptoms change or you need a new recommendation.";
   const latestSuggestedDoctor = triageResult?.suggested_doctors[0] || null;
+  const primaryAction = primaryPatientAction(triageResult, nextAppointment);
 
   return (
     <div className="workspace-dashboard workspace-dashboard--patient">
@@ -287,6 +329,57 @@ function PatientOverview({
       </section>
 
       <div className="workspace-grid workspace-grid--patient">
+        <section className="workspace-card workspace-card--feature">
+          <div className="workspace-card__header">
+            <div>
+              <p className="micro-label">Care status</p>
+              <h3>Your current care summary</h3>
+            </div>
+            <span className={`badge badge--${triageResult?.urgency_level || "neutral"}`}>
+              {triageResult ? triageResult.urgency_level.toUpperCase() : "NO TRIAGE"}
+            </span>
+          </div>
+          <div className="care-status-grid">
+            <article className={`status-card status-card--${nextAppointment ? normalizeStatus(nextAppointment.status) : "info"}`}>
+              <span>Appointment</span>
+              <strong>
+                {nextAppointment
+                  ? appointmentStatusLabel(nextAppointment.status)
+                  : "No appointment booked"}
+              </strong>
+              <p>
+                {nextAppointment
+                  ? formatDateTime(nextAppointment.scheduled_for)
+                  : "Book once you are ready to follow up."}
+              </p>
+            </article>
+            <article className={`status-card status-card--${triageResult ? normalizeStatus(triageResult.urgency_level === "high" ? "rejected" : triageResult.urgency_level === "medium" ? "requested" : "approved") : "info"}`}>
+              <span>Latest triage</span>
+              <strong>{triageResult ? triageResult.urgency_label : "Not started"}</strong>
+              <p>{triageResult ? nextAction : "Run triage to get urgency guidance."}</p>
+            </article>
+            <article className={`status-card status-card--${latestVisit ? "good" : "info"}`}>
+              <span>Visit history</span>
+              <strong>{latestVisit ? "History available" : "No visits yet"}</strong>
+              <p>
+                {latestVisit
+                  ? latestVisit.diagnosis || "Recent visit recorded."
+                  : "Doctor visit notes will appear here after your first consultation."}
+              </p>
+            </article>
+          </div>
+          <div className="workspace-primary-action">
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={() => onNavigate(primaryAction.tab)}
+            >
+              {primaryAction.label}
+            </button>
+            <p>{primaryAction.description}</p>
+          </div>
+        </section>
+
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
@@ -464,20 +557,19 @@ function PatientOverview({
         </section>
 
         <QuickActions
-          title="What do you want to do next?"
+          title="Secondary actions"
           onNavigate={onNavigate}
           actions={[
-            {
-              label: "Run triage",
-              description: "Check urgency and get a specialty recommendation.",
-              tab: "triage",
-              tone: "primary",
-            },
             {
               label: "Book appointment",
               description:
                 "Choose a doctor or continue from a triage recommendation.",
               tab: "appointments",
+            },
+            {
+              label: "Run triage",
+              description: "Check urgency and get a specialty recommendation.",
+              tab: "triage",
             },
             {
               label: "Update profile",
@@ -575,8 +667,14 @@ function DoctorOverview({
     (appointment) => appointment.status === "requested",
   );
   const upcomingAppointments = orderedAppointments.filter(
+    (appointment) => appointment.status === "approved",
+  );
+  const completedAppointments = orderedAppointments.filter(
     (appointment) =>
-      appointment.status === "approved" || appointment.status === "requested",
+      appointment.status === "completed" ||
+      (appointment.status === "approved" &&
+        appointment.scheduled_for &&
+        new Date(appointment.scheduled_for) < new Date()),
   );
   const uniquePatientLoad = new Set([
     ...appointments.map((appointment) => appointment.patient_id),
@@ -605,8 +703,50 @@ function DoctorOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
+              <p className="micro-label">Today's focus</p>
+              <h3>What needs your attention</h3>
+            </div>
+          </div>
+          <div className="care-status-grid">
+            <article
+              className={`status-card status-card--${
+                pendingApprovals.length > 0 ? "pending" : "good"
+              }`}
+            >
+              <span>Pending approvals</span>
+              <strong>{pendingApprovals.length}</strong>
+              <p>
+                {pendingApprovals.length > 0
+                  ? "Start with the waiting appointment approvals."
+                  : "No approvals are waiting right now."}
+              </p>
+            </article>
+            <article
+              className={`status-card status-card--${
+                upcomingAppointments.length > 0 ? "info" : "good"
+              }`}
+            >
+              <span>Confirmed appointments</span>
+              <strong>{upcomingAppointments.length}</strong>
+              <p>
+                {upcomingAppointments.length > 0
+                  ? "Review confirmed visits and prepare the clinic flow."
+                  : "No confirmed bookings are scheduled yet."}
+              </p>
+            </article>
+            <article className="status-card status-card--good">
+              <span>Active patient load</span>
+              <strong>{uniquePatientLoad}</strong>
+              <p>Distinct patients currently flowing through your workspace.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="workspace-card workspace-card--feature">
+          <div className="workspace-card__header">
+            <div>
               <p className="micro-label">Today and next</p>
-              <h3>Upcoming appointments</h3>
+              <h3>Confirmed appointments</h3>
             </div>
             <button
               type="button"
@@ -659,24 +799,26 @@ function DoctorOverview({
             </div>
           </div>
           {pendingApprovals.length > 0 ? (
-            <div className="mini-stat-grid">
-              <article className="metric-card">
-                <span>Need review now</span>
-                <strong>{pendingApprovals.length}</strong>
-              </article>
-              <article className="metric-card">
-                <span>Approved bookings</span>
-                <strong>
-                  {
-                    appointments.filter((appointment) => appointment.status === "approved")
-                      .length
-                  }
-                </strong>
-              </article>
-              <article className="metric-card">
-                <span>Unique patients</span>
-                <strong>{uniquePatientLoad}</strong>
-              </article>
+            <div className="task-list">
+              {pendingApprovals.slice(0, 4).map((appointment) => {
+                const patient = patients.find((item) => item.id === appointment.patient_id);
+                return (
+                  <article key={appointment.id} className="activity-item">
+                    <div>
+                      <strong>
+                        {patient?.full_name || `Patient #${appointment.patient_id}`}
+                      </strong>
+                      <p>{summarize(appointment.reason)}</p>
+                    </div>
+                    <div className="activity-meta">
+                      <span className="badge badge--status-requested">
+                        requested
+                      </span>
+                      <small>{formatDateTime(appointment.requested_at)}</small>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           ) : (
             <div className="empty-prompt empty-prompt--compact">
@@ -728,8 +870,45 @@ function DoctorOverview({
           )}
         </section>
 
+        <section className="workspace-card">
+          <div className="workspace-card__header">
+            <div>
+              <p className="micro-label">Completed work</p>
+              <h3>Recently finished appointments</h3>
+            </div>
+          </div>
+          {completedAppointments.length > 0 ? (
+            <div className="activity-list">
+              {completedAppointments.slice(0, 4).map((appointment) => {
+                const patient = patients.find((item) => item.id === appointment.patient_id);
+                return (
+                  <article key={appointment.id} className="activity-item">
+                    <div>
+                      <strong>
+                        {patient?.full_name || `Patient #${appointment.patient_id}`}
+                      </strong>
+                      <p>{summarize(appointment.reason)}</p>
+                    </div>
+                    <div className="activity-meta">
+                      <span className="badge badge--status-completed">
+                        completed
+                      </span>
+                      <small>{formatDateTime(appointment.scheduled_for)}</small>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="empty-prompt empty-prompt--compact">
+              <h4>No completed appointments yet.</h4>
+              <p>Finished bookings will appear here once clinic work closes them.</p>
+            </div>
+          )}
+        </section>
+
         <QuickActions
-          title="Doctor quick actions"
+          title="Workflow shortcuts"
           onNavigate={onNavigate}
           actions={[
             {
@@ -809,6 +988,29 @@ function AdminOverview({
         new Date(left.requested_at).getTime(),
     )
     .slice(0, 4);
+  const specialtyDemandMap = new Map(demand);
+  const specialtyRows = REQUIRED_SPECIALTIES.map((specialty) => {
+    const doctorCount = coverageMap.get(specialty) || 0;
+    const appointmentDemand = specialtyDemandMap.get(specialty) || 0;
+    const status =
+      doctorCount === 0
+        ? "needs attention"
+        : appointmentDemand > doctorCount * 3
+          ? "overloaded"
+          : doctorCount < 2
+            ? "needs attention"
+            : "balanced";
+    return { specialty, doctorCount, appointmentDemand, status };
+  });
+  const actionAlerts = [
+    appointmentsByStatus.requested > 0
+      ? `${appointmentsByStatus.requested} pending appointments need review`
+      : null,
+    weakCoverage.length > 0
+      ? `${weakCoverage.length} specialties need stronger coverage`
+      : null,
+    recentVisits.length === 0 ? "No recent visits recorded in the workspace" : null,
+  ].filter(Boolean) as string[];
 
   return (
     <div className="workspace-dashboard workspace-dashboard--admin">
@@ -833,6 +1035,78 @@ function AdminOverview({
       </section>
 
       <div className="workspace-grid workspace-grid--admin">
+        <section className="workspace-card workspace-card--feature">
+          <div className="workspace-card__header">
+            <div>
+              <p className="micro-label">Action required</p>
+              <h3>Immediate operational priorities</h3>
+            </div>
+          </div>
+          {actionAlerts.length > 0 ? (
+            <div className="task-list">
+              {actionAlerts.map((alert) => (
+                <article key={alert} className="activity-item">
+                  <div>
+                    <strong>{alert}</strong>
+                    <p>Use the admin actions below to resolve this quickly.</p>
+                  </div>
+                  <div className="activity-meta">
+                    <span className="badge badge--status-rejected">attention</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-prompt empty-prompt--compact">
+              <h4>No urgent admin actions right now.</h4>
+              <p>The control center is stable across appointments, coverage, and records.</p>
+            </div>
+          )}
+        </section>
+
+        <section className="workspace-card">
+          <div className="workspace-card__header">
+            <div>
+              <p className="micro-label">Admin actions</p>
+              <h3>Act on the workspace</h3>
+            </div>
+          </div>
+          <div className="action-grid">
+            <button
+              type="button"
+              className="action-shortcut"
+              onClick={() => onNavigate("appointments")}
+            >
+              <strong>Manage appointments</strong>
+              <span>Review pending bookings, confirmations, and past activity.</span>
+            </button>
+            <button
+              type="button"
+              className="action-shortcut action-shortcut--ghost"
+              onClick={() => onNavigate("profile")}
+            >
+              <strong>Review profiles</strong>
+              <span>Inspect patient and doctor records from the admin profile workspace.</span>
+            </button>
+            <button
+              type="button"
+              className="action-shortcut action-shortcut--ghost"
+              onClick={() => onNavigate("records")}
+            >
+              <strong>Import records</strong>
+              <span>Bring in external medical history when staff need it.</span>
+            </button>
+            <button
+              type="button"
+              className="action-shortcut action-shortcut--ghost"
+              onClick={() => onNavigate("triage")}
+            >
+              <strong>Update doctor directory</strong>
+              <span>Open staff-assisted triage and review the doctor handoff experience.</span>
+            </button>
+          </div>
+        </section>
+
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
@@ -904,81 +1178,40 @@ function AdminOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Specialty coverage</p>
-              <h3>Doctor distribution and weak spots</h3>
+              <p className="micro-label">Coverage and demand</p>
+              <h3>Specialty balancing table</h3>
             </div>
           </div>
-          {coverage.length > 0 ? (
-            <div className="coverage-list">
-              {coverage.slice(0, 8).map(([specialty, count]) => (
-                <article key={specialty} className="coverage-item">
-                  <div>
-                    <strong>{specialty}</strong>
-                    <p>
-                      {count < 2
-                        ? "Low coverage"
-                        : count < 4
-                          ? "Growing coverage"
-                          : "Healthy coverage"}
-                    </p>
-                  </div>
-                  <span
-                    className={`coverage-chip ${count < 2 ? "coverage-chip--warning" : ""}`}
-                  >
-                    {count} doctor{count !== 1 ? "s" : ""}
+          {specialtyRows.length > 0 ? (
+            <div className="ops-table">
+              <div className="ops-table__header">
+                <span>Specialty</span>
+                <span>Doctors</span>
+                <span>Demand</span>
+                <span>Status</span>
+              </div>
+              {specialtyRows.map((row) => (
+                <div key={row.specialty} className="ops-table__row">
+                  <strong>{row.specialty}</strong>
+                  <span>{row.doctorCount}</span>
+                  <span>{row.appointmentDemand}</span>
+                  <span className={`badge ${
+                    row.status === "balanced"
+                      ? "badge--status-approved"
+                      : row.status === "overloaded"
+                        ? "badge--status-rejected"
+                        : "badge--status-requested"
+                  }`}>
+                    {row.status}
                   </span>
-                </article>
+                </div>
               ))}
             </div>
           ) : (
             <div className="empty-prompt empty-prompt--compact">
-              <h4>No doctor directory data has been imported yet.</h4>
+              <h4>No specialty balancing data yet.</h4>
               <p>
-                Run the curated seed import so patient triage can hand off into real
-                specialties.
-              </p>
-            </div>
-          )}
-          <div className="coverage-callout">
-            <p className="micro-label">Needs attention</p>
-            <p>
-              {weakCoverage.length === 0
-                ? "All required specialties have at least basic coverage in the current seed."
-                : `Low or missing coverage: ${weakCoverage.join(", ")}.`}
-            </p>
-          </div>
-        </section>
-
-        <section className="workspace-card">
-          <div className="workspace-card__header">
-            <div>
-              <p className="micro-label">Most requested specialties</p>
-              <h3>Demand signals from appointments</h3>
-            </div>
-          </div>
-          {demand.length > 0 ? (
-            <div className="activity-list">
-              {demand.slice(0, 5).map(([specialty, count]) => (
-                <article key={specialty} className="activity-item">
-                  <div>
-                    <strong>{specialty}</strong>
-                    <p>
-                      Appointment requests currently routed into this specialty.
-                    </p>
-                  </div>
-                  <div className="activity-meta">
-                    <span className="badge badge--neutral">Demand</span>
-                    <strong>{count}</strong>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-prompt empty-prompt--compact">
-              <h4>No appointment demand trend yet.</h4>
-              <p>
-                Demand signals will appear as patients start booking recommended
-                doctors.
+                Coverage and demand will appear once appointments and doctor records are available.
               </p>
             </div>
           )}
@@ -995,7 +1228,7 @@ function AdminOverview({
             <div>
               <h4>Recent patients</h4>
               <div className="activity-list compact">
-                {recentPatients.map((patient) => (
+                {recentPatients.slice(0, 3).map((patient) => (
                   <article key={patient.id} className="activity-item">
                     <div>
                       <strong>{patient.full_name}</strong>
@@ -1015,7 +1248,7 @@ function AdminOverview({
             <div>
               <h4>Recent doctors</h4>
               <div className="activity-list compact">
-                {recentDoctors.map((doctor) => (
+                {recentDoctors.slice(0, 3).map((doctor) => (
                   <article key={doctor.id} className="activity-item">
                     <div>
                       <strong>{doctor.full_name}</strong>
@@ -1031,7 +1264,7 @@ function AdminOverview({
             <div>
               <h4>Recent appointments</h4>
               <div className="activity-list compact">
-                {recentAppointments.map((appointment) => (
+                {recentAppointments.slice(0, 3).map((appointment) => (
                   <article key={appointment.id} className="activity-item">
                     <div>
                       <strong>{appointment.reason}</strong>
@@ -1047,7 +1280,7 @@ function AdminOverview({
             <div>
               <h4>Recent visits</h4>
               <div className="activity-list compact">
-                {recentVisits.slice(0, 4).map((visit) => (
+                {recentVisits.slice(0, 3).map((visit) => (
                   <article key={visit.id} className="activity-item">
                     <div>
                       <strong>{visit.diagnosis || "Visit note"}</strong>
@@ -1061,51 +1294,21 @@ function AdminOverview({
               </div>
             </div>
           </div>
-        </section>
-
-        <section className="workspace-card">
-          <div className="workspace-card__header">
-            <div>
-              <p className="micro-label">Admin actions</p>
-              <h3>Manage the workspace</h3>
-            </div>
-          </div>
-          <div className="action-grid">
+          <div className="workspace-inline-actions">
             <button
               type="button"
-              className="action-shortcut"
+              className="button button--ghost button--small"
               onClick={() => onNavigate("appointments")}
             >
-              <strong>Manage appointments</strong>
-              <span>Review booking flow, pending requests, and approvals.</span>
+              View all appointments
             </button>
             <button
               type="button"
-              className="action-shortcut action-shortcut--ghost"
-              onClick={() => onNavigate("records")}
-            >
-              <strong>Open records workspace</strong>
-              <span>Import visit records and support doctor workflows.</span>
-            </button>
-            <button
-              type="button"
-              className="action-shortcut action-shortcut--ghost"
+              className="button button--ghost button--small"
               onClick={() => onNavigate("profile")}
             >
-              <strong>Review profiles</strong>
-              <span>
-                Inspect patient and doctor profile completeness from the live
-                workspace.
-              </span>
+              View all profiles
             </button>
-          </div>
-          <div className="seed-callout">
-            <p className="micro-label">Doctor import workflow</p>
-            <code>.\\backend\\.venv\\Scripts\\python scripts\\seed_doctors.py</code>
-            <p>
-              Run the canonical import after updating the curated Alexandria public
-              directory seed.
-            </p>
           </div>
         </section>
 

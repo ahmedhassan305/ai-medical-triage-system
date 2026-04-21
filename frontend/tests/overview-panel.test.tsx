@@ -143,10 +143,10 @@ describe("OverviewPanel", () => {
     );
 
     expect(markup).toContain("My care space");
-    expect(markup).toContain("Next appointment");
+    expect(markup).toContain("Your current care summary");
     expect(markup).toContain("Latest triage");
-    expect(markup).toContain("What do you want to do next?");
-    expect(markup).toContain("Continue to booking");
+    expect(markup).toContain("Prepare for appointment");
+    expect(markup).toContain("Secondary actions");
   });
 
   it("renders patient empty states when no care activity exists yet", () => {
@@ -166,8 +166,9 @@ describe("OverviewPanel", () => {
     );
 
     expect(markup).toContain("No appointment booked yet");
-    expect(markup).toContain("No triage result yet.");
-    expect(markup).toContain("No visit records are linked to your profile yet.");
+    expect(markup).toContain("Run triage");
+    expect(markup).toContain("No visit history yet");
+    expect(markup).toContain("No appointment booked yet");
   });
 
   it("renders doctor setup-required state when profile is missing", () => {
@@ -219,9 +220,9 @@ describe("OverviewPanel", () => {
     );
 
     expect(markup).toContain("Admin control center");
+    expect(markup).toContain("Action required");
     expect(markup).toContain("Top operational metrics");
-    expect(markup).toContain("Specialty coverage");
-    expect(markup).toContain("Most requested specialties");
-    expect(markup).toContain("Doctor import workflow");
+    expect(markup).toContain("Coverage and demand");
+    expect(markup).toContain("Admin actions");
   });
 });

@@ -88,6 +88,7 @@ function AdminOperationsPanel({
   recentVisits: VisitResponseDto[];
   onNavigate: (tab: DashboardTab) => void;
 }) {
+  const [profileSearch, setProfileSearch] = useState("");
   const completedAppointments = appointments.filter(
     (appointment) =>
       appointment.status === "approved" &&
@@ -112,6 +113,36 @@ function AdminOperationsPanel({
         new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
     )
     .slice(0, 8);
+  const normalizedSearch = profileSearch.trim().toLowerCase();
+  const filteredPatients = recentPatients.filter((patient) =>
+    [patient.full_name, patient.national_id, patient.current_governorate]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(normalizedSearch)),
+  );
+  const filteredDoctors = recentDoctors.filter((doctor) =>
+    [doctor.full_name, doctor.specialty, doctor.clinic, doctor.area, doctor.city]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(normalizedSearch)),
+  );
+  const filteredAppointments = [...appointments]
+    .filter((appointment) =>
+      [appointment.reason, appointment.status, appointment.notes]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(normalizedSearch)),
+    )
+    .sort(
+      (left, right) =>
+        new Date(right.scheduled_for || right.requested_at).getTime() -
+        new Date(left.scheduled_for || left.requested_at).getTime(),
+    )
+    .slice(0, 6);
+  const filteredVisits = recentVisits
+    .filter((visit) =>
+      [visit.diagnosis, visit.symptoms, visit.notes]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(normalizedSearch)),
+    )
+    .slice(0, 6);
 
   return (
     <div className="stack-lg">
@@ -172,6 +203,14 @@ function AdminOperationsPanel({
           <button
             type="button"
             className="action-shortcut action-shortcut--ghost"
+            onClick={() => onNavigate("profile")}
+          >
+            <strong>Review profiles</strong>
+            <span>Filter patient and doctor records from one compact admin view.</span>
+          </button>
+          <button
+            type="button"
+            className="action-shortcut action-shortcut--ghost"
             onClick={() => onNavigate("records")}
           >
             <strong>Manage record imports</strong>
@@ -180,14 +219,171 @@ function AdminOperationsPanel({
         </div>
       </SectionPanel>
 
+      <SectionPanel
+        eyebrow="Management"
+        title="Profiles and records"
+        description="Search patients, doctors, appointments, and recent visits from one compact admin workspace."
+      >
+        <div className="field">
+          <label htmlFor="admin-profile-search">Search records</label>
+          <input
+            id="admin-profile-search"
+            value={profileSearch}
+            onChange={(event) => setProfileSearch(event.target.value)}
+            placeholder="Search by patient, doctor, specialty, SSN, or visit note"
+          />
+        </div>
+
+        <div className="admin-record-grid">
+          <section className="workspace-card workspace-card--compact">
+            <div className="workspace-card__header">
+              <div>
+                <p className="micro-label">Patients</p>
+                <h3>Recent patient profiles</h3>
+              </div>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={() => onNavigate("visits")}
+              >
+                View all visits
+              </button>
+            </div>
+            <div className="activity-list compact">
+              {(normalizedSearch ? filteredPatients : recentPatients).slice(0, 6).map((patient) => (
+                <article key={patient.id} className="activity-item">
+                  <div>
+                    <strong>{patient.full_name}</strong>
+                    <p>
+                      {patient.national_id
+                        ? `National ID: ${patient.national_id}`
+                        : "National ID not recorded"}
+                    </p>
+                    <p>
+                      {patient.current_governorate ||
+                        patient.inferred_governorate ||
+                        "Governorate pending"}
+                    </p>
+                  </div>
+                  <div className="activity-meta">
+                    <small>{formatDateTime(patient.updated_at)}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="workspace-card workspace-card--compact">
+            <div className="workspace-card__header">
+              <div>
+                <p className="micro-label">Doctors</p>
+                <h3>Operational doctor profiles</h3>
+              </div>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={() => onNavigate("triage")}
+              >
+                Open staff triage
+              </button>
+            </div>
+            <div className="activity-list compact">
+              {(normalizedSearch ? filteredDoctors : recentDoctors).slice(0, 6).map((doctor) => (
+                <article key={doctor.id} className="activity-item">
+                  <div>
+                    <strong>{doctor.full_name}</strong>
+                    <p>{doctor.specialty}</p>
+                    <p>
+                      {doctor.area || doctor.city
+                        ? [doctor.area, doctor.city].filter(Boolean).join(", ")
+                        : doctor.clinic}
+                    </p>
+                  </div>
+                  <div className="activity-meta">
+                    <small>{formatDateTime(doctor.updated_at)}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="workspace-card workspace-card--compact">
+            <div className="workspace-card__header">
+              <div>
+                <p className="micro-label">Appointments</p>
+                <h3>Future and previous bookings</h3>
+              </div>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={() => onNavigate("appointments")}
+              >
+                Manage appointments
+              </button>
+            </div>
+            <div className="activity-list compact">
+              {filteredAppointments.map((appointment) => (
+                <article key={appointment.id} className="activity-item">
+                  <div>
+                    <strong>{summarize(appointment.reason)}</strong>
+                    <p>
+                      Patient #{appointment.patient_id} · Doctor #{appointment.doctor_id}
+                    </p>
+                  </div>
+                  <div className="activity-meta">
+                    <span className={`badge badge--status-${appointment.status}`}>
+                      {appointment.status}
+                    </span>
+                    <small>
+                      {formatDateTime(appointment.scheduled_for || appointment.requested_at)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="workspace-card workspace-card--compact">
+            <div className="workspace-card__header">
+              <div>
+                <p className="micro-label">Medical history</p>
+                <h3>Recent patient visit records</h3>
+              </div>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={() => onNavigate("records")}
+              >
+                Import records
+              </button>
+            </div>
+            <div className="activity-list compact">
+              {filteredVisits.map((visit) => (
+                <article key={visit.id} className="activity-item">
+                  <div>
+                    <strong>{visit.diagnosis || "Visit note"}</strong>
+                    <p>{summarize(visit.symptoms)}</p>
+                    <p>{summarize(visit.notes, "No additional notes recorded.")}</p>
+                  </div>
+                  <div className="activity-meta">
+                    <small>{formatDateTime(visit.created_at)}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </SectionPanel>
+
+      {/* Keep a short operational summary below the management grid. */}
       <div className="activity-columns">
         <SectionPanel
           eyebrow="Patients"
-          title="Recent patient profiles"
-          description="The latest updated patient records available to the admin workspace."
+          title="Profile updates"
+          description="A short operational snapshot of the latest profile changes."
         >
           <div className="activity-list compact">
-            {recentPatients.map((patient) => (
+            {recentPatients.slice(0, 4).map((patient) => (
               <article key={patient.id} className="activity-item">
                 <div>
                   <strong>{patient.full_name}</strong>
@@ -212,11 +408,11 @@ function AdminOperationsPanel({
 
         <SectionPanel
           eyebrow="Doctors"
-          title="Recent doctor profiles"
-          description="Operational doctor profiles and public directory entries currently in the system."
+          title="Doctor updates"
+          description="Recently updated clinicians and public directory entries."
         >
           <div className="activity-list compact">
-            {recentDoctors.map((doctor) => (
+            {recentDoctors.slice(0, 4).map((doctor) => (
               <article key={doctor.id} className="activity-item">
                 <div>
                   <strong>{doctor.full_name}</strong>
@@ -236,64 +432,6 @@ function AdminOperationsPanel({
         </SectionPanel>
       </div>
 
-      <div className="activity-columns">
-        <SectionPanel
-          eyebrow="Appointments"
-          title="Future and previous appointments"
-          description="Latest appointments across all statuses."
-        >
-          <div className="activity-list compact">
-            {[...appointments]
-              .sort(
-                (left, right) =>
-                  new Date(
-                    right.scheduled_for || right.requested_at,
-                  ).getTime() -
-                  new Date(left.scheduled_for || left.requested_at).getTime(),
-              )
-              .slice(0, 10)
-              .map((appointment) => (
-                <article key={appointment.id} className="activity-item">
-                  <div>
-                    <strong>{summarize(appointment.reason)}</strong>
-                    <p>
-                      Patient #{appointment.patient_id} · Doctor #{appointment.doctor_id}
-                    </p>
-                  </div>
-                  <div className="activity-meta">
-                    <span className={`badge badge--status-${appointment.status}`}>
-                      {appointment.status}
-                    </span>
-                    <small>
-                      {formatDateTime(appointment.scheduled_for || appointment.requested_at)}
-                    </small>
-                  </div>
-                </article>
-              ))}
-          </div>
-        </SectionPanel>
-
-        <SectionPanel
-          eyebrow="Medical history"
-          title="Recent patient visit records"
-          description="The latest visit notes, diagnoses, and follow-up records."
-        >
-          <div className="activity-list compact">
-            {recentVisits.slice(0, 10).map((visit) => (
-              <article key={visit.id} className="activity-item">
-                <div>
-                  <strong>{visit.diagnosis || "Visit note"}</strong>
-                  <p>{summarize(visit.symptoms)}</p>
-                  <p>{summarize(visit.notes, "No additional notes recorded.")}</p>
-                </div>
-                <div className="activity-meta">
-                  <small>{formatDateTime(visit.created_at)}</small>
-                </div>
-              </article>
-            ))}
-          </div>
-        </SectionPanel>
-      </div>
     </div>
   );
 }

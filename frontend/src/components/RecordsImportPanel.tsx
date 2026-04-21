@@ -40,6 +40,29 @@ export default function RecordsImportPanel({
       title="Import structured records"
       description="Upload JSON or CSV records to create visits for an existing patient."
     >
+      <div className="workspace-card workspace-card--compact">
+        <div className="workspace-card__header">
+          <div>
+            <p className="micro-label">Supported input</p>
+            <h3>Simple structured upload</h3>
+          </div>
+        </div>
+        <div className="detail-list">
+          <div>
+            <strong>Formats</strong>
+            <span>JSON or CSV</span>
+          </div>
+          <div>
+            <strong>Best use</strong>
+            <span>Backfilling historical visits for an existing patient</span>
+          </div>
+          <div>
+            <strong>Tip</strong>
+            <span>Pick the patient first, then upload one clean file.</span>
+          </div>
+        </div>
+      </div>
+
       <form className="form-grid" onSubmit={handleSubmit}>
         <div className="field">
           <label htmlFor="records-patient">Patient</label>
@@ -82,6 +105,16 @@ export default function RecordsImportPanel({
 
       {error ? <div className="notice notice--error">{error}</div> : null}
       {successMessage ? <div className="notice notice--success">{successMessage}</div> : null}
+
+      {!error && !successMessage ? (
+        <div className="empty-prompt empty-prompt--compact">
+          <h4>Import feedback will appear here.</h4>
+          <p>
+            After upload, the workspace will show whether the file succeeded or needs
+            correction.
+          </p>
+        </div>
+      ) : null}
     </SectionPanel>
   );
 }
