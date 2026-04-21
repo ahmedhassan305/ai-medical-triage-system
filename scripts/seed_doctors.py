@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 project_root = Path(__file__).resolve().parent.parent
 backend_dir = project_root / "backend"
+os.chdir(backend_dir)
 sys.path.insert(0, str(backend_dir))
 
 from app.db.session import engine  # noqa: E402
@@ -64,7 +66,10 @@ def main() -> int:
         )
 
     logger.info(
-        "Doctor seed import complete: inserted=%s updated=%s removed_legacy=%s total_seed_records=%s",
+        (
+            "Doctor seed import complete: inserted=%s updated=%s "
+            "removed_legacy=%s total_seed_records=%s"
+        ),
         result.inserted,
         result.updated,
         result.removed_legacy,

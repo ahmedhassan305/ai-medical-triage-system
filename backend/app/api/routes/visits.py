@@ -54,3 +54,19 @@ def list_patient_visits(
         .all()
     )
     return [VisitResponse.model_validate(item, from_attributes=True) for item in visits]
+
+
+@router.get("/", response_model=list[VisitResponse])
+def list_visits(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("doctor", "admin")),
+) -> list[VisitResponse]:
+    query = db.query(Visit)
+    if current_user.role == "doctor":
+        doctor_profile = get_linked_doctor_profile(db, current_user)
+        if doctor_profile is None:
+            return []
+        query = query.filter(Visit.doctor_id == doctor_profile.id)
+
+    visits = query.order_by(Visit.created_at.desc()).all()
+    return [VisitResponse.model_validate(item, from_attributes=True) for item in visits]

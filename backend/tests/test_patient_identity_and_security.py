@@ -336,3 +336,88 @@ def test_patient_can_only_view_own_visits(client: TestClient) -> None:
     )
     assert own_visits.status_code == 200
     assert own_visits.json() == []
+
+
+def test_doctor_and_admin_workspace_visit_listing_is_role_filtered(
+    client: TestClient,
+) -> None:
+    patient_headers = _register_and_login(
+        client,
+        email="workspace-visits-patient@example.com",
+        role="patient",
+    )
+    patient = _create_patient_profile(
+        client,
+        patient_headers,
+        full_name="Workspace Patient",
+        age=31,
+        sex="female",
+    )
+
+    doctor_headers_one = _register_and_login(
+        client,
+        email="workspace-doctor-one@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers_one,
+        full_name="Workspace Doctor One",
+        specialty="Neurology",
+    )
+
+    doctor_headers_two = _register_and_login(
+        client,
+        email="workspace-doctor-two@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers_two,
+        full_name="Workspace Doctor Two",
+        specialty="Internal Medicine",
+    )
+
+    admin_headers = _register_and_login(
+        client,
+        email="workspace-admin@example.com",
+        role="admin",
+    )
+
+    first_visit = client.post(
+        "/api/v1/visits/",
+        headers=doctor_headers_one,
+        json={
+            "patient_id": patient["id"],
+            "symptoms": "Headache and nausea",
+            "diagnosis": "Needs neurological review",
+        },
+    )
+    assert first_visit.status_code == 200
+
+    second_visit = client.post(
+        "/api/v1/visits/",
+        headers=doctor_headers_two,
+        json={
+            "patient_id": patient["id"],
+            "symptoms": "Fever and fatigue",
+            "diagnosis": "General medical assessment",
+        },
+    )
+    assert second_visit.status_code == 200
+
+    doctor_one_workspace = client.get("/api/v1/visits/", headers=doctor_headers_one)
+    assert doctor_one_workspace.status_code == 200
+    assert len(doctor_one_workspace.json()) == 1
+    assert doctor_one_workspace.json()[0]["diagnosis"] == "Needs neurological review"
+
+    doctor_two_workspace = client.get("/api/v1/visits/", headers=doctor_headers_two)
+    assert doctor_two_workspace.status_code == 200
+    assert len(doctor_two_workspace.json()) == 1
+    assert doctor_two_workspace.json()[0]["diagnosis"] == "General medical assessment"
+
+    admin_workspace = client.get("/api/v1/visits/", headers=admin_headers)
+    assert admin_workspace.status_code == 200
+    admin_diagnoses = {visit["diagnosis"] for visit in admin_workspace.json()}
+    assert "Needs neurological review" in admin_diagnoses
+    assert "General medical assessment" in admin_diagnoses

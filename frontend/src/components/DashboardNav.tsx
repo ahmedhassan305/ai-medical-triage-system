@@ -41,12 +41,25 @@ export default function DashboardNav({
   onLogout,
 }: DashboardNavProps) {
   const items = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
+  const roleWorkspaceLabel =
+    user.role === "admin"
+      ? "Operations control center"
+      : user.role === "doctor"
+        ? "Clinical workflow hub"
+        : "My care workspace";
+  const roleWorkspaceCopy =
+    user.role === "admin"
+      ? "Coverage, approvals, and system posture."
+      : user.role === "doctor"
+        ? "Appointments, visits, and record actions."
+        : "Triage, booking, and follow-up in one place.";
 
   return (
     <aside className="dashboard-nav">
       <div className="dashboard-nav__brand">
         <p className="dashboard-nav__eyebrow">AI Medical Triage</p>
-        <h1>Care workspace</h1>
+        <h1>{roleWorkspaceLabel}</h1>
+        <p className="dashboard-nav__copy">{roleWorkspaceCopy}</p>
         <p className="dashboard-nav__meta">
           {user.email}
           <span>{user.role.toUpperCase()}</span>

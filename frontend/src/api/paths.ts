@@ -26,6 +26,7 @@ export const apiPaths = {
   },
   visits: {
     create: `${API_V1_PREFIX}/visits/`,
+    list: `${API_V1_PREFIX}/visits/`,
     byPatient: (patientId: number) => `${API_V1_PREFIX}/visits/patient/${patientId}`,
   },
   records: {

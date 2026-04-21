@@ -20,7 +20,7 @@ import {
 } from "../api/patients";
 import { importRecords } from "../api/records";
 import { triage, type TriageResponse } from "../api/triage";
-import { createVisit, listPatientVisits } from "../api/visits";
+import { createVisit, listPatientVisits, listWorkspaceVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
   DoctorSuggestionDto,
@@ -62,6 +62,7 @@ export default function HomePage() {
   const [doctors, setDoctors] = useState<DoctorProfileResponseDto[]>([]);
   const [appointments, setAppointments] = useState<AppointmentResponseDto[]>([]);
   const [visits, setVisits] = useState<VisitResponseDto[]>([]);
+  const [workspaceVisits, setWorkspaceVisits] = useState<VisitResponseDto[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedTab, setSelectedTab] = useState<DashboardTab>("overview");
 
@@ -107,6 +108,7 @@ export default function HomePage() {
     setDoctors([]);
     setAppointments([]);
     setVisits([]);
+    setWorkspaceVisits([]);
     setSelectedPatientId(null);
     setTriageResult(null);
     setTriageQuery("");
@@ -129,6 +131,7 @@ export default function HomePage() {
           nextDoctors,
           nextPatients,
           nextAppointments,
+          nextWorkspaceVisits,
         ] = await Promise.all([
           currentUser.role === "patient" || currentUser.role === "admin"
             ? fetchMyPatientProfile().catch((error) =>
@@ -145,6 +148,9 @@ export default function HomePage() {
             ? Promise.resolve([])
             : listPatients().catch(() => []),
           listAppointments().catch(() => []),
+          currentUser.role === "doctor" || currentUser.role === "admin"
+            ? listWorkspaceVisits().catch(() => [])
+            : Promise.resolve([]),
         ]);
 
         let nextSelectedPatientId = forcedPatientId ?? currentSelection;
@@ -168,6 +174,7 @@ export default function HomePage() {
         setDoctors(nextDoctors);
         setPatients(nextPatients);
         setAppointments(nextAppointments);
+        setWorkspaceVisits(nextWorkspaceVisits);
         setSelectedPatientId(nextSelectedPatientId);
         setVisits(nextVisits);
         setPageError(null);
@@ -408,6 +415,10 @@ export default function HomePage() {
       const data = await listPatientVisits(payload.patient_id);
       setVisits(data);
       setSelectedPatientId(payload.patient_id);
+      if (user?.role === "doctor" || user?.role === "admin") {
+        const recentVisits = await listWorkspaceVisits().catch(() => workspaceVisits);
+        setWorkspaceVisits(recentVisits);
+      }
     } catch (error) {
       setVisitsError(getErrorMessage(error, "Failed to create visit."));
     } finally {
@@ -465,6 +476,41 @@ export default function HomePage() {
   const currentPatientId =
     currentUser.role === "patient" ? patientProfile?.id ?? null : selectedPatientId;
 
+  const tabMeta: Record<
+    DashboardTab,
+    { title: string; description: string }
+  > = {
+    overview: {
+      title: "Workspace overview",
+      description:
+        currentUser.role === "admin"
+          ? "Operational visibility across appointments, specialty coverage, and activity."
+          : currentUser.role === "doctor"
+            ? "A live clinician workspace for schedule review, visits, and patient workload."
+            : "A personal care workspace for your next appointment, triage guidance, and visit history.",
+    },
+    profile: {
+      title: "Profile",
+      description: "Keep role details accurate so triage, scheduling, and history stay aligned.",
+    },
+    triage: {
+      title: "Triage",
+      description: "Describe symptoms to get urgency guidance, likely conditions, and doctor suggestions.",
+    },
+    appointments: {
+      title: "Appointments",
+      description: "Coordinate requests, approvals, and confirmed visits without leaving the workspace.",
+    },
+    visits: {
+      title: "Visits",
+      description: "Review clinical notes or create new visit records from the care workflow.",
+    },
+    records: {
+      title: "Records",
+      description: "Import external records into the structured visit history.",
+    },
+  };
+
   function renderPanel() {
     switch (selectedTab) {
       case "overview":
@@ -477,7 +523,10 @@ export default function HomePage() {
             appointments={appointments}
             patients={patients}
             visits={visits}
+            recentVisits={workspaceVisits}
             doctors={doctors}
+            triageResult={triageResult}
+            onNavigate={handleSelectTab}
           />
         );
       case "profile":
@@ -577,16 +626,16 @@ export default function HomePage() {
         <main className="dashboard-main">
           <header className="dashboard-main__header">
             <div>
-              <p className="dashboard-main__eyebrow">Live backend workspace</p>
-              <h2>{selectedTab.toUpperCase()}</h2>
+              <p className="dashboard-main__eyebrow">Live care workspace</p>
+              <h2>{tabMeta[selectedTab].title}</h2>
               <p className="dashboard-main__copy">
-                Frontend actions are wired to FastAPI endpoints with JWT auth.
+                {tabMeta[selectedTab].description}
               </p>
             </div>
 
             <div className="status-bubble">
-              <span>API</span>
-              <strong>connected</strong>
+              <span>{currentUser.role.toUpperCase()}</span>
+              <strong>API connected</strong>
             </div>
           </header>
 

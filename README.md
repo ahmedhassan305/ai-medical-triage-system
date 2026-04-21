@@ -175,8 +175,14 @@ Import command:
 .\backend\.venv\Scripts\python scripts\seed_doctors.py
 ```
 
+Optional maintainer refresh command:
+```powershell
+.\backend\.venv\Scripts\python scripts\build_alexandria_doctor_seed.py
+```
+
 What it does:
 - imports a curated public doctor directory dataset focused on Alexandria first
+- the current canonical seed contains 119 Alexandria-focused public doctor listings
 - stores provenance on each seeded doctor:
   - `source_name`
   - `source_url`
@@ -188,6 +194,7 @@ What it does:
 
 Public data source used in this branch:
 - Vezeeta public doctor directory/profile pages
+- specialty coverage in the canonical seed includes Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, and Family Medicine
 
 ## Hybrid triage response
 
@@ -263,6 +270,7 @@ npm run build
 - `PATCH /api/v1/appointments/{appointment_id}/status`
 - `GET /api/v1/appointments/`
 - `POST /api/v1/visits/`
+- `GET /api/v1/visits/`
 - `GET /api/v1/visits/patient/{patient_id}`
 - `POST /api/v1/records/import`
 

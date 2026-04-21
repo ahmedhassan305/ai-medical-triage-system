@@ -78,6 +78,12 @@ def _normalize_optional_text(value: Any) -> str | None:
     return normalized or None
 
 
+def _truncate(value: str | None, max_length: int) -> str | None:
+    if value is None:
+        return None
+    return value[:max_length].strip()
+
+
 def normalize_specialty(value: str) -> str:
     normalized = value.strip().lower()
     mapped = SPECIALTY_NORMALIZATION.get(normalized)
@@ -92,29 +98,31 @@ def normalize_seed_record(record: dict[str, Any]) -> DoctorSeedRecord:
         raise ValueError("Doctor seed record requires full_name.")
     if full_name.lower().startswith("doctor "):
         full_name = full_name[7:].strip()
+    full_name = _truncate(full_name, 200) or ""
 
     specialty = normalize_specialty(str(record.get("specialty", "")).strip())
+    specialty = _truncate(specialty, 120) or ""
     if not specialty:
         raise ValueError(f"Doctor seed record for {full_name} requires specialty.")
 
-    clinic = str(record.get("clinic", "")).strip()
+    clinic = _truncate(str(record.get("clinic", "")).strip(), 200) or ""
     if not clinic:
         raise ValueError(f"Doctor seed record for {full_name} requires clinic.")
 
-    source_name = str(record.get("source_name", "")).strip()
-    source_url = str(record.get("source_url", "")).strip()
+    source_name = _truncate(str(record.get("source_name", "")).strip(), 120) or ""
+    source_url = _truncate(str(record.get("source_url", "")).strip(), 500) or ""
     if not source_name or not source_url:
         raise ValueError(
             f"Doctor seed record for {full_name} requires source_name and source_url."
         )
 
-    booking_url = _normalize_optional_text(record.get("booking_url"))
+    booking_url = _truncate(_normalize_optional_text(record.get("booking_url")), 500)
     return DoctorSeedRecord(
         full_name=full_name,
         specialty=specialty,
         clinic=clinic,
-        area=_normalize_optional_text(record.get("area")),
-        city=_normalize_optional_text(record.get("city")),
+        area=_truncate(_normalize_optional_text(record.get("area")), 120),
+        city=_truncate(_normalize_optional_text(record.get("city")), 120),
         source_name=source_name,
         source_url=source_url,
         booking_url=booking_url,

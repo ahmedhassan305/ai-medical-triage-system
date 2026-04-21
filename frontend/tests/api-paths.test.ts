@@ -13,6 +13,7 @@ describe("api paths", () => {
     expect(apiPaths.patients.list).toBe("/api/v1/patients/");
     expect(apiPaths.doctors.list).toBe("/api/v1/doctors/");
     expect(apiPaths.appointments.create).toBe("/api/v1/appointments/");
+    expect(apiPaths.visits.list).toBe("/api/v1/visits/");
     expect(apiPaths.records.import).toBe("/api/v1/records/import");
   });
 });

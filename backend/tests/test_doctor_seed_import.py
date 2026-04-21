@@ -67,6 +67,28 @@ def test_load_seed_records_reads_curated_json(tmp_path: Path) -> None:
     assert records[0].specialty == "Pulmonology"
 
 
+def test_normalize_seed_record_truncates_fields_to_model_limits() -> None:
+    record = normalize_seed_record(
+        {
+            "full_name": "Doctor " + ("A" * 240),
+            "specialty": "Neurology",
+            "clinic": "Clinic " + ("B" * 260),
+            "area": "C" * 140,
+            "city": "D" * 140,
+            "source_name": "Vezeeta public directory",
+            "source_url": "https://example.com/" + ("e" * 600),
+            "booking_url": "https://example.com/" + ("f" * 600),
+        }
+    )
+
+    assert len(record.full_name) == 200
+    assert len(record.clinic) == 200
+    assert len(record.area or "") == 120
+    assert len(record.city or "") == 120
+    assert len(record.source_url) == 500
+    assert len(record.booking_url or "") == 500
+
+
 def test_import_seed_records_upserts_and_cleans_legacy_data() -> None:
     db = _create_memory_session()
     public_label = (
@@ -137,3 +159,36 @@ def test_import_seed_records_upserts_and_cleans_legacy_data() -> None:
     db.refresh(seeded)
     assert seeded.clinic == "Updated public practice label"
     assert db.query(DoctorProfile).count() == 1
+
+
+def test_canonical_seed_file_has_expanded_public_directory_coverage() -> None:
+    seed_path = (
+        Path(__file__).resolve().parent.parent
+        / "data"
+        / "doctors"
+        / "alexandria_public_directory_seed.json"
+    )
+
+    records = load_seed_records(seed_path)
+    assert len(records) >= 80
+
+    specialties = {record.specialty for record in records}
+    for required_specialty in {
+        "Cardiology",
+        "Neurology",
+        "Neurosurgery",
+        "Internal Medicine",
+        "Gastroenterology",
+        "Dermatology",
+        "Psychiatry",
+        "Ophthalmology",
+        "Orthopedics",
+        "ENT",
+        "Pediatrics",
+        "Family Medicine",
+    }:
+        assert required_specialty in specialties
+
+    sample = records[0]
+    assert sample.source_name == "Vezeeta public directory"
+    assert sample.source_url.startswith("https://www.vezeeta.com/")
