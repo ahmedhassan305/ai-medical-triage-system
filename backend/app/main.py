@@ -14,6 +14,12 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
+    if (
+        settings.app_env != "development"
+        and settings.jwt_secret_key == "change-me-in-production"
+    ):
+        raise RuntimeError("JWT_SECRET_KEY must be set to a non-default value.")
+
     app = FastAPI(title=settings.app_name)
 
     app.add_middleware(

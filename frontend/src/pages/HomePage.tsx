@@ -19,7 +19,11 @@ import {
   upsertMyPatientProfile,
 } from "../api/patients";
 import { importRecords } from "../api/records";
-import { triage, type TriageResponse } from "../api/triage";
+import {
+  fetchTriageHistory,
+  triage,
+  type TriageResponse,
+} from "../api/triage";
 import { createVisit, listPatientVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
@@ -27,6 +31,7 @@ import type {
   PatientProfileResponseDto,
   RoleType,
   TokenResponseDto,
+  TriageHistoryItemDto,
   UserResponseDto,
   VisitResponseDto,
 } from "../api/dto";
@@ -55,6 +60,7 @@ export default function HomePage() {
   const [doctors, setDoctors] = useState<DoctorProfileResponseDto[]>([]);
   const [appointments, setAppointments] = useState<AppointmentResponseDto[]>([]);
   const [visits, setVisits] = useState<VisitResponseDto[]>([]);
+  const [triageHistory, setTriageHistory] = useState<TriageHistoryItemDto[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedTab, setSelectedTab] = useState<DashboardTab>("overview");
 
@@ -66,6 +72,7 @@ export default function HomePage() {
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [triageLoading, setTriageLoading] = useState(false);
+  const [triageHistoryLoading, setTriageHistoryLoading] = useState(false);
 
   const [pageError, setPageError] = useState<string | null>(null);
   const [triageError, setTriageError] = useState<string | null>(null);
@@ -98,6 +105,7 @@ export default function HomePage() {
     setDoctors([]);
     setAppointments([]);
     setVisits([]);
+    setTriageHistory([]);
     setSelectedPatientId(null);
     setTriageResult(null);
     setTriageQuery("");
@@ -131,6 +139,7 @@ export default function HomePage() {
           nextDoctors,
           nextPatients,
           nextAppointments,
+          nextTriageHistory,
         ] = await Promise.all([
           patientProfileRequest,
           doctorProfileRequest,
@@ -139,6 +148,9 @@ export default function HomePage() {
             ? Promise.resolve([])
             : listPatients().catch(() => []),
           listAppointments().catch(() => []),
+          fetchTriageHistory(10, 0)
+            .then((response) => response.items)
+            .catch(() => []),
         ]);
 
         let nextSelectedPatientId = forcedPatientId ?? currentSelection;
@@ -162,6 +174,7 @@ export default function HomePage() {
         setDoctors(nextDoctors);
         setPatients(nextPatients);
         setAppointments(nextAppointments);
+        setTriageHistory(nextTriageHistory);
         setSelectedPatientId(nextSelectedPatientId);
         setVisits(nextVisits);
         setPageError(null);
@@ -322,15 +335,19 @@ export default function HomePage() {
 
   async function handleRunTriage() {
     setTriageLoading(true);
+    setTriageHistoryLoading(true);
     setTriageError(null);
     setTriageResult(null);
     try {
       const result = await triage(triageQuery.trim(), selectedPatientId ?? undefined);
       setTriageResult(result);
+      const history = await fetchTriageHistory(10, 0);
+      setTriageHistory(history.items);
     } catch (error) {
       setTriageError(getErrorMessage(error, "Failed to run triage."));
     } finally {
       setTriageLoading(false);
+      setTriageHistoryLoading(false);
     }
   }
 
@@ -485,6 +502,8 @@ export default function HomePage() {
             lockPatientSelection={
               currentUser.role === "patient" && Boolean(patientProfile)
             }
+            history={triageHistory}
+            historyLoading={triageHistoryLoading}
             query={triageQuery}
             onQueryChange={setTriageQuery}
             onPatientChange={refreshVisits}

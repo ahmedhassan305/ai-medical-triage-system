@@ -43,8 +43,35 @@ def _to_bool(value: str | None, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _to_float(value: str | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+def _split_kv(value: str | None) -> dict[str, float]:
+    if not value:
+        return {}
+
+    result: dict[str, float] = {}
+    for part in value.split(","):
+        item = part.strip()
+        if not item or "=" not in item:
+            continue
+        key, raw = item.split("=", 1)
+        try:
+            result[key.strip()] = float(raw.strip())
+        except ValueError:
+            continue
+    return result
+
+
 @dataclass(frozen=True)
 class Settings:
+    app_env: str
     app_name: str
     api_v1_prefix: str
     cors_origins: list[str]
@@ -71,6 +98,15 @@ class Settings:
     strict_reasoner: bool
     patient_history_visit_limit: int
     patient_history_top_matches: int
+    triage_enable_embedding_signal: bool
+    triage_rate_limit_count: int
+    triage_rate_limit_window_seconds: int
+    auth_rate_limit_count: int
+    auth_rate_limit_window_seconds: int
+    rag_dense_weight: float
+    rag_sparse_weight: float
+    rag_rerank_weight: float
+    rag_source_priorities: dict[str, float]
 
 
 @lru_cache
@@ -81,6 +117,7 @@ def get_settings() -> Settings:
         tfidf_ngram_min, tfidf_ngram_max = tfidf_ngram_max, tfidf_ngram_min
 
     return Settings(
+        app_env=os.getenv("APP_ENV", "development").strip().lower(),
         app_name=os.getenv("APP_NAME", "AI Medical Triage System API"),
         api_v1_prefix=_normalize_api_prefix(os.getenv("API_V1_PREFIX")),
         cors_origins=_split_csv(os.getenv("CORS_ORIGINS")) or DEFAULT_DEV_CORS_ORIGINS,
@@ -117,5 +154,25 @@ def get_settings() -> Settings:
         patient_history_top_matches=_to_int(
             os.getenv("PATIENT_HISTORY_TOP_MATCHES"),
             3,
+        ),
+        triage_enable_embedding_signal=_to_bool(
+            os.getenv("TRIAGE_ENABLE_EMBEDDING_SIGNAL"),
+            False,
+        ),
+        triage_rate_limit_count=_to_int(os.getenv("TRIAGE_RATE_LIMIT_COUNT"), 30),
+        triage_rate_limit_window_seconds=_to_int(
+            os.getenv("TRIAGE_RATE_LIMIT_WINDOW_SECONDS"),
+            60,
+        ),
+        auth_rate_limit_count=_to_int(os.getenv("AUTH_RATE_LIMIT_COUNT"), 10),
+        auth_rate_limit_window_seconds=_to_int(
+            os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS"),
+            60,
+        ),
+        rag_dense_weight=_to_float(os.getenv("RAG_DENSE_WEIGHT"), 0.45),
+        rag_sparse_weight=_to_float(os.getenv("RAG_SPARSE_WEIGHT"), 0.35),
+        rag_rerank_weight=_to_float(os.getenv("RAG_RERANK_WEIGHT"), 0.20),
+        rag_source_priorities=_split_kv(
+            os.getenv("RAG_SOURCE_PRIORITIES", "NHS=1.15,Mayo Clinic=1.0,Unknown=0.9")
         ),
     )

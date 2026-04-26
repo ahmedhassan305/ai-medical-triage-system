@@ -5,6 +5,8 @@ import { API_V1_PREFIX, apiPaths } from "../src/api/paths";
 describe("api paths", () => {
   it("uses versioned triage path", () => {
     expect(apiPaths.triage).toBe("/api/v1/triage");
+    expect(apiPaths.triageHistory).toBe("/api/v1/triage/history");
+    expect(apiPaths.triageDetail(42)).toBe("/api/v1/triage/42");
     expect(apiPaths.triage.startsWith(API_V1_PREFIX)).toBe(true);
   });
 

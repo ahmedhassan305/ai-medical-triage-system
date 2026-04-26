@@ -100,10 +100,61 @@ export type TriageRequestDto = {
   patient_id?: number;
 };
 
+export type TriageSourceDto = {
+  doc_id: string;
+  chunk_id: string;
+  source: string;
+  title: string;
+  url: string;
+  score: number;
+};
+
+export type TriageDecisionDto = {
+  heuristic_level: TriageLevel;
+  embedding_level: TriageLevel;
+  llm_level?: TriageLevel | null;
+  final_level: TriageLevel;
+  confidence: number;
+  explanation: string;
+};
+
 export type TriageResponseDto = {
   triage_level: TriageLevel;
   summary: string;
   actions: string[];
   disclaimer: string;
   history_used: boolean;
+  confidence: number;
+  risk_reasoning: string;
+  recommended_action: string;
+  red_flags: string[];
+  sources: TriageSourceDto[];
+  decision: TriageDecisionDto;
+  triage_session_id?: number | null;
+};
+
+export type TriageHistoryItemDto = {
+  id: number;
+  query: string;
+  triage_level: TriageLevel;
+  confidence: number;
+  history_used: boolean;
+  patient_id?: number | null;
+  created_at: string;
+};
+
+export type TriageHistoryPageDto = {
+  items: TriageHistoryItemDto[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type TriageDetailDto = {
+  id: number;
+  query: string;
+  patient_id?: number | null;
+  user_id?: number | null;
+  created_at: string;
+  result: TriageResponseDto;
 };

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,18 @@ def load_conditions(data_dir: str) -> list[MedicalCondition]:
                 conditions.append(condition)
 
     return conditions
+
+
+def compute_dataset_hash(data_dir: str) -> str:
+    directory = Path(data_dir)
+    if not directory.exists() or not directory.is_dir():
+        raise FileNotFoundError(f"RAG data directory not found: {directory}")
+
+    digest = hashlib.sha256()
+    for json_file in sorted(directory.glob("*.json")):
+        digest.update(json_file.name.encode("utf-8"))
+        digest.update(json_file.read_bytes())
+    return digest.hexdigest()
 
 
 def _extract_records(payload: Any) -> list[dict[str, Any]]:

@@ -8,7 +8,7 @@ import numpy as np
 
 from app.core.config import get_settings
 from app.rag.chunking import chunk_text
-from app.rag.dataset_loader import load_conditions
+from app.rag.dataset_loader import compute_dataset_hash, load_conditions
 from app.rag.embedding_model import get_embedding_model
 from app.rag.faiss_store import (
     ChunkMetadata,
@@ -36,6 +36,10 @@ class EmbeddingRetriever(Retriever):
         self.top_k = max(1, top_k)
         self.cache_dir = settings.rag_cache_dir
         self.rebuild_index = settings.rag_rebuild_index
+        try:
+            self.dataset_hash = compute_dataset_hash(self.data_dir)
+        except FileNotFoundError:
+            self.dataset_hash = None
 
         self._lock = threading.Lock()
         self._ready = False
@@ -95,7 +99,10 @@ class EmbeddingRetriever(Retriever):
                 return
 
             if not self.rebuild_index:
-                cached_index, cached_metadata = load_index(cache_dir=self.cache_dir)
+                cached_index, cached_metadata = load_index(
+                    cache_dir=self.cache_dir,
+                    expected_dataset_hash=self.dataset_hash,
+                )
                 if cached_index is not None and cached_metadata:
                     self._index = cached_index
                     self._metadata = cached_metadata
@@ -114,6 +121,7 @@ class EmbeddingRetriever(Retriever):
             self._index, self._metadata = build_and_persist_index(
                 chunks,
                 cache_dir=self.cache_dir,
+                dataset_hash=self.dataset_hash,
             )
             self._ready = True
             logger.info(

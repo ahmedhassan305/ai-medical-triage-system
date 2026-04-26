@@ -11,6 +11,10 @@ from app.db.models import User
 from app.db.session import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login",
+    auto_error=False,
+)
 
 
 def get_current_user(
@@ -51,3 +55,22 @@ def require_roles(*allowed_roles: str) -> Callable[[User], User]:
         return current_user
 
     return _dependency
+
+
+def get_optional_user(
+    token: str | None = Depends(optional_oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not token:
+        return None
+
+    try:
+        payload = decode_access_token(token)
+    except ValueError:
+        return None
+
+    subject = payload.get("sub")
+    if not subject:
+        return None
+
+    return db.query(User).filter(User.id == int(subject)).first()

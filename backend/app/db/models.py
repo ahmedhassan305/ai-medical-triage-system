@@ -26,6 +26,8 @@ class User(Base):
         back_populates="user",
         uselist=False,
     )
+    triage_sessions: Mapped[list["TriageSession"]] = relationship(back_populates="user")
+    audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="user")
 
 
 class PatientProfile(Base):
@@ -54,6 +56,9 @@ class PatientProfile(Base):
     user: Mapped[User | None] = relationship(back_populates="patient_profile")
     visits: Mapped[list["Visit"]] = relationship(back_populates="patient")
     appointments: Mapped[list["Appointment"]] = relationship(back_populates="patient")
+    triage_sessions: Mapped[list["TriageSession"]] = relationship(
+        back_populates="patient"
+    )
 
 
 class DoctorProfile(Base):
@@ -130,3 +135,108 @@ class Appointment(Base):
 
     patient: Mapped[PatientProfile] = relationship(back_populates="appointments")
     doctor: Mapped[DoctorProfile] = relationship(back_populates="appointments")
+
+
+class TriageSession(Base):
+    __tablename__ = "triage_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    patient_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("patient_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    query: Mapped[str] = mapped_column(Text)
+    heuristic_level: Mapped[str] = mapped_column(String(20), index=True)
+    embedding_level: Mapped[str] = mapped_column(String(20), index=True)
+    llm_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    final_level: Mapped[str] = mapped_column(String(20), index=True)
+    history_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User | None] = relationship(back_populates="triage_sessions")
+    patient: Mapped[PatientProfile | None] = relationship(
+        back_populates="triage_sessions"
+    )
+    result: Mapped["TriageResult | None"] = relationship(
+        back_populates="session",
+        uselist=False,
+    )
+    retrieved_chunks: Mapped[list["RetrievedChunkLog"]] = relationship(
+        back_populates="session"
+    )
+
+
+class TriageResult(Base):
+    __tablename__ = "triage_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    triage_session_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("triage_sessions.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+    )
+    summary: Mapped[str] = mapped_column(Text)
+    risk_reasoning: Mapped[str] = mapped_column(Text)
+    recommended_action: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column()
+    red_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    actions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    disclaimer: Mapped[str] = mapped_column(Text)
+    sources: Mapped[list[dict[str, str | float]]] = mapped_column(JSON, default=list)
+    decision_payload: Mapped[dict[str, str | float | None]] = mapped_column(JSON)
+    reasoner_payload: Mapped[dict[str, object]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    session: Mapped[TriageSession] = relationship(back_populates="result")
+
+
+class RetrievedChunkLog(Base):
+    __tablename__ = "retrieved_chunks_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    triage_session_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("triage_sessions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    doc_id: Mapped[str] = mapped_column(String(255), index=True)
+    source_file: Mapped[str] = mapped_column(String(255))
+    chunk_id: Mapped[str] = mapped_column(String(255), index=True)
+    source: Mapped[str] = mapped_column(String(120))
+    title: Mapped[str] = mapped_column(String(255))
+    url: Mapped[str] = mapped_column(Text)
+    score: Mapped[float] = mapped_column()
+    rank: Mapped[int] = mapped_column(Integer)
+    snippet: Mapped[str] = mapped_column(Text)
+
+    session: Mapped[TriageSession] = relationship(back_populates="retrieved_chunks")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    action: Mapped[str] = mapped_column(String(120), index=True)
+    resource_type: Mapped[str] = mapped_column(String(120), index=True)
+    resource_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    details: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User | None] = relationship(back_populates="audit_logs")

@@ -507,6 +507,60 @@ textarea {
   padding-left: 18px;
 }
 
+.list--compact {
+  display: grid;
+  gap: 8px;
+}
+
+.triage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: 18px;
+  margin: 18px 0;
+}
+
+.result-card__sidebar,
+.history-card {
+  background: rgba(22, 51, 50, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.history-card {
+  margin-top: 18px;
+}
+
+.history-card__header,
+.history-list__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.history-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.history-list__item {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+
+.history-list__item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.history-list__item p {
+  margin: 8px 0 0;
+}
+
 .loading-card,
 .empty-state {
   text-align: center;
@@ -538,6 +592,7 @@ textarea {
 
   .hero__stats,
   .metric-grid,
+  .triage-grid,
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -545,6 +600,8 @@ textarea {
   .dashboard-main__header,
   .entity-card__header,
   .result-card__meta,
+  .history-card__header,
+  .history-list__item,
   .button-row,
   .inline-filter {
     flex-direction: column;

@@ -10,7 +10,10 @@
 ## API Endpoints
 - Versioned:
   - `GET /api/v1/health`
+  - `GET /api/v1/health/ready`
   - `POST /api/v1/triage`
+  - `GET /api/v1/triage/history`
+  - `GET /api/v1/triage/{triage_id}`
   - `POST /api/v1/auth/register`
   - `POST /api/v1/auth/login`
   - `GET /api/v1/auth/me`
@@ -84,6 +87,8 @@ Copy-Item .env.example .env -ErrorAction SilentlyContinue
 docker compose up --build
 ```
 
+The backend container now runs `alembic upgrade head` before starting Uvicorn.
+
 ### Service URLs
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:19001`
@@ -129,6 +134,10 @@ backend/reports/rag_eval_report.json
 cd backend
 alembic upgrade head
 ```
+
+### Readiness Checks
+- Backend readiness: `http://localhost:19001/api/v1/health/ready`
+- Standard health: `http://localhost:19001/api/v1/health`
 
 ## Docker Desktop Storage On D:\
 
@@ -194,15 +203,20 @@ npm run build
 - `JWT_ALGORITHM=HS256`
 - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60`
 - `RAG_DATA_DIR=./data`
-- `RAG_RETRIEVER=stub` (`stub`, `tfidf`, `embedding`)
+- `RAG_RETRIEVER=hybrid` (`stub`, `tfidf`, `embedding`, `hybrid`)
 - `RAG_TOP_K=3`
 - `OLLAMA_HOST=http://localhost:11434`
 - `OLLAMA_MODEL=llama3.2`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
+- `TRIAGE_ENABLE_EMBEDDING_SIGNAL=false`
 - `TFIDF_MAX_FEATURES=1000`
 - `TFIDF_NGRAM_MIN=1`
 - `TFIDF_NGRAM_MAX=2`
+- `RAG_DENSE_WEIGHT=0.45`
+- `RAG_SPARSE_WEIGHT=0.35`
+- `RAG_RERANK_WEIGHT=0.20`
+- `RAG_SOURCE_PRIORITIES=NHS=1.15,Mayo Clinic=1.0,Unknown=0.9`
 - `RAG_EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2`
 - `RAG_CACHE_DIR=./.cache/rag`
 - `RAG_CHUNK_SIZE=2000`
@@ -210,6 +224,10 @@ npm run build
 - `RAG_REBUILD_INDEX=false`
 - `PATIENT_HISTORY_VISIT_LIMIT=10`
 - `PATIENT_HISTORY_TOP_MATCHES=3`
+- `TRIAGE_RATE_LIMIT_COUNT=30`
+- `TRIAGE_RATE_LIMIT_WINDOW_SECONDS=60`
+- `AUTH_RATE_LIMIT_COUNT=10`
+- `AUTH_RATE_LIMIT_WINDOW_SECONDS=60`
 
 ### `frontend/.env`
 - `VITE_API_BASE_URL=http://localhost:19001`
@@ -218,6 +236,8 @@ npm run build
 - `OLLAMA_MODEL=llama3.2`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
+- `RAG_RETRIEVER=hybrid`
+- `TRIAGE_ENABLE_EMBEDDING_SIGNAL=true`
 - `RAG_REBUILD_INDEX=false`
 - `VITE_API_BASE_URL=http://localhost:19001`
 - `DATABASE_URL=postgresql+psycopg2://triage:triage@postgres:5432/triage`

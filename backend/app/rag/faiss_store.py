@@ -28,6 +28,7 @@ def build_and_persist_index(
     chunks_with_metadata: list[ChunkMetadata],
     *,
     cache_dir: str | None = None,
+    dataset_hash: str | None = None,
 ) -> tuple[faiss.IndexFlatIP, list[ChunkMetadata]]:
     if not chunks_with_metadata:
         raise ValueError("No chunks provided for index build.")
@@ -48,6 +49,7 @@ def build_and_persist_index(
 
     payload = {
         "embedding_model": get_settings().rag_embed_model,
+        "dataset_hash": dataset_hash,
         "items": chunks_with_metadata,
     }
     (directory / METADATA_FILENAME).write_text(
@@ -61,6 +63,7 @@ def build_and_persist_index(
 def load_index(
     *,
     cache_dir: str | None = None,
+    expected_dataset_hash: str | None = None,
 ) -> tuple[faiss.Index | None, list[ChunkMetadata]]:
     directory = _cache_dir(cache_dir)
     index_path = directory / INDEX_FILENAME
@@ -70,6 +73,11 @@ def load_index(
         return None, []
 
     metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if (
+        expected_dataset_hash
+        and metadata_payload.get("dataset_hash") != expected_dataset_hash
+    ):
+        return None, []
     items = metadata_payload.get("items", [])
     if not isinstance(items, list):
         return None, []
