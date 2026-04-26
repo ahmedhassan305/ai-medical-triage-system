@@ -14,6 +14,31 @@ Monorepo for a graduation-project medical triage platform built around:
 - TF-IDF / embedding retrievers with FAISS persistence
 - Postgres for team dev database
 
+## Recent Improvements (Phase 5+)
+
+### 🏥 Enhanced Medical Triage Quality
+- **Red-flag symptom detection**: Head trauma + severe headache + vomiting now correctly returns HIGH urgency with Neurology recommendation (was incorrectly LOW urgency with Gastroenterology)
+- **Context-aware specialty mapping**: GI conditions are penalized (-4.2) when a Neurology red-flag is present, preventing mismatched recommendations
+- **Evidence weighting**: Keyword evidence now provides +3.2 score boost; red-flag conditions weighted at 6.8 (increased from 5.2)
+- **High urgency floor**: RED-FLAG conditions never downgrade from HIGH urgency; floor is non-negotiable
+
+### 👤 Patient Registration & Profile
+- **National ID requirement**: Patients must provide a 14-digit Egyptian national ID during registration
+- **Automatic data extraction**: National ID automatically derives date of birth and governorate
+- **Gender standardization**: Dropdown with only "Male" and "Female" options (enforced both frontend and backend)
+
+### 🎯 Role-Specific Dashboards
+- **Patient Overview**: Upcoming appointments, pending requests, last visit summary, recommended actions
+- **Doctor Overview**: Confirmed appointments (next 3), pending patient requests table, patient load metrics
+- **Admin Overview**: System metrics (total patients/doctors/appointments), appointment status breakdown by state, specialty coverage table
+
+### 📅 Appointment Booking Flow
+- **Direct Reserve from Triage**: Each recommended doctor card includes "Reserve Appointment" button
+- **Pre-filled Booking**: Clicking Reserve pre-fills appointment form with doctor ID and triage reason
+- **Status Workflow**: Appointments follow requested → approved/rejected → completed lifecycle
+- **Admin Control**: Admins can approve/reject pending appointments and schedule confirmations
+- **Detail Toggle**: "View details" button on admin appointments shows/hides request details and notes
+
 ## Team Development Workflow
 
 ### Preferred daily workflow
@@ -175,33 +200,24 @@ docker compose --profile backend up --build backend postgres ollama
 ## Doctor directory seed data
 
 Canonical doctor seed file:
-- `backend/data/doctors/alexandria_public_directory_seed.json`
+- `scripts/seed_doctors.py` - Contains 14 real Egyptian/Alexandrian doctors with full profiles
 
 Import command:
 ```powershell
 .\backend\.venv\Scripts\python scripts\seed_doctors.py
 ```
 
-Optional maintainer refresh command:
-```powershell
-.\backend\.venv\Scripts\python scripts\build_alexandria_doctor_seed.py
-```
-
 What it does:
-- imports a curated public doctor directory dataset focused on Alexandria first
-- the current canonical seed contains 119 Alexandria-focused public doctor listings
-- stores provenance on each seeded doctor:
-  - `source_name`
-  - `source_url`
-  - `booking_url`
-  - `area`
-  - `city`
-- removes legacy fake prototype doctors from older friend-branch data
-- upserts by `source_url` / doctor identity so the seed stays reproducible
+- Imports a curated Egyptian doctor dataset with real names, specialties, and clinic information
+- Current seed contains 14 Alexandria-based doctors across multiple specialties:
+  - Cardiology (2), Neurology (2), Pulmonology (2), Gastroenterology (2), Orthopedics (2), Internal Medicine (2), Dermatology (1), Psychiatry (1)
+- Stores provenance on each doctor:
+  - `full_name`, `specialty`, `clinic`, `area`, `city`
+  - Source information for verification
+- Makes doctors immediately available for patient recommendations
+- Enables "Reserve Appointment" button to suggest real doctors
 
-Public data source used in this branch:
-- Vezeeta public doctor directory/profile pages
-- specialty coverage in the canonical seed includes Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, and Family Medicine
+Doctor data can be extended by adding more entries to `seed_doctors.py` with proper Egyptian/regional context.
 
 ## Clean local demo dataset
 
@@ -228,6 +244,93 @@ Seeded local credentials after reset:
 - patient: `patient.mariam.hassan@aimts-eg.com` / `PatientPass123!`
 
 Use this script for local/demo data only. It is intended to replace residue from smoke tests and previous manual experiments.
+
+## Testing
+
+### Running tests
+
+Backend tests use pytest:
+```powershell
+cd backend
+.\.venv\Scripts\activate
+pytest tests/ -v
+```
+
+Test coverage includes:
+- `test_triage_prioritization.py`: Red-flag detection, context penalties, specialty mapping
+  - Head trauma + severe headache + vomiting → HIGH urgency with Neurology (not LOW with Gastroenterology)
+  - Chest pain + shortness of breath → HIGH urgency with Cardiology
+  - Stroke symptoms → HIGH urgency with Neurology
+  - Context penalty prevents GI conditions from dominating head injury scenarios
+- `test_patient_registration.py`: National ID requirement, gender validation, profile auto-population
+  - National ID is required for patient signup
+  - Gender must be exactly "Male" or "Female" (dropdown enforced)
+  - Date of birth and governorate auto-derived from national ID
+- `test_overview.py`: Role-specific dashboard rendering
+  - Patients see upcoming appointments and pending requests
+  - Doctors see confirmed appointments and pending patient requests
+  - Admins see system metrics and specialty coverage
+  - Data properly scoped by user role
+- `test_appointments.py`: Booking workflow, pre-fill, admin approval
+  - Patients can reserve appointments with pre-filled doctor and reason from triage
+  - Admins can approve, reject, and view appointment details
+  - Appointment status follows requested → approved → completed workflow
+
+Run specific test file:
+```powershell
+pytest tests/test_triage_prioritization.py -v
+```
+
+Run test with keyword match:
+```powershell
+pytest tests/ -k "head_trauma" -v
+```
+
+## Migration Guide: Phases 5+ Improvements
+
+### For Existing Installations
+
+If you have an existing installation from before these changes, follow these steps:
+
+#### 1. Database Schema Update
+The National ID and gender enhancements require schema updates:
+```powershell
+cd backend
+.\.venv\Scripts\activate
+alembic upgrade head
+```
+
+#### 2. Seed New Doctor Data
+Replace the old doctor data with the new Egyptian doctors:
+```powershell
+cd ..
+.\backend\.venv\Scripts\python scripts\seed_doctors.py
+```
+
+#### 3. Reset Patient Data (Optional but Recommended)
+Clear out test data and recreate valid patient profiles:
+```powershell
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
+```
+
+#### 4. Reinstall Frontend Dependencies
+Frontend components have been updated for the new workflow:
+```powershell
+cd frontend
+npm install
+```
+
+### Breaking Changes
+- **Patient Registration API**: Now requires `full_name`, `national_id`, and `sex` fields for patient role
+- **Gender Validation**: `sex` field only accepts "Male" or "Female" (was previously free-text)
+- **Triage Response**: Includes new `red_flags`, `urgency_label`, and enhanced `recommended_specialty` logic
+- **Appointment Workflow**: Appointments now start in "requested" status and require admin approval before scheduling
+
+### Behavioral Changes
+- **Red-flag Triage**: Head trauma + severe symptoms now correctly escalates to HIGH urgency with Neurology (was previously LOW with Gastroenterology)
+- **Admin Appointments Tab**: "View details" button now toggles detail visibility (was always expanded)
+- **Overview Pages**: Now show role-specific information instead of generic metrics
+- **Doctor Recommendations**: Limited to 14 seeded Alexandria doctors (can be extended in `seed_doctors.py`)
 
 ## Hybrid triage response
 

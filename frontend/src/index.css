@@ -1169,9 +1169,60 @@ textarea {
   margin-top: 4px;
 }
 
+.appointment-header-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.appointment-header-main > div {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.appointment-header-main h3 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appointment-time {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .badge--status-completed {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
+}
+
+.badge--status-requested {
+  background: rgba(217, 119, 6, 0.12);
+  color: var(--warning);
+}
+
+.badge--status-approved {
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--success);
+}
+
+.badge--status-rejected {
+  background: rgba(194, 65, 12, 0.12);
+  color: var(--danger);
+}
+
+.detail-section {
+  background: rgba(22, 51, 50, 0.04);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 8px;
 }
 
 @media (max-width: 1120px) {

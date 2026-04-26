@@ -47,6 +47,31 @@ function renderStatusLabel(status: AppointmentResponseDto["status"]): string {
   }
 }
 
+function getTimeDisplay(date: string): string {
+  const now = new Date();
+  const apptDate = new Date(date);
+  const diffMs = apptDate.getTime() - now.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffHours < 0) {
+    return "Past";
+  }
+  if (diffHours < 1) {
+    return "Soon";
+  }
+  if (diffHours < 24) {
+    return `Today, ${apptDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  if (diffDays === 1) {
+    return `Tomorrow, ${apptDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  if (diffDays <= 7) {
+    return `In ${diffDays} days`;
+  }
+  return apptDate.toLocaleDateString();
+}
+
 export default function AppointmentsPanel({
   role,
   doctors,
@@ -66,6 +91,9 @@ export default function AppointmentsPanel({
   const [reason, setReason] = useState(preFill?.reason ?? "");
   const [notes, setNotes] = useState(preFill?.notes ?? "");
   const [scheduledFor, setScheduledFor] = useState("");
+  const [expandedAppointmentId, setExpandedAppointmentId] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!preFill) {
@@ -100,12 +128,19 @@ export default function AppointmentsPanel({
       new Date(right.scheduled_for || right.requested_at).getTime() -
       new Date(left.scheduled_for || left.requested_at).getTime(),
   );
-  const pendingAppointments = sortedAppointments.filter(
-    (appointment) => appointment.status === "requested",
-  );
-  const confirmedAppointments = sortedAppointments.filter(
-    (appointment) => appointment.status === "approved",
-  );
+  const pendingAppointments = sortedAppointments
+    .filter((appointment) => appointment.status === "requested")
+    .sort(
+      (left, right) =>
+        new Date(left.requested_at).getTime() - new Date(right.requested_at).getTime(),
+    );
+  const confirmedAppointments = sortedAppointments
+    .filter((appointment) => appointment.status === "approved")
+    .sort(
+      (left, right) =>
+        new Date(left.scheduled_for || left.requested_at).getTime() -
+        new Date(right.scheduled_for || right.requested_at).getTime(),
+    );
   const completedAppointments = sortedAppointments.filter(
     (appointment) => appointment.status === "completed",
   );
@@ -124,16 +159,23 @@ export default function AppointmentsPanel({
       doctors.find((doctor) => doctor.id === appointment.doctor_id)?.full_name ??
       `Doctor #${appointment.doctor_id}`;
 
+    const scheduleTime = appointment.scheduled_for || null;
+    const timeDisplay = scheduleTime ? getTimeDisplay(scheduleTime) : null;
+
     return (
       <article key={appointment.id} className="entity-card entity-card--appointment">
         <div className="entity-card__header">
-          <div>
-            <h3>Appointment #{appointment.id}</h3>
-            <p>{appointment.reason}</p>
+          <div className="appointment-header-main">
+            <div>
+              <h3>{appointment.reason || `Appointment #${appointment.id}`}</h3>
+              {timeDisplay ? (
+                <p className="appointment-time">{timeDisplay}</p>
+              ) : null}
+            </div>
+            <span className={`badge badge--status-${appointment.status}`}>
+              {renderStatusLabel(appointment.status)}
+            </span>
           </div>
-          <span className={`badge badge--status-${appointment.status}`}>
-            {renderStatusLabel(appointment.status)}
-          </span>
         </div>
 
         <div className="detail-list">
@@ -155,16 +197,30 @@ export default function AppointmentsPanel({
           </div>
         </div>
 
-        <p className="muted-copy">
-          Requested: {new Date(appointment.requested_at).toLocaleString()}
-        </p>
-        {appointment.notes ? <p className="muted-copy">Notes: {appointment.notes}</p> : null}
+        {expandedAppointmentId === appointment.id ? (
+          <div className="detail-section">
+            <p className="muted-copy">
+              Requested: {new Date(appointment.requested_at).toLocaleString()}
+            </p>
+            {appointment.notes ? (
+              <p className="muted-copy">Notes: {appointment.notes}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         {options?.showWorkflowActions || options?.showDetailsAction ? (
           <div className="button-row">
             {options.showDetailsAction ? (
-              <button type="button" className="button button--ghost button--small">
-                View details
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={() =>
+                  setExpandedAppointmentId(
+                    expandedAppointmentId === appointment.id ? null : appointment.id,
+                  )
+                }
+              >
+                {expandedAppointmentId === appointment.id ? "Hide details" : "View details"}
               </button>
             ) : null}
             {options.showWorkflowActions ? (
