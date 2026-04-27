@@ -71,6 +71,8 @@ export type DoctorProfileUpsertDto = {
 export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  department_id?: number | null;
+  department_name?: string | null;
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;
@@ -110,6 +112,7 @@ export type VisitCreateDto = {
 
 export type VisitResponseDto = VisitCreateDto & {
   id: number;
+  appointment_id?: number | null;
   created_at: string;
 };
 

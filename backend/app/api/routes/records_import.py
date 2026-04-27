@@ -11,6 +11,11 @@ from app.api.deps import require_roles
 from app.db.models import PatientProfile, User, Visit
 from app.db.session import get_db
 from app.schemas.records import RecordsImportResult
+from app.services.clinical_records import (
+    extract_symptom_names,
+    sync_medical_history_from_visit,
+    sync_patient_symptoms,
+)
 
 router = APIRouter(prefix="/records", tags=["records"])
 
@@ -73,6 +78,16 @@ def import_records(
             vitals=None,
         )
         db.add(visit)
+        db.flush()
+        sync_medical_history_from_visit(db, visit=visit, source_type="imported_record")
+        sync_patient_symptoms(
+            db,
+            patient=patient,
+            symptom_names=extract_symptom_names(symptoms),
+            source="imported_record",
+            notes=(str(record["diagnosis"]).strip() if record.get("diagnosis") else None),
+            observed_at=visit.created_at,
+        )
         imported += 1
 
     db.commit()

@@ -70,7 +70,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-triage}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triage}
     ports:
-      - "${HOST_POSTGRES_PORT:-5432}:5432"
+      - "${HOST_POSTGRES_PORT:-5437}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -74,3 +75,11 @@ class TriageResponse(BaseModel):
     supporting_references: list[SupportingReference] = Field(default_factory=list)
     disclaimer: str
     history_used: bool = False
+
+
+class TriageAssessmentResponse(TriageResponse):
+    id: int
+    patient_id: int
+    appointment_id: int | None = None
+    query_text: str
+    created_at: datetime
