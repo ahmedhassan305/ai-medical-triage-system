@@ -24,16 +24,14 @@ def normalize_department_name(value: str) -> str:
 
 def get_or_create_department(db: Session, name: str) -> Department:
     normalized_name = normalize_department_name(name)
-    department = (
-        db.query(Department).filter(Department.name == normalized_name).first()
-    )
+    department = db.query(Department).filter(Department.name == normalized_name).first()
     if department is not None:
         return department
 
     department = Department(
-        name=normalized_name, 
+        name=normalized_name,
         description=f"{normalized_name} department",
-        )
+    )
     db.add(department)
     db.flush()
     return department
@@ -120,11 +118,7 @@ def sync_medical_history_from_visit(
     visit: Visit,
     source_type: str,
 ) -> MedicalHistory:
-    entry = (
-        db.query(MedicalHistory)
-        .filter(MedicalHistory.visit_id == visit.id)
-        .first()
-    )
+    entry = db.query(MedicalHistory).filter(MedicalHistory.visit_id == visit.id).first()
     if entry is None:
         entry = MedicalHistory(
             patient_id=visit.patient_id,

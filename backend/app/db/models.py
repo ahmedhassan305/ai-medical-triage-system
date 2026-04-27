@@ -399,8 +399,8 @@ class TriageAssessment(Base):
     specialty_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     suspected_condition: Mapped[str | None] = mapped_column(String(200), nullable=True)
     suspected_conditions: Mapped[list[dict[str, str]]] = mapped_column(
-        JSON, 
-        default=list)
+        JSON, default=list
+    )
     suggested_doctors: Mapped[list[dict[str, str | int | None]]] = mapped_column(
         JSON,
         default=list,

@@ -86,9 +86,8 @@ def import_records(
             symptom_names=extract_symptom_names(symptoms),
             source="imported_record",
             notes=(
-                str(record["diagnosis"]).strip()
-                if record.get("diagnosis")
-                else None),
+                str(record["diagnosis"]).strip() if record.get("diagnosis") else None
+            ),
             observed_at=visit.created_at,
         )
         imported += 1
