@@ -30,7 +30,10 @@ def get_or_create_department(db: Session, name: str) -> Department:
     if department is not None:
         return department
 
-    department = Department(name=normalized_name, description=f"{normalized_name} department")
+    department = Department(
+        name=normalized_name, 
+        description=f"{normalized_name} department",
+        )
     db.add(department)
     db.flush()
     return department

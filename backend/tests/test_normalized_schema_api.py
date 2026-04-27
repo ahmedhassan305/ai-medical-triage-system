@@ -175,7 +175,11 @@ def test_triage_and_records_are_persisted_into_normalized_tables(
     assert history_response.status_code == 200
     history_payload = history_response.json()
     assert len(history_payload) == 1
-    assert history_payload[0]["query_text"] == "I have chest pain and shortness of breath"
+    assert (
+    history_payload[0]["query_text"]
+    == "I have chest pain and shortness of breath"
+    )
+
 
     record_file = io.BytesIO(
         json.dumps(
