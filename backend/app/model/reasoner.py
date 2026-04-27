@@ -155,7 +155,8 @@ class OllamaReasoner:
             "urgency_level": "medium",
             "clinical_summary": (
                 "Respiratory symptoms with fever could reflect an acute lower "
-                "respiratory infection."
+                "respiratory infection. The patient reports productive cough and elevated temperature, "
+                "consistent with pneumonia or acute bronchitis based on retrieved medical literature."
             ),
             "patient_friendly_explanation": (
                 "Your symptoms may be related to a chest or breathing infection. "
@@ -164,14 +165,14 @@ class OllamaReasoner:
             ),
             "possible_conditions": [
                 {
-                    "name": "Bronchitis",
-                    "explanation": "Cough and fever can fit this pattern.",
+                    "name": "Pneumonia",
+                    "explanation": "Fever with persistent productive cough and respiratory findings can fit this pattern.",
                 },
                 {
-                    "name": "Pneumonia",
+                    "name": "Acute Bronchitis",
                     "explanation": (
-                        "Fever with persistent cough can sometimes point to a "
-                        "lung infection."
+                        "Fever and productive cough are classic findings. "
+                        "Usually self-limited but medical review is prudent."
                     ),
                 },
             ],
@@ -180,41 +181,46 @@ class OllamaReasoner:
                 "Arrange a same-day medical review if symptoms are worsening.",
                 "Seek urgent help if breathing becomes difficult.",
             ],
-            "red_flags": ["trouble breathing", "blue lips"],
+            "red_flags": ["trouble breathing", "blue lips", "coughing up blood"],
         }
         context_text = (
             "\n\n".join(contexts[:3]) if contexts else "No retrieved evidence."
         )
         patient_block = patient_context or "No patient history provided."
         return (
-            "You are a careful medical triage assistant. "
-            "You do not give a confirmed diagnosis. "
+            "You are a careful medical triage assistant with expertise in clinical reasoning. "
+            "You do not give a confirmed diagnosis but provide careful clinical assessment. "
             "Use plain, reassuring language for non-doctors. "
-            "Use the retrieved evidence when it is relevant.\n\n"
+            "Use the retrieved medical evidence when it is relevant. "
+            "IMPORTANT: Explicitly identify and name specific medical conditions from your clinical reasoning.\n\n"
             "Return ONLY valid JSON with this exact shape:\n"
             "{\n"
             '  "urgency_level": "low|medium|high",\n'
-            '  "clinical_summary": "short clinician-style summary",\n'
+            '  "clinical_summary": "detailed clinician-style summary with specific condition names identified from reasoning",\n'
             '  "patient_friendly_explanation": "simple explanation for the patient",\n'
             '  "possible_conditions": [\n'
-            '    {"name": "condition", "explanation": "why it may fit"}\n'
+            '    {"name": "specific condition name", "explanation": "why it may fit based on symptoms"}\n'
             "  ],\n"
             '  "recommended_specialty": "specialty name or null",\n'
             '  "recommended_actions": ["action 1", "action 2"],\n'
             '  "red_flags": ["warning sign 1", "warning sign 2"]\n'
             "}\n\n"
             "Rules:\n"
-            "- possible_conditions must contain 1 to 3 possibilities.\n"
+            "- possible_conditions must contain 1 to 3 specific medical conditions.\n"
+            "- ALWAYS include the most likely specific condition name (e.g., 'Pneumonia', 'Myocardial infarction', 'Meningitis').\n"
+            "- Use exact medical terminology in condition names for extraction by downstream systems.\n"
             "- Use wording such as 'possible condition' or 'may be related to'.\n"
             "- Do not overstate certainty.\n"
             "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
-            "- If symptoms sound dangerous, set urgency_level to high.\n\n"
+            "- If symptoms sound dangerous, set urgency_level to high.\n"
+            "- Be explicit about clinical reasoning - name the specific conditions you are considering.\n\n"
             "Example JSON:\n"
             f"{json.dumps(example_payload, indent=2)}\n\n"
             f"Symptoms: {query}\n"
             f"Safety baseline urgency: {triage_level}\n\n"
             f"Patient context:\n{patient_block}\n\n"
-            f"Retrieved evidence:\n{context_text}\n"
+            f"Retrieved medical evidence:\n{context_text}\n"
+            f"\nNow analyze this case and provide detailed clinical reasoning with specific condition names."
         )
 
 
