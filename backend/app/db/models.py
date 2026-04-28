@@ -6,6 +6,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -150,12 +151,79 @@ class DoctorProfile(Base):
     department: Mapped[Department | None] = relationship(back_populates="doctors")
     visits: Mapped[list["Visit"]] = relationship(back_populates="doctor")
     appointments: Mapped[list["Appointment"]] = relationship(back_populates="doctor")
+    doctor_clinics: Mapped[list["DoctorClinic"]] = relationship(
+        back_populates="doctor",
+        cascade="all, delete-orphan",
+    )
     schedules: Mapped[list["DoctorSchedule"]] = relationship(
         back_populates="doctor",
         cascade="all, delete-orphan",
     )
     medical_history_entries: Mapped[list["MedicalHistory"]] = relationship(
         back_populates="doctor"
+    )
+
+
+class Clinic(Base):
+    __tablename__ = "clinics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), index=True)
+    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    area: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    doctor_links: Mapped[list["DoctorClinic"]] = relationship(
+        back_populates="clinic",
+        cascade="all, delete-orphan",
+    )
+    appointments: Mapped[list["Appointment"]] = relationship(back_populates="clinic")
+
+
+class DoctorClinic(Base):
+    __tablename__ = "doctor_clinics"
+    __table_args__ = (
+        UniqueConstraint("doctor_id", "clinic_id", name="uq_doctor_clinic_link"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    doctor_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("doctor_profiles.id", ondelete="CASCADE"),
+        index=True,
+    )
+    clinic_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("clinics.id", ondelete="CASCADE"),
+        index=True,
+    )
+    scope_at_clinic: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    doctor: Mapped[DoctorProfile] = relationship(back_populates="doctor_clinics")
+    clinic: Mapped[Clinic] = relationship(back_populates="doctor_links")
+    schedules: Mapped[list["DoctorSchedule"]] = relationship(
+        back_populates="doctor_clinic"
+    )
+    slots: Mapped[list["AppointmentSlot"]] = relationship(
+        back_populates="doctor_clinic"
     )
 
 
@@ -173,6 +241,19 @@ class Appointment(Base):
         ForeignKey("doctor_profiles.id", ondelete="CASCADE"),
         index=True,
     )
+    clinic_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("clinics.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    slot_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("appointment_slots.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(30), default="requested", index=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -181,6 +262,8 @@ class Appointment(Base):
 
     patient: Mapped[PatientProfile] = relationship(back_populates="appointments")
     doctor: Mapped[DoctorProfile] = relationship(back_populates="appointments")
+    clinic: Mapped[Clinic | None] = relationship(back_populates="appointments")
+    slot: Mapped["AppointmentSlot | None"] = relationship(back_populates="appointment")
     triage_assessment: Mapped["TriageAssessment | None"] = relationship(
         back_populates="appointment",
         uselist=False,
@@ -294,9 +377,18 @@ class DoctorSchedule(Base):
         ForeignKey("doctor_profiles.id", ondelete="CASCADE"),
         index=True,
     )
+    doctor_clinic_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("doctor_clinics.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     day_of_week: Mapped[str] = mapped_column(String(20), index=True)
     start_time: Mapped[time] = mapped_column(Time)
     end_time: Mapped[time] = mapped_column(Time)
+    slot_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     location_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -307,6 +399,51 @@ class DoctorSchedule(Base):
     )
 
     doctor: Mapped[DoctorProfile] = relationship(back_populates="schedules")
+    doctor_clinic: Mapped[DoctorClinic | None] = relationship(
+        back_populates="schedules"
+    )
+    slots: Mapped[list["AppointmentSlot"]] = relationship(
+        back_populates="schedule",
+        cascade="all, delete-orphan",
+    )
+
+
+class AppointmentSlot(Base):
+    __tablename__ = "appointment_slots"
+    __table_args__ = (
+        UniqueConstraint(
+            "doctor_clinic_id",
+            "start_at",
+            "end_at",
+            name="uq_doctor_clinic_slot_window",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    doctor_clinic_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("doctor_clinics.id", ondelete="CASCADE"),
+        index=True,
+    )
+    schedule_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("doctor_schedules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    start_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    end_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    doctor_clinic: Mapped[DoctorClinic] = relationship(back_populates="slots")
+    schedule: Mapped[DoctorSchedule | None] = relationship(back_populates="slots")
+    appointment: Mapped[Appointment | None] = relationship(back_populates="slot")
 
 
 class MedicalHistory(Base):

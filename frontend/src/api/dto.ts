@@ -80,12 +80,36 @@ export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   updated_at: string;
 };
 
+export type ClinicDto = {
+  id: number;
+  name: string;
+  address?: string | null;
+  area?: string | null;
+  city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  phone?: string | null;
+  is_active: boolean;
+};
+
+export type AppointmentSlotDto = {
+  id: number;
+  doctor_clinic_id: number;
+  schedule_id?: number | null;
+  start_at: string;
+  end_at: string;
+  status: string;
+  clinic: ClinicDto;
+};
+
 export type AppointmentCreateDto = {
   patient_id: number;
   doctor_id: number;
   reason: string;
   notes?: string | null;
   scheduled_for?: string | null;
+  clinic_id?: number | null;
+  slot_id?: number | null;
 };
 
 export type AppointmentStatusUpdateDto = {
@@ -97,6 +121,8 @@ export type AppointmentResponseDto = AppointmentCreateDto & {
   id: number;
   status: string;
   requested_at: string;
+  clinic?: ClinicDto | null;
+  slot?: AppointmentSlotDto | null;
 };
 
 export type VisitCreateDto = {
@@ -131,8 +157,10 @@ export type DoctorSuggestionDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  clinic_id?: number | null;
   area?: string | null;
   city?: string | null;
+  earliest_available_slot?: string | null;
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;

@@ -1,13 +1,24 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
-from app.db.models import DoctorProfile, User
+from app.db.models import AppointmentSlot, Clinic, DoctorProfile, User
 from app.db.session import get_db
-from app.schemas.doctor import DoctorProfileResponse, DoctorProfileUpsert
+from app.schemas.doctor import (
+    AppointmentSlotResponse,
+    ClinicResponse,
+    DoctorProfileResponse,
+    DoctorProfileUpsert,
+)
 from app.services.clinical_records import assign_department_to_doctor
+from app.services.slot_booking import (
+    SlotBookingValidationError,
+    generate_slots_for_doctor,
+)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -16,6 +27,25 @@ def _serialize_doctor(profile: DoctorProfile) -> DoctorProfileResponse:
     payload = DoctorProfileResponse.model_validate(profile, from_attributes=True)
     payload.department_name = profile.department.name if profile.department else None
     return payload
+
+
+def _serialize_clinic(clinic: Clinic | None) -> ClinicResponse | None:
+    if clinic is None:
+        return None
+    return ClinicResponse.model_validate(clinic, from_attributes=True)
+
+
+def _serialize_slot(slot: AppointmentSlot) -> AppointmentSlotResponse:
+    clinic = slot.doctor_clinic.clinic if slot.doctor_clinic else None
+    return AppointmentSlotResponse(
+        id=slot.id,
+        doctor_clinic_id=slot.doctor_clinic_id,
+        schedule_id=slot.schedule_id,
+        start_at=slot.start_at,
+        end_at=slot.end_at,
+        status=slot.status,
+        clinic=_serialize_clinic(clinic),
+    )
 
 
 @router.get("/", response_model=list[DoctorProfileResponse])
@@ -88,3 +118,28 @@ def get_doctor(
     if profile is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
     return _serialize_doctor(profile)
+
+
+@router.get("/{doctor_id}/slots", response_model=list[AppointmentSlotResponse])
+def list_doctor_slots(
+    doctor_id: int,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> list[AppointmentSlotResponse]:
+    profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
+
+    try:
+        slots = generate_slots_for_doctor(
+            db,
+            doctor_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except SlotBookingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return [_serialize_slot(slot) for slot in slots]
