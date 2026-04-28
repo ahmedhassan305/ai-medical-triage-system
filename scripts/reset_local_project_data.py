@@ -5,7 +5,7 @@ import os
 import random
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 from sqlalchemy import func
@@ -19,12 +19,26 @@ sys.path.insert(0, str(backend_dir))
 from app.core.security import get_password_hash  # noqa: E402
 from app.db.models import (  # noqa: E402
     Appointment,
+    Department,
     DoctorProfile,
+    DoctorSchedule,
+    MedicalHistory,
     PatientProfile,
+    PatientSymptom,
+    Symptom,
+    TriageAssessment,
     User,
     Visit,
 )
 from app.db.session import create_all, engine  # noqa: E402
+from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS  # noqa: E402
+from app.services.clinical_records import (  # noqa: E402
+    assign_department_to_doctor,
+    extract_symptom_names,
+    get_or_create_symptom,
+    sync_medical_history_from_visit,
+    sync_patient_symptoms,
+)
 from app.services.doctor_seed_importer import (  # noqa: E402
     import_seed_records,
     load_seed_records,
@@ -36,7 +50,7 @@ from app.services.egyptian_national_id import (  # noqa: E402
 
 SEED_PATH = backend_dir / "data" / "doctors" / "alexandria_public_directory_seed.json"
 RNG = random.Random(20260421)
-NOW = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+NOW = datetime.now(UTC).replace(tzinfo=None, minute=0, second=0, microsecond=0)
 
 ADMIN_CREDENTIALS = ("admin.ops@aimts-eg.com", "AdminPass123!")
 DOCTOR_PASSWORD = "DoctorPass123!"
@@ -336,11 +350,17 @@ def build_patient_records() -> list[dict[str, object]]:
 
 
 def delete_existing_data(db: Session) -> None:
+    db.query(TriageAssessment).delete(synchronize_session=False)
+    db.query(MedicalHistory).delete(synchronize_session=False)
+    db.query(PatientSymptom).delete(synchronize_session=False)
+    db.query(DoctorSchedule).delete(synchronize_session=False)
+    db.query(Symptom).delete(synchronize_session=False)
     db.query(Appointment).delete(synchronize_session=False)
     db.query(Visit).delete(synchronize_session=False)
     db.query(DoctorProfile).delete(synchronize_session=False)
     db.query(PatientProfile).delete(synchronize_session=False)
     db.query(User).delete(synchronize_session=False)
+    db.query(Department).delete(synchronize_session=False)
     db.commit()
 
 
@@ -452,6 +472,46 @@ def seed_users_and_linked_profiles(db: Session) -> list[SeededCredentials]:
     return credentials
 
 
+def seed_symptom_catalog(db: Session) -> int:
+    seeded = 0
+    seen: set[str] = set()
+    for keyword, _condition in PATIENT_SYMPTOM_KEYWORDS:
+        normalized = keyword.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        get_or_create_symptom(db, name=normalized)
+        seeded += 1
+    db.commit()
+    return seeded
+
+
+def seed_doctor_schedules(db: Session) -> int:
+    created = 0
+    weekday_templates = (
+        ("Sunday", 10, 14),
+        ("Tuesday", 16, 20),
+        ("Thursday", 11, 15),
+    )
+    doctors = db.query(DoctorProfile).order_by(DoctorProfile.id.asc()).all()
+    for doctor in doctors:
+        assign_department_to_doctor(db, doctor, department_name=doctor.specialty)
+        for day_name, start_hour, end_hour in weekday_templates:
+            db.add(
+                DoctorSchedule(
+                    doctor_id=doctor.id,
+                    day_of_week=day_name,
+                    start_time=time(start_hour, 0),
+                    end_time=time(end_hour, 0),
+                    location_label=doctor.clinic,
+                    is_active=True,
+                )
+            )
+            created += 1
+    db.commit()
+    return created
+
+
 def seed_appointments_and_visits(db: Session) -> tuple[int, int]:
     doctors = db.query(DoctorProfile).order_by(DoctorProfile.id.asc()).all()
     patients = db.query(PatientProfile).order_by(PatientProfile.id.asc()).all()
@@ -513,6 +573,7 @@ def seed_appointments_and_visits(db: Session) -> tuple[int, int]:
             visit = Visit(
                 patient_id=patient.id,
                 doctor_id=doctor.id,
+                appointment_id=appointment.id,
                 symptoms=template["symptoms"],
                 diagnosis=template["diagnosis"],
                 notes=template["notes"],
@@ -525,6 +586,16 @@ def seed_appointments_and_visits(db: Session) -> tuple[int, int]:
                 created_at=scheduled_at + timedelta(minutes=RNG.randint(25, 110)),
             )
             db.add(visit)
+            db.flush()
+            sync_medical_history_from_visit(db, visit=visit, source_type="visit")
+            sync_patient_symptoms(
+                db,
+                patient=patient,
+                symptom_names=extract_symptom_names(visit.symptoms),
+                source="visit",
+                notes=visit.diagnosis,
+                observed_at=visit.created_at,
+            )
             visit_count += 1
 
     future_statuses = ["requested", "approved", "approved", "requested", "approved"]
@@ -569,16 +640,22 @@ def main() -> int:
     with Session(engine) as db:
         delete_existing_data(db)
         import_seed_records(db, records, clean_legacy=False)
+        symptom_count = seed_symptom_catalog(db)
         credentials = seed_users_and_linked_profiles(db)
+        schedule_count = seed_doctor_schedules(db)
         appointment_count, visit_count = seed_appointments_and_visits(db)
         doctor_count = db.query(func.count(DoctorProfile.id)).scalar() or 0
         patient_count = db.query(func.count(PatientProfile.id)).scalar() or 0
+        history_count = db.query(func.count(MedicalHistory.id)).scalar() or 0
 
     print("Local project data reset complete.")
     print(f"Doctors available: {doctor_count}")
     print(f"Patients available: {patient_count}")
     print(f"Appointments available: {appointment_count}")
     print(f"Visits available: {visit_count}")
+    print(f"Medical history records available: {history_count}")
+    print(f"Doctor schedule rows available: {schedule_count}")
+    print(f"Symptom catalog rows available: {symptom_count}")
     print("")
     print("Seeded local credentials:")
     for item in credentials:

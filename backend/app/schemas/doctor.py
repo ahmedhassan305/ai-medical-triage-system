@@ -16,6 +16,8 @@ class DoctorProfileUpsert(BaseModel):
 class DoctorProfileResponse(DoctorProfileUpsert):
     id: int
     user_id: int | None = None
+    department_id: int | None = None
+    department_name: str | None = None
     source_name: str | None = None
     source_url: str | None = None
     booking_url: str | None = None

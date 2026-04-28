@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.models import DoctorProfile
+from app.services.clinical_records import assign_department_to_doctor
 
 SPECIALTY_NORMALIZATION = {
     "cardiologist": "Cardiology",
@@ -212,6 +213,8 @@ def import_seed_records(
                 booking_url=record.booking_url,
             )
             db.add(existing)
+            db.flush()
+            assign_department_to_doctor(db, existing, department_name=record.specialty)
             inserted += 1
             continue
 
@@ -223,6 +226,7 @@ def import_seed_records(
         existing.source_name = record.source_name
         existing.source_url = record.source_url
         existing.booking_url = record.booking_url
+        assign_department_to_doctor(db, existing, department_name=record.specialty)
         updated += 1
 
     db.commit()
