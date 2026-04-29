@@ -28,7 +28,12 @@ def _ollama_model_available(host: str, model: str) -> bool:
         return False
 
     models = payload.get("models", [])
-    return any(item.get("name") == model for item in models if isinstance(item, dict))
+    candidate_names = {
+        item.get("name")
+        for item in models
+        if isinstance(item, dict) and item.get("name")
+    }
+    return model in candidate_names or f"{model}:latest" in candidate_names
 
 
 def test_triage_reasoner_mode_stub(monkeypatch) -> None:
@@ -42,13 +47,15 @@ def test_triage_reasoner_mode_stub(monkeypatch) -> None:
         response = client.post("/api/v1/triage", json={"query": "I have headache"})
 
     assert response.status_code == 200
-    summary = response.json()["summary"]
-    assert summary.startswith("Triage level:")
+    payload = response.json()
+    assert payload["patient_friendly_explanation"]
+    assert payload["urgency_level"] == "low"
+    assert isinstance(payload["suspected_conditions"], list)
 
 
 def test_triage_reasoner_mode_ollama_when_available(monkeypatch) -> None:
     host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    model = os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4")
+    model = os.getenv("OLLAMA_MODEL", "llama3.2")
     if not _ollama_reachable(host):
         pytest.skip("Ollama is not reachable; skipping integration test.")
     if not _ollama_model_available(host, model):
@@ -71,6 +78,6 @@ def test_triage_reasoner_mode_ollama_when_available(monkeypatch) -> None:
         )
 
     assert response.status_code == 200
-    summary = response.json()["summary"].strip()
-    assert summary
-    assert not summary.startswith("Triage level:")
+    payload = response.json()
+    assert payload["summary"].strip()
+    assert payload["patient_friendly_explanation"].strip()

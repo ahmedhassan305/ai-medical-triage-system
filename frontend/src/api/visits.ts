@@ -15,3 +15,8 @@ export async function listPatientVisits(
   );
   return response.data;
 }
+
+export async function listWorkspaceVisits(): Promise<VisitResponseDto[]> {
+  const response = await api.get<VisitResponseDto[]>(apiPaths.visits.list);
+  return response.data;
+}

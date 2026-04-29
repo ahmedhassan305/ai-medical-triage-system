@@ -14,17 +14,23 @@ import {
 } from "../api/doctors";
 import { getErrorMessage } from "../api/errors";
 import {
+  createManagedPatientProfile,
   fetchMyPatientProfile,
+  findPatientByNationalId,
   listPatients,
   upsertMyPatientProfile,
 } from "../api/patients";
 import { importRecords } from "../api/records";
 import { triage, type TriageResponse } from "../api/triage";
-import { createVisit, listPatientVisits } from "../api/visits";
+import { createVisit, listPatientVisits, listWorkspaceVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
+  DoctorSuggestionDto,
   DoctorProfileResponseDto,
+  ManagedPatientProfileCreateDto,
   PatientProfileResponseDto,
+  PatientProfileUpsertDto,
+  RegisterRequestDto,
   RoleType,
   TokenResponseDto,
   UserResponseDto,
@@ -38,6 +44,10 @@ import ProfilePanel from "../components/ProfilePanel";
 import RecordsImportPanel from "../components/RecordsImportPanel";
 import TriagePanel from "../components/TriagePanel";
 import VisitsPanel from "../components/VisitsPanel";
+import {
+  buildAppointmentPrefill,
+  type AppointmentPrefill,
+} from "../lib/appointmentPrefill";
 import { clearSession, readSession, writeSession } from "../lib/session";
 
 function isStatus(error: unknown, statusCode: number): boolean {
@@ -55,6 +65,7 @@ export default function HomePage() {
   const [doctors, setDoctors] = useState<DoctorProfileResponseDto[]>([]);
   const [appointments, setAppointments] = useState<AppointmentResponseDto[]>([]);
   const [visits, setVisits] = useState<VisitResponseDto[]>([]);
+  const [workspaceVisits, setWorkspaceVisits] = useState<VisitResponseDto[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedTab, setSelectedTab] = useState<DashboardTab>("overview");
 
@@ -77,6 +88,21 @@ export default function HomePage() {
 
   const [triageQuery, setTriageQuery] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResponse | null>(null);
+  const [appointmentPrefill, setAppointmentPrefill] =
+    useState<AppointmentPrefill | null>(null);
+  const [triagePatientNationalId, setTriagePatientNationalId] = useState("");
+  const [triageLinkedPatient, setTriageLinkedPatient] =
+    useState<PatientProfileResponseDto | null>(null);
+  const [triageLinkedPatientLatestVisit, setTriageLinkedPatientLatestVisit] =
+    useState<VisitResponseDto | null>(null);
+  const [triagePatientLookupLoading, setTriagePatientLookupLoading] =
+    useState(false);
+  const [triagePatientLookupError, setTriagePatientLookupError] =
+    useState<string | null>(null);
+  const [triagePatientCreateLoading, setTriagePatientCreateLoading] =
+    useState(false);
+  const [triagePatientCreateError, setTriagePatientCreateError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -88,6 +114,20 @@ export default function HomePage() {
     }
   }, [selectedTab, user]);
 
+  useEffect(() => {
+    if (!user || user.role === "patient") {
+      return;
+    }
+    if (!selectedPatientId) {
+      setTriageLinkedPatient(null);
+      setTriageLinkedPatientLatestVisit(null);
+      return;
+    }
+    const matchedPatient =
+      patients.find((patient) => patient.id === selectedPatientId) ?? null;
+    setTriageLinkedPatient(matchedPatient);
+  }, [patients, selectedPatientId, user]);
+
   function resetWorkspace() {
     clearSession();
     setSession(null);
@@ -98,9 +138,16 @@ export default function HomePage() {
     setDoctors([]);
     setAppointments([]);
     setVisits([]);
+    setWorkspaceVisits([]);
     setSelectedPatientId(null);
     setTriageResult(null);
     setTriageQuery("");
+    setAppointmentPrefill(null);
+    setTriagePatientNationalId("");
+    setTriageLinkedPatient(null);
+    setTriageLinkedPatientLatestVisit(null);
+    setTriagePatientLookupError(null);
+    setTriagePatientCreateError(null);
     setPageError(null);
     setRecordsSuccess(null);
   }
@@ -131,14 +178,22 @@ export default function HomePage() {
           nextDoctors,
           nextPatients,
           nextAppointments,
+          nextWorkspaceVisits,
         ] = await Promise.all([
-          patientProfileRequest,
-          doctorProfileRequest,
+          fetchMyPatientProfile().catch((error) =>
+            isStatus(error, 404) ? null : Promise.reject(error),
+          ),
+          fetchMyDoctorProfile().catch((error) =>
+            isStatus(error, 404) ? null : Promise.reject(error),
+          ),
           listDoctors().catch(() => []),
           currentUser.role === "patient"
             ? Promise.resolve([])
             : listPatients().catch(() => []),
           listAppointments().catch(() => []),
+          currentUser.role === "doctor" || currentUser.role === "admin"
+            ? listWorkspaceVisits().catch(() => [])
+            : Promise.resolve([]),
         ]);
 
         let nextSelectedPatientId = forcedPatientId ?? currentSelection;
@@ -162,6 +217,7 @@ export default function HomePage() {
         setDoctors(nextDoctors);
         setPatients(nextPatients);
         setAppointments(nextAppointments);
+        setWorkspaceVisits(nextWorkspaceVisits);
         setSelectedPatientId(nextSelectedPatientId);
         setVisits(nextVisits);
         setPageError(null);
@@ -220,11 +276,12 @@ export default function HomePage() {
     };
   }, [refreshWorkspace, session]);
 
-  async function refreshVisits(patientId: number | null) {
+  async function refreshVisits(patientId: number | null): Promise<VisitResponseDto[]> {
     setSelectedPatientId(patientId);
     if (!patientId) {
       setVisits([]);
-      return;
+      setTriageLinkedPatientLatestVisit(null);
+      return [];
     }
 
     setVisitsLoading(true);
@@ -232,8 +289,12 @@ export default function HomePage() {
     try {
       const response = await listPatientVisits(patientId);
       setVisits(response);
+      setTriageLinkedPatientLatestVisit(response[0] ?? null);
+      return response;
     } catch (error) {
       setVisitsError(getErrorMessage(error, "Failed to load visits."));
+      setTriageLinkedPatientLatestVisit(null);
+      return [];
     } finally {
       setVisitsLoading(false);
     }
@@ -257,6 +318,9 @@ export default function HomePage() {
     email: string;
     password: string;
     role: RoleType;
+    full_name?: string;
+    national_id?: string;
+    sex?: RegisterRequestDto["sex"];
   }) {
     setAuthLoading(true);
     setAuthError(null);
@@ -278,7 +342,9 @@ export default function HomePage() {
   async function handleSavePatientProfile(payload: {
     full_name: string;
     age: number;
-    sex: string;
+    sex: PatientProfileUpsertDto["sex"];
+    national_id?: string | null;
+    current_governorate?: string | null;
     smoker: boolean;
     alcoholic: boolean;
     chronic_conditions: string[];
@@ -303,6 +369,8 @@ export default function HomePage() {
     full_name: string;
     specialty: string;
     clinic: string;
+    area?: string | null;
+    city?: string | null;
   }) {
     if (!session) {
       return;
@@ -332,6 +400,73 @@ export default function HomePage() {
     } finally {
       setTriageLoading(false);
     }
+  }
+
+  function handleReserveAppointment(
+    doctor: DoctorSuggestionDto,
+    specialty: string,
+    reason: string,
+  ) {
+    setAppointmentPrefill(buildAppointmentPrefill(doctor, reason, specialty));
+    setSelectedTab("appointments");
+  }
+
+  async function handleLookupPatientByNationalId(nationalId: string) {
+    const normalizedNationalId = nationalId.replace(/\D/g, "").slice(0, 14);
+    setTriagePatientNationalId(normalizedNationalId);
+    if (!normalizedNationalId) {
+      setTriagePatientLookupError(null);
+      setTriageLinkedPatient(null);
+      await refreshVisits(null);
+      return;
+    }
+
+    setTriagePatientLookupLoading(true);
+    setTriagePatientLookupError(null);
+    try {
+      const patient = await findPatientByNationalId(normalizedNationalId);
+      setTriageLinkedPatient(patient);
+      await refreshVisits(patient.id);
+    } catch (error) {
+      setTriageLinkedPatient(null);
+      await refreshVisits(null);
+      setTriagePatientLookupError(
+        getErrorMessage(error, "Failed to find patient by national ID."),
+      );
+    } finally {
+      setTriagePatientLookupLoading(false);
+    }
+  }
+
+  async function handleCreateManagedPatientProfile(
+    payload: ManagedPatientProfileCreateDto,
+  ) {
+    if (!session) {
+      return;
+    }
+
+    setTriagePatientCreateLoading(true);
+    setTriagePatientCreateError(null);
+    try {
+      const profile = await createManagedPatientProfile(payload);
+      await refreshWorkspace(session, profile.id, profile.id);
+      setTriagePatientNationalId(profile.national_id ?? payload.national_id);
+      setTriageLinkedPatient(profile);
+      await refreshVisits(profile.id);
+    } catch (error) {
+      setTriagePatientCreateError(
+        getErrorMessage(error, "Failed to create patient profile."),
+      );
+    } finally {
+      setTriagePatientCreateLoading(false);
+    }
+  }
+
+  function handleClearLinkedTriagePatient() {
+    setTriagePatientLookupError(null);
+    setTriagePatientNationalId("");
+    setTriageLinkedPatient(null);
+    void refreshVisits(null);
   }
 
   async function handleCreateAppointment(payload: {
@@ -388,6 +523,10 @@ export default function HomePage() {
       const data = await listPatientVisits(payload.patient_id);
       setVisits(data);
       setSelectedPatientId(payload.patient_id);
+      if (user?.role === "doctor" || user?.role === "admin") {
+        const recentVisits = await listWorkspaceVisits().catch(() => workspaceVisits);
+        setWorkspaceVisits(recentVisits);
+      }
     } catch (error) {
       setVisitsError(getErrorMessage(error, "Failed to create visit."));
     } finally {
@@ -435,15 +574,46 @@ export default function HomePage() {
 
   const currentUser: UserResponseDto = user;
 
-  const triagePatients =
-    currentUser.role === "patient"
-      ? patientProfile
-        ? [patientProfile]
-        : []
-      : patients;
-
   const currentPatientId =
     currentUser.role === "patient" ? patientProfile?.id ?? null : selectedPatientId;
+
+  const tabMeta: Record<
+    DashboardTab,
+    { title: string; description: string }
+  > = {
+    overview: {
+      title: "Workspace overview",
+      description:
+        currentUser.role === "admin"
+          ? "Operational visibility across appointments, specialty coverage, and activity."
+          : currentUser.role === "doctor"
+            ? "A live clinician workspace for schedule review, visits, and patient workload."
+            : "A personal care workspace for your next appointment, triage guidance, and visit history.",
+    },
+    profile: {
+      title: "Profile",
+      description:
+        currentUser.role === "admin"
+          ? "Review patients, doctors, appointments, and recent medical history from one operations workspace."
+          : "Keep role details accurate so triage, scheduling, and history stay aligned.",
+    },
+    triage: {
+      title: "Triage",
+      description: "Describe symptoms to get urgency guidance, likely conditions, and doctor suggestions.",
+    },
+    appointments: {
+      title: "Appointments",
+      description: "Coordinate requests, approvals, and confirmed visits without leaving the workspace.",
+    },
+    visits: {
+      title: "Visits",
+      description: "Review clinical notes or create new visit records from the care workflow.",
+    },
+    records: {
+      title: "Records",
+      description: "Import external records into the structured visit history.",
+    },
+  };
 
   function renderPanel() {
     switch (selectedTab) {
@@ -454,10 +624,13 @@ export default function HomePage() {
             key={`overview-${currentUser.role}`}
             patientProfile={patientProfile}
             doctorProfile={doctorProfile}
-            doctorsCount={doctors.length}
-            patientsCount={patients.length}
-            appointmentsCount={appointments.length}
-            visitsCount={visits.length}
+            appointments={appointments}
+            patients={patients}
+            visits={visits}
+            recentVisits={workspaceVisits}
+            doctors={doctors}
+            triageResult={triageResult}
+            onNavigate={handleSelectTab}
           />
         );
       case "profile":
@@ -469,6 +642,11 @@ export default function HomePage() {
             doctorProfile={doctorProfile}
             savingPatient={patientSaving}
             savingDoctor={doctorSaving}
+            patients={patients}
+            doctors={doctors}
+            appointments={appointments}
+            recentVisits={workspaceVisits}
+            onNavigate={handleSelectTab}
             onSavePatient={handleSavePatientProfile}
             onSaveDoctor={handleSaveDoctorProfile}
           />
@@ -477,24 +655,34 @@ export default function HomePage() {
         return (
           <TriagePanel
             key={`triage-${currentPatientId ?? "none"}`}
+            role={currentUser.role}
             loading={triageLoading}
             error={triageError}
             result={triageResult}
-            patientOptions={triagePatients}
-            patientId={currentPatientId}
-            lockPatientSelection={
-              currentUser.role === "patient" && Boolean(patientProfile)
-            }
+            patientProfile={patientProfile}
+            linkedPatient={currentUser.role === "patient" ? patientProfile : triageLinkedPatient}
+            linkedPatientLatestVisit={triageLinkedPatientLatestVisit}
+            patientLookupNationalId={triagePatientNationalId}
+            patientLookupLoading={triagePatientLookupLoading}
+            patientLookupError={triagePatientLookupError}
+            patientCreateLoading={triagePatientCreateLoading}
+            patientCreateError={triagePatientCreateError}
             query={triageQuery}
             onQueryChange={setTriageQuery}
-            onPatientChange={refreshVisits}
+            onLookupNationalIdChange={setTriagePatientNationalId}
+            onLookupPatient={handleLookupPatientByNationalId}
+            onClearLinkedPatient={handleClearLinkedTriagePatient}
+            onCreatePatientProfile={handleCreateManagedPatientProfile}
             onSubmit={handleRunTriage}
+            onReserveAppointment={
+              currentUser.role === "doctor" ? undefined : handleReserveAppointment
+            }
           />
         );
       case "appointments":
         return (
           <AppointmentsPanel
-            key={`appointments-${currentPatientId ?? "none"}`}
+            key={`appointments-${currentPatientId ?? "none"}-${appointmentPrefill?.doctorId ?? "none"}`}
             role={currentUser.role}
             doctors={doctors}
             patients={patients}
@@ -504,6 +692,8 @@ export default function HomePage() {
             error={appointmentsError}
             onCreate={handleCreateAppointment}
             onUpdateStatus={handleUpdateAppointmentStatus}
+            preFill={appointmentPrefill}
+            onClearPreFill={() => setAppointmentPrefill(null)}
           />
         );
       case "visits":
@@ -511,7 +701,13 @@ export default function HomePage() {
           <VisitsPanel
             key={`visits-${currentPatientId ?? "none"}`}
             role={currentUser.role}
-            patientOptions={triagePatients}
+            patientOptions={
+              currentUser.role === "patient"
+                ? patientProfile
+                  ? [patientProfile]
+                  : []
+                : patients
+            }
             selectedPatientId={currentPatientId}
             currentDoctorId={doctorProfile?.id ?? null}
             visits={visits}
@@ -552,16 +748,16 @@ export default function HomePage() {
         <main className="dashboard-main">
           <header className="dashboard-main__header">
             <div>
-              <p className="dashboard-main__eyebrow">Live backend workspace</p>
-              <h2>{selectedTab.toUpperCase()}</h2>
+              <p className="dashboard-main__eyebrow">Live care workspace</p>
+              <h2>{tabMeta[selectedTab].title}</h2>
               <p className="dashboard-main__copy">
-                Frontend actions are wired to FastAPI endpoints with JWT auth.
+                {tabMeta[selectedTab].description}
               </p>
             </div>
 
             <div className="status-bubble">
-              <span>API</span>
-              <strong>connected</strong>
+              <span>{currentUser.role.toUpperCase()}</span>
+              <strong>API connected</strong>
             </div>
           </header>
 

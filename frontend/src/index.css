@@ -219,6 +219,12 @@ button {
   color: #f8fafc;
 }
 
+.dashboard-nav__copy {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.74);
+  line-height: 1.55;
+}
+
 .dashboard-nav__menu {
   display: grid;
   gap: 10px;
@@ -325,6 +331,20 @@ button {
   font-weight: 600;
 }
 
+.field__hint,
+.field__error {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.field__hint {
+  color: var(--text-muted);
+}
+
+.field__error {
+  color: var(--danger);
+}
+
 input,
 textarea,
 select {
@@ -358,6 +378,11 @@ textarea {
   padding: 12px 18px;
   border: 1px solid transparent;
   transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.button--small {
+  padding: 9px 14px;
+  font-size: 0.92rem;
 }
 
 .button:hover:not(:disabled) {
@@ -429,6 +454,15 @@ textarea {
   background: linear-gradient(135deg, rgba(15, 118, 110, 0.1), rgba(255, 214, 165, 0.14));
 }
 
+.callout--warning {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.12), rgba(255, 241, 237, 0.72));
+}
+
+.callout--next-step {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(216, 242, 238, 0.76));
+  border-color: rgba(15, 118, 110, 0.16);
+}
+
 .notice {
   border-radius: var(--radius-md);
   padding: 14px 16px;
@@ -455,6 +489,124 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+}
+
+.result-layout,
+.reference-list,
+.condition-list {
+  display: grid;
+  gap: 18px;
+}
+
+.result-card--hero {
+  border-color: rgba(15, 118, 110, 0.14);
+  box-shadow: 0 18px 34px rgba(15, 118, 110, 0.08);
+}
+
+.result-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.result-title {
+  margin: 8px 0 10px;
+  font-size: clamp(1.4rem, 2.8vw, 2rem);
+  font-family:
+    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Georgia", serif;
+}
+
+.condition-card,
+.reference-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 16px;
+}
+
+.doctor-suggestion-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.doctor-suggestion-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.doctor-suggestion-card__actions,
+.appointment-prefill {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.button-row--align-end {
+  justify-content: flex-end;
+  align-self: end;
+  flex-wrap: wrap;
+}
+
+.patient-lookup-card {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.86));
+}
+
+.patient-lookup-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.appointment-prefill {
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.09), rgba(255, 214, 165, 0.14));
+  padding: 18px;
+}
+
+.appointment-prefill h3 {
+  margin: 8px 0 6px;
+  font-size: 1.1rem;
+}
+
+.appointment-prefill p {
+  margin: 0;
+}
+
+.condition-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.badge--neutral {
+  background: rgba(31, 41, 51, 0.08);
+  color: var(--text-main);
+}
+
+.reference-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.reference-link:hover {
+  text-decoration: underline;
 }
 
 .badge {
@@ -513,6 +665,515 @@ textarea {
   color: var(--text-muted);
 }
 
+.workspace-dashboard,
+.workspace-grid,
+.action-grid,
+.activity-columns,
+.activity-list,
+.mini-stat-grid,
+.admin-metric-grid,
+.status-grid,
+.detail-list,
+.hero-pill-group,
+.status-track,
+.funnel-list,
+.coverage-list {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-hero,
+.workspace-card,
+.status-card,
+.action-shortcut,
+.coverage-item {
+  background: var(--bg-panel-strong);
+  border: 1px solid var(--border-soft);
+  border-radius: 22px;
+  box-shadow: var(--shadow-soft);
+}
+
+.dashboard-hero {
+  padding: 28px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -8% -22% auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  opacity: 0.4;
+}
+
+.dashboard-hero__eyebrow {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.dashboard-hero h3,
+.workspace-card h3,
+.empty-prompt h4,
+.activity-columns h4,
+.seed-callout code,
+.status-card strong {
+  margin: 0;
+}
+
+.dashboard-hero h3,
+.workspace-card h3,
+.activity-columns h4,
+.empty-prompt h4 {
+  font-family:
+    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Georgia", serif;
+}
+
+.dashboard-hero h3 {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  margin-bottom: 12px;
+}
+
+.dashboard-hero p,
+.workspace-card p,
+.status-card p,
+.coverage-item p,
+.action-shortcut span,
+.detail-list span,
+.detail-list strong,
+.spotlight-inline p {
+  margin: 0;
+}
+
+.dashboard-hero--patient {
+  background: linear-gradient(145deg, rgba(10, 113, 107, 0.1), rgba(255, 241, 214, 0.8));
+}
+
+.dashboard-hero--patient::after {
+  background: rgba(255, 214, 165, 0.45);
+}
+
+.dashboard-hero--doctor {
+  background: linear-gradient(145deg, rgba(18, 55, 75, 0.14), rgba(214, 234, 248, 0.84));
+}
+
+.dashboard-hero--doctor::after {
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.dashboard-hero--admin {
+  background: linear-gradient(145deg, rgba(22, 51, 50, 0.12), rgba(229, 243, 239, 0.92));
+}
+
+.dashboard-hero--admin::after {
+  background: rgba(15, 118, 110, 0.24);
+}
+
+.dashboard-hero--warning {
+  border-color: rgba(217, 119, 6, 0.18);
+}
+
+.hero-pill-group {
+  align-content: start;
+  justify-items: start;
+}
+
+.hero-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(22, 51, 50, 0.12);
+  color: var(--bg-ink);
+  font-weight: 700;
+}
+
+.workspace-grid--patient {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.workspace-grid--doctor {
+  grid-template-columns: 1.2fr 0.9fr;
+}
+
+.workspace-grid--admin {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-card {
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+
+.workspace-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.workspace-card--feature {
+  border-color: rgba(15, 118, 110, 0.14);
+}
+
+.workspace-card--compact {
+  padding: 18px;
+  gap: 14px;
+}
+
+.workspace-card--activity-span {
+  grid-column: 1 / -1;
+}
+
+.workspace-card--actions {
+  align-content: start;
+}
+
+.workspace-card--skeleton {
+  min-height: 220px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(237, 245, 243, 0.92));
+}
+
+.status-track {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.status-track__step {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(22, 51, 50, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.status-track__step strong,
+.detail-list strong,
+.spotlight-inline strong,
+.activity-item strong,
+.coverage-item strong,
+.status-card strong,
+.action-shortcut strong {
+  display: block;
+  color: var(--bg-ink);
+}
+
+.status-track__step span,
+.detail-list span,
+.activity-item p,
+.activity-meta small,
+.status-card span {
+  color: var(--text-muted);
+}
+
+.status-track__step.is-complete {
+  border-color: rgba(15, 118, 110, 0.2);
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.status-track__step.is-current {
+  border-color: rgba(15, 118, 110, 0.24);
+}
+
+.status-track__step.is-pending {
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.status-track__step.is-blocked {
+  border-color: rgba(194, 65, 12, 0.18);
+  background: rgba(194, 65, 12, 0.08);
+}
+
+.detail-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detail-list div {
+  display: grid;
+  gap: 6px;
+}
+
+.spotlight-inline,
+.seed-callout {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.spotlight-inline {
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 214, 165, 0.14));
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.mini-stat-grid,
+.admin-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-metric-grid .metric-card strong {
+  font-size: 1.25rem;
+}
+
+.activity-list {
+  align-content: start;
+}
+
+.activity-list.compact {
+  gap: 12px;
+}
+
+.task-list {
+  display: grid;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.activity-meta {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  text-align: right;
+}
+
+.action-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.action-shortcut {
+  padding: 18px;
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  background: linear-gradient(145deg, rgba(15, 118, 110, 0.11), rgba(255, 255, 255, 0.9));
+}
+
+.action-shortcut--ghost {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.empty-prompt {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(22, 51, 50, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.empty-prompt--compact {
+  border-style: solid;
+  background: rgba(247, 244, 236, 0.72);
+}
+
+.funnel-list {
+  align-content: start;
+}
+
+.funnel-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.funnel-row__bar {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(22, 51, 50, 0.08);
+  overflow: hidden;
+}
+
+.funnel-row__bar div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #f59e0b);
+}
+
+.coverage-list {
+  align-content: start;
+}
+
+.coverage-item {
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.coverage-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--success);
+  font-weight: 700;
+}
+
+.coverage-chip--warning {
+  background: rgba(217, 119, 6, 0.12);
+  color: var(--warning);
+}
+
+.coverage-callout {
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(22, 51, 50, 0.05), rgba(255, 255, 255, 0.92));
+  border: 1px solid rgba(22, 51, 50, 0.08);
+}
+
+.activity-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.activity-columns > div {
+  display: grid;
+  gap: 12px;
+}
+
+.seed-callout {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.seed-callout code {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(22, 51, 50, 0.9);
+  color: #f8fafc;
+  font-size: 0.88rem;
+}
+
+.status-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.status-card {
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.status-card--good {
+  background: rgba(15, 118, 110, 0.08);
+  border-color: rgba(15, 118, 110, 0.14);
+}
+
+.status-card--pending {
+  background: rgba(217, 119, 6, 0.08);
+  border-color: rgba(217, 119, 6, 0.14);
+}
+
+.status-card--problem {
+  background: rgba(194, 65, 12, 0.08);
+  border-color: rgba(194, 65, 12, 0.14);
+}
+
+.status-card--info {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.12);
+}
+
+.care-status-grid,
+.admin-record-grid,
+.workspace-primary-action,
+.ops-table,
+.ops-table__header,
+.ops-table__row {
+  display: grid;
+}
+
+.care-status-grid,
+.admin-record-grid {
+  gap: 14px;
+}
+
+.care-status-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-record-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-primary-action {
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  background: linear-gradient(145deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.9));
+}
+
+.workspace-primary-action p {
+  margin: 0;
+}
+
+.ops-table {
+  gap: 10px;
+}
+
+.ops-table__header,
+.ops-table__row {
+  grid-template-columns: minmax(0, 1.3fr) 90px 90px 140px;
+  gap: 12px;
+  align-items: center;
+}
+
+.ops-table__header {
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ops-table__row {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(22, 51, 50, 0.08);
+}
+
+.ops-table__row strong {
+  color: var(--bg-ink);
+}
+
+.entity-card--appointment .detail-list {
+  margin-top: 4px;
+}
+
+.badge--status-completed {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
 @media (max-width: 1120px) {
   .auth-shell,
   .dashboard-shell {
@@ -521,6 +1182,21 @@ textarea {
 
   .dashboard-nav {
     position: static;
+  }
+
+  .workspace-grid--patient,
+  .workspace-grid--doctor,
+  .workspace-grid--admin,
+  .care-status-grid,
+  .admin-record-grid,
+  .activity-columns,
+  .status-grid,
+  .mini-stat-grid,
+  .admin-metric-grid,
+  .action-grid,
+  .detail-list,
+  .status-track {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -538,7 +1214,8 @@ textarea {
 
   .hero__stats,
   .metric-grid,
-  .form-grid {
+  .form-grid,
+  .result-grid {
     grid-template-columns: 1fr;
   }
 
@@ -546,8 +1223,28 @@ textarea {
   .entity-card__header,
   .result-card__meta,
   .button-row,
-  .inline-filter {
+  .inline-filter,
+  .doctor-suggestion-card__header,
+  .doctor-suggestion-card__actions,
+  .appointment-prefill,
+  .dashboard-hero,
+  .workspace-card__header,
+  .activity-item,
+  .activity-meta,
+  .spotlight-inline,
+  .seed-callout,
+  .coverage-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .funnel-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .ops-table__header,
+  .ops-table__row {
+    grid-template-columns: 1fr;
   }
 }

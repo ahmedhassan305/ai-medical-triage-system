@@ -4,9 +4,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
-from app.db.models import PatientProfile, User, Visit
+from app.db.models import User, Visit
 from app.db.session import get_db
 from app.schemas.visit import VisitCreate, VisitResponse
+from app.services.access_control import (
+    ensure_patient_profile_access,
+    get_linked_doctor_profile,
+    get_patient_profile_or_404,
+)
+from app.services.clinical_records import (
+    extract_symptom_names,
+    sync_medical_history_from_visit,
+    sync_patient_symptoms,
+)
 
 router = APIRouter(prefix="/visits", tags=["visits"])
 
@@ -15,16 +25,31 @@ router = APIRouter(prefix="/visits", tags=["visits"])
 def create_visit(
     payload: VisitCreate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("doctor", "admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> VisitResponse:
-    patient = (
-        db.query(PatientProfile).filter(PatientProfile.id == payload.patient_id).first()
-    )
-    if patient is None:
-        raise HTTPException(status_code=404, detail="Patient profile not found.")
+    patient = get_patient_profile_or_404(db, payload.patient_id)
+    visit_data = payload.model_dump()
+    if current_user.role == "doctor":
+        doctor_profile = get_linked_doctor_profile(db, current_user)
+        if doctor_profile is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Doctor profile is required before creating visits.",
+            )
+        visit_data["doctor_id"] = doctor_profile.id
 
-    visit = Visit(**payload.model_dump())
+    visit = Visit(**visit_data)
     db.add(visit)
+    db.flush()
+    sync_medical_history_from_visit(db, visit=visit, source_type="visit")
+    sync_patient_symptoms(
+        db,
+        patient=patient,
+        symptom_names=extract_symptom_names(visit.symptoms),
+        source="visit",
+        notes=visit.diagnosis or visit.notes,
+        observed_at=visit.created_at,
+    )
     db.commit()
     db.refresh(visit)
     return VisitResponse.model_validate(visit, from_attributes=True)
@@ -34,12 +59,29 @@ def create_visit(
 def list_patient_visits(
     patient_id: int,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+    current_user: User = Depends(require_roles("patient", "doctor", "admin")),
 ) -> list[VisitResponse]:
+    ensure_patient_profile_access(db, current_user, patient_id)
     visits = (
         db.query(Visit)
         .filter(Visit.patient_id == patient_id)
         .order_by(Visit.created_at.desc())
         .all()
     )
+    return [VisitResponse.model_validate(item, from_attributes=True) for item in visits]
+
+
+@router.get("/", response_model=list[VisitResponse])
+def list_visits(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("doctor", "admin")),
+) -> list[VisitResponse]:
+    query = db.query(Visit)
+    if current_user.role == "doctor":
+        doctor_profile = get_linked_doctor_profile(db, current_user)
+        if doctor_profile is None:
+            return []
+        query = query.filter(Visit.doctor_id == doctor_profile.id)
+
+    visits = query.order_by(Visit.created_at.desc()).all()
     return [VisitResponse.model_validate(item, from_attributes=True) for item in visits]
