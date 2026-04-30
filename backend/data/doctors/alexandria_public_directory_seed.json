@@ -1,0 +1,1219 @@
+{
+  "metadata": {
+    "dataset_name": "alexandria_public_directory_seed",
+    "source_name": "Vezeeta public directory",
+    "focus": "Alexandria public specialist directory coverage with reproducible page mapping.",
+    "captured_on": "2026-04-21",
+    "specialty_pages": {
+      "Cardiology": "https://www.vezeeta.com/en/doctor/cardiology/alexandria",
+      "Neurology": "https://www.vezeeta.com/en/doctor/neurology/alexandria",
+      "Neurosurgery": "https://www.vezeeta.com/en/doctor/neurosurgery/alexandria",
+      "Internal Medicine": "https://www.vezeeta.com/en/doctor/internal-medicine/alexandria",
+      "Gastroenterology": "https://www.vezeeta.com/en/doctor/adult-gastroenterology-and-endoscopy/alexandria",
+      "Dermatology": "https://www.vezeeta.com/en/doctor/dermatology/alexandria",
+      "Psychiatry": "https://www.vezeeta.com/en/doctor/psychiatry/alexandria",
+      "Ophthalmology": "https://www.vezeeta.com/en/doctor/ophthalmology/alexandria",
+      "Orthopedics": "https://www.vezeeta.com/en/doctor/orthopedics/alexandria",
+      "ENT": "https://www.vezeeta.com/en/doctor/ear-nose-and-throat/alexandria",
+      "Pediatrics": "https://www.vezeeta.com/en/doctor/pediatrics/alexandria",
+      "Family Medicine": "https://www.vezeeta.com/en/doctor/family-medicine/alexandria"
+    },
+    "notes": [
+      "Generated from public Vezeeta specialty pages using structured JSON-LD physician entries.",
+      "Each row preserves source provenance so doctor recommendations remain explainable.",
+      "This file is the canonical team seed source for doctor directory data."
+    ]
+  },
+  "doctors": [
+    {
+      "full_name": "Abd El hameed Moustafa",
+      "specialty": "Cardiology",
+      "clinic": "Consultant in Cardiology and Vascular Disease Treatment - Armed Forces.",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Abd-El-hameed-Moustafa-Cardiology-and-Vascular-Disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Abd-El-hameed-Moustafa-Cardiology-and-Vascular-Disease"
+    },
+    {
+      "full_name": "Amr Abdelaziz",
+      "specialty": "Cardiology",
+      "clinic": "Cardiology ,angiology and cardiac catheterization specialist",
+      "area": "El-Agamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amr-abdelaziz-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amr-abdelaziz-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Amr Asman",
+      "specialty": "Cardiology",
+      "clinic": "cardiology, vascular and internal catheterization consultant",
+      "area": "Sidy Gaber",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amr-asman-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amr-asman-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Amr Younes",
+      "specialty": "Cardiology",
+      "clinic": "Cardiology consultant",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amr-younes-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amr-younes-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Fathy Selim",
+      "specialty": "Cardiology",
+      "clinic": "Consultant Non-invasive Cardiology",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-fathy-selim-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-fathy-selim-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Hesham Samy",
+      "specialty": "Cardiology",
+      "clinic": "cardiology consultant",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hesham-samy-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hesham-samy-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Mohamed Elmaadawy",
+      "specialty": "Cardiology",
+      "clinic": "cardiology, angiology and internal specialist",
+      "area": "El-Agamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-elmaadawy-cardiology-and-vascular-disease-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-elmaadawy-cardiology-and-vascular-disease-1"
+    },
+    {
+      "full_name": "Muhaaaamed Nassar",
+      "specialty": "Cardiology",
+      "clinic": "cardiology and coronary artery disease specialist",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-nassar-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-nassar-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Sasha Ahmed Youssef",
+      "specialty": "Cardiology",
+      "clinic": "Consultant of Cardiology and Vascular disease",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sasha-ahmed-youssef-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sasha-ahmed-youssef-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Waleed Etman",
+      "specialty": "Cardiology",
+      "clinic": "Consultant Cardiologist, Vascular and Interventional Catheterization, Faculty of Medicine, Alexandria University",
+      "area": "Glym",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-waleed-etman-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-waleed-etman-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "waleed Elawady",
+      "specialty": "Cardiology",
+      "clinic": "consultant cardiology",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-waleed-elawady-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-waleed-elawady-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Ahmed Ayad",
+      "specialty": "Dermatology",
+      "clinic": "Consultant in dermatological diseases, genital dermatology, and cosmo dermatology",
+      "area": "Victoria",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Ayad-Dermatology-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Ayad-Dermatology-1"
+    },
+    {
+      "full_name": "Amany Nageeb",
+      "specialty": "Dermatology",
+      "clinic": "Dermatology and cosmetic specialist",
+      "area": "El-Asafra",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amany-nageeb-dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amany-nageeb-dermatology"
+    },
+    {
+      "full_name": "Amin Dowidar",
+      "specialty": "Dermatology",
+      "clinic": "Consultant in dermatology",
+      "area": "El-Asafra",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amin-dwidar-dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amin-dwidar-dermatology"
+    },
+    {
+      "full_name": "Jailan Rashad Mohamed Ali Zaid",
+      "specialty": "Dermatology",
+      "clinic": "Dermatology and aesthetic specialist",
+      "area": "Bulkly",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-jailan-rashad-mohamed-dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-jailan-rashad-mohamed-dermatology"
+    },
+    {
+      "full_name": "Misr laser",
+      "specialty": "Dermatology",
+      "clinic": "Doctor Maha Samir consultant of Dermatology",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/center-Misr-laser-Dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/center-Misr-laser-Dermatology"
+    },
+    {
+      "full_name": "Mostafa zaghloul",
+      "specialty": "Dermatology",
+      "clinic": "consultant in Dermatology, venerology, cosmetic and laser",
+      "area": "Victoria",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Mostafa-Nabil-zaghloul-Dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Mostafa-Nabil-zaghloul-Dermatology"
+    },
+    {
+      "full_name": "Nariman Salaheldin",
+      "specialty": "Dermatology",
+      "clinic": "Consultant in dermatology",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-nariman-salaheldin-dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-nariman-salaheldin-dermatology"
+    },
+    {
+      "full_name": "Nesrine Anwar",
+      "specialty": "Dermatology",
+      "clinic": "Dermatology ,venereology consultant",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-nesrine-anwar-dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-nesrine-anwar-dermatology"
+    },
+    {
+      "full_name": "Osama Sorour",
+      "specialty": "Dermatology",
+      "clinic": "Professor of Dermatology Faculty of medicine- Alexandria university",
+      "area": "El-Azarita",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Osama-Sorour-Dermatology-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Osama-Sorour-Dermatology-1"
+    },
+    {
+      "full_name": "Phieby Amir Riad",
+      "specialty": "Dermatology",
+      "clinic": "Dermatologist",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-phipe-amir-ryad--dermatology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-phipe-amir-ryad--dermatology"
+    },
+    {
+      "full_name": "Waheed Thabet",
+      "specialty": "Dermatology",
+      "clinic": "Consultant in Dermatology and Venereology",
+      "area": "El-Asafra",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Wahid-Thabet-Andrology-and-Male-Infertility",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Wahid-Thabet-Andrology-and-Male-Infertility"
+    },
+    {
+      "full_name": "AbdelSalam Mandil",
+      "specialty": "ENT",
+      "clinic": "ear,nose and throat surgery consultant",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-abdelsalam-mandil-ear-nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-abdelsalam-mandil-ear-nose-and-throat"
+    },
+    {
+      "full_name": "Ahmed Elbana",
+      "specialty": "ENT",
+      "clinic": "Otolaryngology Consultant",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-elbana-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-elbana-ear--nose-and-throat"
+    },
+    {
+      "full_name": "Hany Morris",
+      "specialty": "ENT",
+      "clinic": "Masters of Otorhinolayngology Faculty of Medicine- University of Alexandria Member of Egyptian ORL Society",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hany--Morris-Ear-Nose-and-Throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hany--Morris-Ear-Nose-and-Throat"
+    },
+    {
+      "full_name": "Kotb Ibrahim",
+      "specialty": "ENT",
+      "clinic": "Specialist in Ear, Nose and Throat Surgery",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-kotb-ibrahim-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-kotb-ibrahim-ear--nose-and-throat"
+    },
+    {
+      "full_name": "Marwa abd el baki",
+      "specialty": "ENT",
+      "clinic": "ENT consultant",
+      "area": "Janaklees",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-marwa-abd-el-baki-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-marwa-abd-el-baki-ear--nose-and-throat"
+    },
+    {
+      "full_name": "Mina Yahia Gurguis",
+      "specialty": "ENT",
+      "clinic": "Consultant in Ear, Nose, and Throat Medicine and Surgery and Sinus Endoscopy.",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Mina-Yahia-Gurguis-Ear-Nose-and-Throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Mina-Yahia-Gurguis-Ear-Nose-and-Throat"
+    },
+    {
+      "full_name": "Mohamed Melouk",
+      "specialty": "ENT",
+      "clinic": "Ear nose and throat Consultant",
+      "area": "Fleming",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-melouk-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-melouk-ear--nose-and-throat"
+    },
+    {
+      "full_name": "Mohamed Morshedy",
+      "specialty": "ENT",
+      "clinic": "Consultant in Ear, Nose and Throat Surgery",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-morshedy-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-morshedy-ear--nose-and-throat"
+    },
+    {
+      "full_name": "Mostafa mohamed Elsayed",
+      "specialty": "ENT",
+      "clinic": "Consultant in Otolaryngology (ENT) Medicine, Surgery, and Endoscopy",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mostafa-mohamed-elsayed-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mostafa-mohamed-elsayed-ear--nose-and-throat"
+    },
+    {
+      "full_name": "Reda Soliman",
+      "specialty": "ENT",
+      "clinic": "Senior Consultant of ear,nose and throat and Head of the Department of Health Insurance",
+      "area": "Bulkly",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-reda-soliman-ear--nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-reda-soliman-ear--nose-and-throat"
+    },
+    {
+      "full_name": "ali galal Kashef",
+      "specialty": "ENT",
+      "clinic": "Ear, nose and throat Consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ali-galal-kashef-ear-nose-and-throat",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ali-galal-kashef-ear-nose-and-throat"
+    },
+    {
+      "full_name": "Amany Yackoub",
+      "specialty": "Family Medicine",
+      "clinic": "Family medicine and public health specialist more intersted in pediatrics and pediatric nutrition",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amany-yackoub-family-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amany-yackoub-family-medicine"
+    },
+    {
+      "full_name": "Hebatallah ismael",
+      "specialty": "Family Medicine",
+      "clinic": "Specialist of Family medicine",
+      "area": "El-Seyouf",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hebatallah-ismael-family-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hebatallah-ismael-family-medicine"
+    },
+    {
+      "full_name": "Ahmed Fathalla",
+      "specialty": "Gastroenterology",
+      "clinic": "Lecturer and consultant of gastroenterology, hepatology and endoscopy",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-fathalla-gastroenterology-and-endoscopy",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-fathalla-gastroenterology-and-endoscopy"
+    },
+    {
+      "full_name": "Amir Andrawes",
+      "specialty": "Gastroenterology",
+      "clinic": "consultant internal medcine",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amir-andrawes-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amir-andrawes-internal-medicine"
+    },
+    {
+      "full_name": "Eslam Aboutaleb",
+      "specialty": "Gastroenterology",
+      "clinic": "Gastroentrology, Hepatology and Advanced Endoscopy specialist",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-eslam-aboutaleb-gastroenterology-and-endoscopy",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-eslam-aboutaleb-gastroenterology-and-endoscopy"
+    },
+    {
+      "full_name": "Gehan Anwar Mabrouk",
+      "specialty": "Gastroenterology",
+      "clinic": "Internal medicine consultant",
+      "area": "Fleming",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-gehan-anwar-mabrouk-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-gehan-anwar-mabrouk-internal-medicine"
+    },
+    {
+      "full_name": "Mohamed Dewidar",
+      "specialty": "Gastroenterology",
+      "clinic": "Lecturer Hepatogastroentrology and Endoscopy",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-kamal-dewidar-gastroenterology-and-endoscopy",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-kamal-dewidar-gastroenterology-and-endoscopy"
+    },
+    {
+      "full_name": "Mohamed Roshdy",
+      "specialty": "Gastroenterology",
+      "clinic": "Consultant of Internal Medicine and Cardiology - Ain Shams University / Fellow of the Royal College of Internal Medicine in London.",
+      "area": "Kafr Abdouh",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-roshdy-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-roshdy-internal-medicine"
+    },
+    {
+      "full_name": "Sameh Emara",
+      "specialty": "Gastroenterology",
+      "clinic": "consultant in nephrology",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sameh-emara-nephrology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sameh-emara-nephrology"
+    },
+    {
+      "full_name": "Ahmed Ismail",
+      "specialty": "Internal Medicine",
+      "clinic": "Consultant of internal medicine , Hepatology, Gastroneotology",
+      "area": "El-Asafra",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Ismail-Pediatrics-and-New-Born-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Ismail-Pediatrics-and-New-Born-1"
+    },
+    {
+      "full_name": "Bishoy Tharwat",
+      "specialty": "Internal Medicine",
+      "clinic": "Critical care internal diseases and ICU Consultant",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-bishoy-tharwat-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-bishoy-tharwat-internal-medicine"
+    },
+    {
+      "full_name": "Fouad El Naggar",
+      "specialty": "Internal Medicine",
+      "clinic": "Consultant of internal medicine",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Fouad-El-Naggar-Internal-Medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Fouad-El-Naggar-Internal-Medicine"
+    },
+    {
+      "full_name": "Mohamed Abd El Raoof",
+      "specialty": "Internal Medicine",
+      "clinic": "Professor and Consultant of Internal Medicine, Diabetes and Endocrinology",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-abd-el-raoof-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-abd-el-raoof-internal-medicine"
+    },
+    {
+      "full_name": "Mohamed Fawzy",
+      "specialty": "Internal Medicine",
+      "clinic": "Internal medicine consultant",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-fawzy-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-fawzy-internal-medicine"
+    },
+    {
+      "full_name": "Mohamed Said Rushdy",
+      "specialty": "Internal Medicine",
+      "clinic": "internal medicine consultant.",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-said-rushdy-Internal-Medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-said-rushdy-Internal-Medicine"
+    },
+    {
+      "full_name": "Nasr Elsofany",
+      "specialty": "Internal Medicine",
+      "clinic": "Internal Medicine and Gastroenterolgy Consultant Alexandria University",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-nasr-elsofany-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-nasr-elsofany-internal-medicine"
+    },
+    {
+      "full_name": "Nermen magdy Abdel megid",
+      "specialty": "Internal Medicine",
+      "clinic": "consultant of internal medicine and Rheumatology",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-nermine-magdy-abdul-majeed-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-nermine-magdy-abdul-majeed-internal-medicine"
+    },
+    {
+      "full_name": "Sherine Abdelfatah Shehata",
+      "specialty": "Internal Medicine",
+      "clinic": "lecturer of internal medicine, rheumatology and immunology- faculty of medicine Alexandria university",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sherine-abdelfatah-shehata-internal-medicine",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sherine-abdelfatah-shehata-internal-medicine"
+    },
+    {
+      "full_name": "Yasser Asfour",
+      "specialty": "Internal Medicine",
+      "clinic": "Consultant of Cardiology",
+      "area": "El-Seyouf",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-yasser-asfour-cardiology-and-vascular-disease",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-yasser-asfour-cardiology-and-vascular-disease"
+    },
+    {
+      "full_name": "Amany Samir",
+      "specialty": "Neurology",
+      "clinic": "Specialist of neurology and psychiatry",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-amany-samir-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-amany-samir-neurology"
+    },
+    {
+      "full_name": "EMAN Abd ELbadeaa",
+      "specialty": "Neurology",
+      "clinic": "Specialist in Neurology, Neurosurgery and Psychiatry",
+      "area": "Roshdy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-eman-abd-elbadeaa-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-eman-abd-elbadeaa-neurology"
+    },
+    {
+      "full_name": "Islam Yousry Gouda",
+      "specialty": "Neurology",
+      "clinic": "Pediatric Neurological Disability Specialist",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-islam-yousry-gouda-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-islam-yousry-gouda-neurology"
+    },
+    {
+      "full_name": "John Tharwat Shafek",
+      "specialty": "Neurology",
+      "clinic": "neuropsychaitry",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-john-tharwat-shafek-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-john-tharwat-shafek-neurology"
+    },
+    {
+      "full_name": "Sameh Mahmoud hamoda",
+      "specialty": "Neurology",
+      "clinic": "consultant of Neurology and Psychiatry",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sameh-mahmoud-hamoda-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sameh-mahmoud-hamoda-neurology"
+    },
+    {
+      "full_name": "Sameh Said",
+      "specialty": "Neurology",
+      "clinic": "Professor and Head of Department of Neuropsychiatry faculty of medicine alexandria university",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Prof-Sameh-Said-Neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Prof-Sameh-Said-Neurology"
+    },
+    {
+      "full_name": "Samy Salama",
+      "specialty": "Neurology",
+      "clinic": "Consultant Of Neurology And Lecturer at the Faculty of Medicine -Alexandria University / Member of the International Organization for Movement Disorders / Member of the International Association of Epilepsy",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-samy-salama-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-samy-salama-neurology"
+    },
+    {
+      "full_name": "Yousry Mohamed Abdelwahab",
+      "specialty": "Neurology",
+      "clinic": "Consultant in Neurological Disorders and Psychiatry",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-yousry-mohamed-abdelwahab-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-yousry-mohamed-abdelwahab-neurology"
+    },
+    {
+      "full_name": "hesham elhenawy",
+      "specialty": "Neurology",
+      "clinic": "Senior Consultant in Neurological Diseases",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hesham-elhenawy-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hesham-elhenawy-neurology"
+    },
+    {
+      "full_name": "walid ibrahem",
+      "specialty": "Neurology",
+      "clinic": "specialist of Neurology and Psychiatry and addiction cure",
+      "area": "El-Agamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-walid-ibrahem-neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-walid-ibrahem-neurology"
+    },
+    {
+      "full_name": "Ahmed Abd Alla hablas",
+      "specialty": "Neurosurgery",
+      "clinic": "Professor of neurosurgery",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Abd-Alla-hablas-Neurology",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Abd-Alla-hablas-Neurology"
+    },
+    {
+      "full_name": "Ghada Arafat Elsaidy",
+      "specialty": "Neurosurgery",
+      "clinic": "Consultant in Neurosurgery and Spine Surgery",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ghada-elsaidy-neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ghada-elsaidy-neurosurgery"
+    },
+    {
+      "full_name": "Hesham Elemam",
+      "specialty": "Neurosurgery",
+      "clinic": "PhD and Consultant of Neurological Surgery",
+      "area": "Roshdy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hesham-Mahmoud-Neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hesham-Mahmoud-Neurosurgery"
+    },
+    {
+      "full_name": "Hisham Aboul Enein",
+      "specialty": "Neurosurgery",
+      "clinic": "Professor Of Neurosurgery",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hisham--Aboul-Enein--Neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hisham--Aboul-Enein--Neurosurgery"
+    },
+    {
+      "full_name": "Ibrahim Mahmoud Hegazy",
+      "specialty": "Neurosurgery",
+      "clinic": "Consultant Neurosurgeon",
+      "area": "El-Agamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ibrahim-mahmoud-hegazy-neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ibrahim-mahmoud-hegazy-neurosurgery"
+    },
+    {
+      "full_name": "Moamen Mohamed Morsy",
+      "specialty": "Neurosurgery",
+      "clinic": "consultant Neurosurgery and Spine",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-moamen-mohamed-morsy-neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-moamen-mohamed-morsy-neurosurgery"
+    },
+    {
+      "full_name": "Mohamed Ali",
+      "specialty": "Neurosurgery",
+      "clinic": "Neurosurgery and Spine Consultant",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-ali-anwar-neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-ali-anwar-neurosurgery"
+    },
+    {
+      "full_name": "Mohamed Elmadawy",
+      "specialty": "Neurosurgery",
+      "clinic": "Neurosurgeon specialist",
+      "area": "Roshdy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-elmadawy-neurosurgery-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-elmadawy-neurosurgery-1"
+    },
+    {
+      "full_name": "Mohamed Zoheiry",
+      "specialty": "Neurosurgery",
+      "clinic": "Neurosurgery and spine surgery consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-zoheiry-neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-zoheiry-neurosurgery"
+    },
+    {
+      "full_name": "abdou saleh",
+      "specialty": "Neurosurgery",
+      "clinic": "consultant in neurosurgery and spinal surgery",
+      "area": "Victoria",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-abdou-saleh-neurosurgery",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-abdou-saleh-neurosurgery"
+    },
+    {
+      "full_name": "Ahmed Sameer",
+      "specialty": "Ophthalmology",
+      "clinic": "Ophthalmology and eye surgery consultant",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-sameer-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-sameer-ophthalmology"
+    },
+    {
+      "full_name": "Amr Said",
+      "specialty": "Ophthalmology",
+      "clinic": "assistant professor of ophthalmoogy,Faculty of Medicine - Alexandria University",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Amr-Said-Ophthalmology-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Amr-Said-Ophthalmology-1"
+    },
+    {
+      "full_name": "Ismail Said Elashkar",
+      "specialty": "Ophthalmology",
+      "clinic": "Ophthalmology Consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ismail-said-elashkar-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ismail-said-elashkar-ophthalmology"
+    },
+    {
+      "full_name": "Karim Adel",
+      "specialty": "Ophthalmology",
+      "clinic": "Opthalmology consultant,Faculty of Medicine, Alexandria University",
+      "area": "Bulkly",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-karim-adel-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-karim-adel-ophthalmology"
+    },
+    {
+      "full_name": "Karim El Araby",
+      "specialty": "Ophthalmology",
+      "clinic": "Ophthalmology consultant",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-karim-el-araby-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-karim-el-araby-ophthalmology"
+    },
+    {
+      "full_name": "Khaled Fathy",
+      "specialty": "Ophthalmology",
+      "clinic": "consultant and lecturer in ophthalmology and eye surgery faculty of medicine alexandria university",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-khaled-fathy-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-khaled-fathy-ophthalmology"
+    },
+    {
+      "full_name": "Magdy Wadie",
+      "specialty": "Ophthalmology",
+      "clinic": "Consultant of Ophthalmology and Ophthalmic Surgery",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-magdy-wadeaa-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-magdy-wadeaa-ophthalmology"
+    },
+    {
+      "full_name": "Mohamed Gamal",
+      "specialty": "Ophthalmology",
+      "clinic": "Fellowship in Ophthalmology from the Egyptian Fellowship",
+      "area": "Sidy Gaber",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-gamal-ophthalmology-4",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-gamal-ophthalmology-4"
+    },
+    {
+      "full_name": "Mohamed mohsen Sarhan",
+      "specialty": "Ophthalmology",
+      "clinic": "Ophthalmology senior consultant",
+      "area": "Moustafa Kamel",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-mohsen-sarhan-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-mohsen-sarhan-ophthalmology"
+    },
+    {
+      "full_name": "Osama Farouk",
+      "specialty": "Ophthalmology",
+      "clinic": "Consultant in ophthalmology",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-osama-farouk-ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-osama-farouk-ophthalmology"
+    },
+    {
+      "full_name": "Tamer El Bigawy",
+      "specialty": "Ophthalmology",
+      "clinic": "Ophthalmology Consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-tamer--el-bigawy--ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-tamer--el-bigawy--ophthalmology"
+    },
+    {
+      "full_name": "Tarek Hussein",
+      "specialty": "Ophthalmology",
+      "clinic": "Assistant Professor of Ophthalmology and Surgery, Alexandria University",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Tarek-Hussein-Ophthalmology",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Tarek-Hussein-Ophthalmology"
+    },
+    {
+      "full_name": "Ahmed Ismail",
+      "specialty": "Orthopedics",
+      "clinic": "Orthopedic Surgeon Specialist- MasterDegree in Orthopedic Surgery, Faculty of Medicine Alexandria University",
+      "area": "Bulkly",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Ismail-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Ismail-Orthopedics"
+    },
+    {
+      "full_name": "Ahmed Mahmoud Saad",
+      "specialty": "Orthopedics",
+      "clinic": "consultant in Orthopedic Surgery, Fractures, Joints and Arthroscopes",
+      "area": "Sidy Gaber",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Mahmoud-Saad-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Mahmoud-Saad-Orthopedics"
+    },
+    {
+      "full_name": "Ahmed Rashed",
+      "specialty": "Orthopedics",
+      "clinic": "consultant of orthopedic surgery",
+      "area": "El-Azarita",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Rashed-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Rashed-Orthopedics"
+    },
+    {
+      "full_name": "Fady Farag",
+      "specialty": "Orthopedics",
+      "clinic": "Orthopedic Surgeon and Fracture Specialist",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-fady-farag-orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-fady-farag-orthopedics"
+    },
+    {
+      "full_name": "Hanna Fikry",
+      "specialty": "Orthopedics",
+      "clinic": "Orthopedic Consultant",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hanna--Fikry-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hanna--Fikry-Orthopedics"
+    },
+    {
+      "full_name": "Mohamed Abdelkareem El Zokka",
+      "specialty": "Orthopedics",
+      "clinic": "Specialist in Trauma And Orthopedic Surgery",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-abd-el-kereem-el-zokka-orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-abd-el-kereem-el-zokka-orthopedics"
+    },
+    {
+      "full_name": "Mohamed Nabil",
+      "specialty": "Orthopedics",
+      "clinic": "Consultant of Orthopedic Surgery and Joint Diseases",
+      "area": "Victoria",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-nabil-orthopedics-4",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-nabil-orthopedics-4"
+    },
+    {
+      "full_name": "Mohammad Metwaly Abdelsalam",
+      "specialty": "Orthopedics",
+      "clinic": "Orthopedics Surgery consultant",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Mohammad-Metwaly-Abdelsalam-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Mohammad-Metwaly-Abdelsalam-Orthopedics"
+    },
+    {
+      "full_name": "Walid Mahmoud",
+      "specialty": "Orthopedics",
+      "clinic": "Consultant orthopedic surgeon",
+      "area": "El-Amreya",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Walid-Mahmoud-Orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Walid-Mahmoud-Orthopedics"
+    },
+    {
+      "full_name": "Yasser el shopky",
+      "specialty": "Orthopedics",
+      "clinic": "Consultant in orthopedic surgery and fractures, and knee and shoulder surgeries",
+      "area": "Victoria",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-yasser--el-shopky-orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-yasser--el-shopky-orthopedics"
+    },
+    {
+      "full_name": "farag zohier",
+      "specialty": "Orthopedics",
+      "clinic": "Orthopedic and Fracture Surgeons specialist",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-farag-zohier-orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-farag-zohier-orthopedics"
+    },
+    {
+      "full_name": "mina shawky",
+      "specialty": "Orthopedics",
+      "clinic": "orthopedic consultant",
+      "area": "El-Asafra",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mina-sgawky-orthopedics",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mina-sgawky-orthopedics"
+    },
+    {
+      "full_name": "Azza Moustafa",
+      "specialty": "Pediatrics",
+      "clinic": "Professor of Pediatrics and New Borns, Alexandria University",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-azza-moustafa-pediatrics-and-new-born",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-azza-moustafa-pediatrics-and-new-born"
+    },
+    {
+      "full_name": "Enas El sayed Kamal",
+      "specialty": "Pediatrics",
+      "clinic": "Pediatrics and New Borns Specialist",
+      "area": "Victoria",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-enas-el-sayed-kamal-pediatrics-and-new-born",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-enas-el-sayed-kamal-pediatrics-and-new-born"
+    },
+    {
+      "full_name": "Engy Ahmed Mansour",
+      "specialty": "Pediatrics",
+      "clinic": "Pediatrics and NewBorns consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Engy-Ahmed-Mansour-Pediatrics-and-New-Born",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Engy-Ahmed-Mansour-Pediatrics-and-New-Born"
+    },
+    {
+      "full_name": "Eriny Rushdy",
+      "specialty": "Pediatrics",
+      "clinic": "Pediatrics and neonatology consultant, Alexandria University.",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Eriny-Rushdy-Pediatrics-and-New-Born",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Eriny-Rushdy-Pediatrics-and-New-Born"
+    },
+    {
+      "full_name": "Hamdy Elsayed",
+      "specialty": "Pediatrics",
+      "clinic": "Consultant Pediatrician and Neonatologist",
+      "area": "El-Mandara",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hamdy-Elsayed-Pediatrics-and-New-Born",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hamdy-Elsayed-Pediatrics-and-New-Born"
+    },
+    {
+      "full_name": "Heba Abdelatty",
+      "specialty": "Pediatrics",
+      "clinic": "Professor of Pediatrics, Faculty of Medicine, Alexandria University",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-heba-abdelatty-pediatrics-and-new-born",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-heba-abdelatty-pediatrics-and-new-born"
+    },
+    {
+      "full_name": "Hossam Romeh",
+      "specialty": "Pediatrics",
+      "clinic": "consultant in pediatrics and neonatology",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hossam-Romeh-Pediatrics-and-New-Born-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hossam-Romeh-Pediatrics-and-New-Born-1"
+    },
+    {
+      "full_name": "Mohamed khater",
+      "specialty": "Pediatrics",
+      "clinic": "Consultant of pediatrics and New born",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-khater-pediatrics-and-new-born",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-khater-pediatrics-and-new-born"
+    },
+    {
+      "full_name": "Nagah Kamal",
+      "specialty": "Pediatrics",
+      "clinic": "Pediatrics and New Born Medicine Consultant.",
+      "area": "El-Agamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Nagah-Kamal-Pediatrics-and-New-Born",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Nagah-Kamal-Pediatrics-and-New-Born"
+    },
+    {
+      "full_name": "Ramy Ahmed Foaad",
+      "specialty": "Pediatrics",
+      "clinic": "Pediatrics and New Born Consultant.",
+      "area": "El-Agamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ramy-Ahmed-Foaad-Pediatrics-and-New-Born",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ramy-Ahmed-Foaad-Pediatrics-and-New-Born"
+    },
+    {
+      "full_name": "Dalia elsabawy",
+      "specialty": "Psychiatry",
+      "clinic": "Consultant of psychatiry and Addiction treatment",
+      "area": "El-Seyouf",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-داليا-السبعاوى-Psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-داليا-السبعاوى-Psychiatry"
+    },
+    {
+      "full_name": "Elfateh Amr",
+      "specialty": "Psychiatry",
+      "clinic": "Psychiatry senior consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-elfateh-amr-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-elfateh-amr-psychiatry"
+    },
+    {
+      "full_name": "Estier Onsy Todry",
+      "specialty": "Psychiatry",
+      "clinic": "Mental health and psychological support consultant Expert in family and marital relations and rehabilitation of those approaching",
+      "area": "Glym",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/psychologist-estier-onsy-todry-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/psychologist-estier-onsy-todry-psychiatry"
+    },
+    {
+      "full_name": "Heba Farouk",
+      "specialty": "Psychiatry",
+      "clinic": "Psychiatry senior consultant",
+      "area": "Miamy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-heba-farouk-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-heba-farouk-psychiatry"
+    },
+    {
+      "full_name": "Maha Basha",
+      "specialty": "Psychiatry",
+      "clinic": "Psychiatry Consultant",
+      "area": "Loran",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-maha-basha-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-maha-basha-psychiatry"
+    },
+    {
+      "full_name": "Mamdouh Abo Rayan",
+      "specialty": "Psychiatry",
+      "clinic": "Consultant Neuropsychiatrist.",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mamdouh-abo-rayan-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mamdouh-abo-rayan-psychiatry"
+    },
+    {
+      "full_name": "Mohamed Elshazly",
+      "specialty": "Psychiatry",
+      "clinic": "Expert and therapist in mental health and behavior modification",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/psychologist-mohamed-elshazly-psychiatry-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/psychologist-mohamed-elshazly-psychiatry-1"
+    },
+    {
+      "full_name": "Mostafa Abdou",
+      "specialty": "Psychiatry",
+      "clinic": "clinical psychologist",
+      "area": "Sporting",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/psychologist-mostafa-abdou-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/psychologist-mostafa-abdou-psychiatry"
+    },
+    {
+      "full_name": "Moustafa Abdelmoamen",
+      "specialty": "Psychiatry",
+      "clinic": "Psychiatry and Addiction Treatment Consultant.",
+      "area": "El-Mandara",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Moustafa-Abdelmoamen-Psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Moustafa-Abdelmoamen-Psychiatry"
+    },
+    {
+      "full_name": "Nehad Saif Alla Mahmoud",
+      "specialty": "Psychiatry",
+      "clinic": "Psychiatry consultant and ttt of addiction",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-nehad-saif-alla-mahmoud-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-nehad-saif-alla-mahmoud-psychiatry"
+    },
+    {
+      "full_name": "Saifeldin Youssef",
+      "specialty": "Psychiatry",
+      "clinic": "Specialist Psychiatrist, Manager of Nozha specialised Hospital , Manager of SafeSpace Center for psychiatric wellness",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-saifeldin--youssef-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-saifeldin--youssef-psychiatry"
+    },
+    {
+      "full_name": "Sara Habiba",
+      "specialty": "Psychiatry",
+      "clinic": "psychologist",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sara-habiba-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sara-habiba-psychiatry"
+    },
+    {
+      "full_name": "Sherif Marouf",
+      "specialty": "Psychiatry",
+      "clinic": "Consultant in psychiatry and addiction treatment",
+      "area": "Roshdy",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sherif-marouf-psychiatry",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sherif-marouf-psychiatry"
+    }
+  ]
+}

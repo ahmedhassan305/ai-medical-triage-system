@@ -12,9 +12,23 @@ def _register_and_login(
     role: str,
 ) -> dict[str, str]:
     password = "password123"
+    register_payload: dict[str, str] = {
+        "email": email,
+        "password": password,
+        "role": role,
+    }
+    if role == "patient":
+        suffix = sum(ord(character) for character in email) % 100000
+        register_payload.update(
+            {
+                "full_name": f"Patient {suffix}",
+                "national_id": f"301010101{suffix:05d}",
+                "sex": "Female",
+            }
+        )
     register_response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": password, "role": role},
+        json=register_payload,
     )
     assert register_response.status_code == 201
 
@@ -121,7 +135,7 @@ def test_patient_profile_derives_birth_date_and_governorate(client: TestClient) 
         full_name="National ID Patient",
         age=12,
         sex="female",
-        national_id="30101010112345",
+        national_id="30101010167890",
         current_governorate="",
     )
     assert payload["age"] >= 20
@@ -129,6 +143,71 @@ def test_patient_profile_derives_birth_date_and_governorate(client: TestClient) 
     assert payload["inferred_governorate_code"] == "01"
     assert payload["inferred_governorate"] == "Cairo"
     assert payload["current_governorate"] == "Cairo"
+
+
+def test_doctor_can_create_and_lookup_patient_by_national_id(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="managed-patient-doctor@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers,
+        full_name="Managed Patient Doctor",
+        specialty="Internal Medicine",
+    )
+
+    create_response = client.post(
+        "/api/v1/patients/",
+        headers=doctor_headers,
+        json={
+            "full_name": "Mona Adel",
+            "sex": "Female",
+            "national_id": "30101010254321",
+            "current_governorate": "",
+            "smoker": False,
+            "alcoholic": False,
+            "chronic_conditions": ["Asthma"],
+        },
+    )
+    assert create_response.status_code == 201
+    created_patient = create_response.json()
+    assert created_patient["date_of_birth"] == "2001-01-01"
+    assert created_patient["inferred_governorate"] == "Alexandria"
+    assert created_patient["current_governorate"] == "Alexandria"
+
+    lookup_response = client.get(
+        "/api/v1/patients/by-national-id/30101010254321",
+        headers=doctor_headers,
+    )
+    assert lookup_response.status_code == 200
+    assert lookup_response.json()["id"] == created_patient["id"]
+
+
+def test_managed_patient_create_rejects_invalid_sex(client: TestClient) -> None:
+    admin_headers = _register_and_login(
+        client,
+        email="managed-patient-admin@example.com",
+        role="admin",
+    )
+
+    create_response = client.post(
+        "/api/v1/patients/",
+        headers=admin_headers,
+        json={
+            "full_name": "Invalid Sex Profile",
+            "sex": "Unknown",
+            "national_id": "30101010133333",
+            "current_governorate": "Cairo",
+            "smoker": False,
+            "alcoholic": False,
+            "chronic_conditions": [],
+        },
+    )
+    assert create_response.status_code == 422
 
 
 def test_patient_cannot_use_other_patient_history_in_triage(client: TestClient) -> None:
@@ -322,3 +401,88 @@ def test_patient_can_only_view_own_visits(client: TestClient) -> None:
     )
     assert own_visits.status_code == 200
     assert own_visits.json() == []
+
+
+def test_doctor_and_admin_workspace_visit_listing_is_role_filtered(
+    client: TestClient,
+) -> None:
+    patient_headers = _register_and_login(
+        client,
+        email="workspace-visits-patient@example.com",
+        role="patient",
+    )
+    patient = _create_patient_profile(
+        client,
+        patient_headers,
+        full_name="Workspace Patient",
+        age=31,
+        sex="female",
+    )
+
+    doctor_headers_one = _register_and_login(
+        client,
+        email="workspace-doctor-one@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers_one,
+        full_name="Workspace Doctor One",
+        specialty="Neurology",
+    )
+
+    doctor_headers_two = _register_and_login(
+        client,
+        email="workspace-doctor-two@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers_two,
+        full_name="Workspace Doctor Two",
+        specialty="Internal Medicine",
+    )
+
+    admin_headers = _register_and_login(
+        client,
+        email="workspace-admin@example.com",
+        role="admin",
+    )
+
+    first_visit = client.post(
+        "/api/v1/visits/",
+        headers=doctor_headers_one,
+        json={
+            "patient_id": patient["id"],
+            "symptoms": "Headache and nausea",
+            "diagnosis": "Needs neurological review",
+        },
+    )
+    assert first_visit.status_code == 200
+
+    second_visit = client.post(
+        "/api/v1/visits/",
+        headers=doctor_headers_two,
+        json={
+            "patient_id": patient["id"],
+            "symptoms": "Fever and fatigue",
+            "diagnosis": "General medical assessment",
+        },
+    )
+    assert second_visit.status_code == 200
+
+    doctor_one_workspace = client.get("/api/v1/visits/", headers=doctor_headers_one)
+    assert doctor_one_workspace.status_code == 200
+    assert len(doctor_one_workspace.json()) == 1
+    assert doctor_one_workspace.json()[0]["diagnosis"] == "Needs neurological review"
+
+    doctor_two_workspace = client.get("/api/v1/visits/", headers=doctor_headers_two)
+    assert doctor_two_workspace.status_code == 200
+    assert len(doctor_two_workspace.json()) == 1
+    assert doctor_two_workspace.json()[0]["diagnosis"] == "General medical assessment"
+
+    admin_workspace = client.get("/api/v1/visits/", headers=admin_headers)
+    assert admin_workspace.status_code == 200
+    admin_diagnoses = {visit["diagnosis"] for visit in admin_workspace.json()}
+    assert "Needs neurological review" in admin_diagnoses
+    assert "General medical assessment" in admin_diagnoses

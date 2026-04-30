@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_roles
 from app.db.models import PatientProfile, User
 from app.db.session import get_db
-from app.schemas.patient import PatientProfileResponse, PatientProfileUpsert
+from app.schemas.patient import (
+    ManagedPatientProfileCreate,
+    PatientProfileResponse,
+    PatientProfileUpsert,
+)
 from app.services.egyptian_national_id import (
     calculate_age,
     parse_egyptian_national_id,
@@ -92,6 +96,78 @@ def get_my_profile(
     )
     if profile is None:
         raise HTTPException(status_code=404, detail="Patient profile not found.")
+    return PatientProfileResponse.model_validate(profile, from_attributes=True)
+
+
+@router.get("/by-national-id/{national_id}", response_model=PatientProfileResponse)
+def get_patient_by_national_id(
+    national_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("doctor", "admin")),
+) -> PatientProfileResponse:
+    try:
+        normalized_national_id = parse_egyptian_national_id(national_id).national_id
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    profile = (
+        db.query(PatientProfile)
+        .filter(PatientProfile.national_id == normalized_national_id)
+        .first()
+    )
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Patient profile not found.")
+    return PatientProfileResponse.model_validate(profile, from_attributes=True)
+
+
+@router.post("/", response_model=PatientProfileResponse, status_code=201)
+def create_patient_profile(
+    payload: ManagedPatientProfileCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("doctor", "admin")),
+) -> PatientProfileResponse:
+    try:
+        national_id_info = parse_egyptian_national_id(payload.national_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    existing = (
+        db.query(PatientProfile)
+        .filter(PatientProfile.national_id == national_id_info.national_id)
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This national ID is already linked to another patient profile.",
+        )
+
+    profile = PatientProfile(
+        user_id=None,
+        full_name=payload.full_name.strip(),
+        age=calculate_age(national_id_info.date_of_birth),
+        sex=payload.sex,
+        national_id=national_id_info.national_id,
+        date_of_birth=national_id_info.date_of_birth,
+        inferred_governorate_code=national_id_info.inferred_governorate_code,
+        inferred_governorate=national_id_info.inferred_governorate,
+        current_governorate=payload.current_governorate
+        or national_id_info.inferred_governorate,
+        smoker=payload.smoker,
+        alcoholic=payload.alcoholic,
+        chronic_conditions=payload.chronic_conditions,
+    )
+    db.add(profile)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This national ID is already linked to another patient profile.",
+        ) from exc
+
+    db.refresh(profile)
     return PatientProfileResponse.model_validate(profile, from_attributes=True)
 
 

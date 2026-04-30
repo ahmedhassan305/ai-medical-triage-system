@@ -10,6 +10,16 @@ from fastapi.responses import JSONResponse
 from app.schemas.error import ErrorResponse
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, Exception):
+        return str(value)
+    return value
+
+
 def _error_response(
     *,
     status_code: int,
@@ -21,7 +31,7 @@ def _error_response(
         error={
             "code": code,
             "message": message,
-            "details": details,
+            "details": _json_safe(details),
         }
     ).model_dump()
     return JSONResponse(status_code=status_code, content=payload)

@@ -12,6 +12,11 @@ from app.services.access_control import (
     get_linked_doctor_profile,
     get_patient_profile_or_404,
 )
+from app.services.clinical_records import (
+    extract_symptom_names,
+    sync_medical_history_from_visit,
+    sync_patient_symptoms,
+)
 
 router = APIRouter(prefix="/visits", tags=["visits"])
 
@@ -22,7 +27,7 @@ def create_visit(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> VisitResponse:
-    get_patient_profile_or_404(db, payload.patient_id)
+    patient = get_patient_profile_or_404(db, payload.patient_id)
     visit_data = payload.model_dump()
     if current_user.role == "doctor":
         doctor_profile = get_linked_doctor_profile(db, current_user)
@@ -35,6 +40,16 @@ def create_visit(
 
     visit = Visit(**visit_data)
     db.add(visit)
+    db.flush()
+    sync_medical_history_from_visit(db, visit=visit, source_type="visit")
+    sync_patient_symptoms(
+        db,
+        patient=patient,
+        symptom_names=extract_symptom_names(visit.symptoms),
+        source="visit",
+        notes=visit.diagnosis or visit.notes,
+        observed_at=visit.created_at,
+    )
     db.commit()
     db.refresh(visit)
     return VisitResponse.model_validate(visit, from_attributes=True)
@@ -53,4 +68,20 @@ def list_patient_visits(
         .order_by(Visit.created_at.desc())
         .all()
     )
+    return [VisitResponse.model_validate(item, from_attributes=True) for item in visits]
+
+
+@router.get("/", response_model=list[VisitResponse])
+def list_visits(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("doctor", "admin")),
+) -> list[VisitResponse]:
+    query = db.query(Visit)
+    if current_user.role == "doctor":
+        doctor_profile = get_linked_doctor_profile(db, current_user)
+        if doctor_profile is None:
+            return []
+        query = query.filter(Visit.doctor_id == doctor_profile.id)
+
+    visits = query.order_by(Visit.created_at.desc()).all()
     return [VisitResponse.model_validate(item, from_attributes=True) for item in visits]

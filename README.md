@@ -1,38 +1,41 @@
-# AI Medical Triage System (Monorepo)
+# AI Medical Triage System
 
-## Repository Structure
-- `backend/`: FastAPI API (routers, schemas, services, RAG, tests)
-- `frontend/`: React + Vite + TypeScript app
-- `scripts/`: helper scripts for local dev and tests
-- `.github/workflows/ci.yml`: CI for backend and frontend
-- `docker-compose.yml`: local Docker stack for backend + Ollama + Postgres
+Monorepo for a graduation-project medical triage platform built around:
+- `backend/`: FastAPI + SQLAlchemy + Alembic + local RAG/LLM orchestration
+- `frontend/`: React + TypeScript + Vite dashboard
+- `docker-compose.yml`: local infrastructure stack and optional backend container profile
+- `scripts/`: development, test, and seeding helpers
 
-## API Endpoints
-- Versioned:
-  - `GET /api/v1/health`
-  - `POST /api/v1/triage`
-  - `POST /api/v1/auth/register`
-  - `POST /api/v1/auth/login`
-  - `GET /api/v1/auth/me`
-  - `POST /api/v1/patients/me`
-  - `GET /api/v1/patients/me`
-  - `GET /api/v1/patients/{patient_id}`
-  - `POST /api/v1/doctors/me`
-  - `GET /api/v1/doctors/me`
-  - `GET /api/v1/doctors/{doctor_id}`
-  - `POST /api/v1/appointments`
-  - `PATCH /api/v1/appointments/{appointment_id}/status`
-  - `GET /api/v1/appointments`
-  - `POST /api/v1/visits`
-  - `GET /api/v1/visits/patient/{patient_id}`
-  - `POST /api/v1/records/import`
-- Backward-compatible legacy paths:
-  - `GET /health`
-  - `POST /triage`
+## Verified Stack
+- FastAPI
+- SQLAlchemy + Alembic
+- React + TypeScript + Vite
+- Ollama for local inference
+- TF-IDF / embedding retrievers with FAISS persistence
+- Postgres for team dev database
 
-## One-Time Setup (Without Docker)
+## Team Development Workflow
 
-### Backend (PowerShell)
+### Preferred daily workflow
+Use Docker only for infrastructure:
+- `postgres`
+- `ollama`
+
+Run application code locally:
+- backend locally with `uvicorn --reload`
+- frontend locally with `vite`
+
+This avoids rebuilding the backend image on every code change and keeps the frontend completely out of Docker during development.
+
+### First-time setup
+
+#### 1. Clone and switch to the working branch
+```powershell
+git fetch origin
+git switch --track origin/triage-phase5-improvements
+```
+
+#### 2. Backend setup
 ```powershell
 cd backend
 python -m venv .venv
@@ -41,201 +44,230 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-### Frontend (PowerShell)
+#### 3. Frontend setup
 ```powershell
-cd frontend
+cd ..\frontend
 npm install
 Copy-Item .env.example .env
 ```
 
-## Preferred Local Development Workflow
-
-Run the frontend locally with Vite, and use Docker only for the backend dependencies.
-
-### 1. Start backend services with Docker
+#### 4. Start infrastructure only
 ```powershell
-cd D:\Personal\Projects\ai-medical-triage-system
+cd ..
 Copy-Item .env.example .env -ErrorAction SilentlyContinue
-docker compose up --build
+docker compose up -d postgres ollama
 ```
 
-This starts:
-- Backend API on `http://localhost:19001`
-- Ollama on `http://localhost:11434`
-- Postgres on `localhost:5432`
-
-### 2. Run the frontend locally
-```powershell
-cd frontend
-Copy-Item .env.example .env -ErrorAction SilentlyContinue
-npm install
-npm run dev
-```
-
-Frontend URL:
-- `http://localhost:5173`
-
-### 3. Apply database migrations
+#### 5. Run migrations
 ```powershell
 cd backend
+.\.venv\Scripts\activate
 alembic upgrade head
 ```
 
-## Run Everything Locally Without Docker
-
-### Option A: Root Scripts (PowerShell)
+#### 6. Seed the public doctor directory data
 ```powershell
-.\scripts\dev-backend.ps1
-.\scripts\dev-frontend.ps1
-.\scripts\test-backend.ps1
-.\scripts\test-frontend.ps1
+cd ..
+.\backend\.venv\Scripts\python scripts\seed_doctors.py
 ```
 
-### Option B: Direct Commands (PowerShell)
+#### 7. Reset local demo data to a clean Egypt-like dataset
+```powershell
+cd ..
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
+```
+
+#### 8. Start the backend locally
 ```powershell
 cd backend
 .\.venv\Scripts\activate
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 19001
 ```
 
+#### 9. Start the frontend locally
+```powershell
+cd ..\frontend
+npm run dev
+```
+
+### Daily development after setup
+
+#### Start infrastructure
+```powershell
+cd D:\Personal\Projects\ai-medical-triage-system-friend-updates-2026-04-20
+docker compose up -d postgres ollama
+```
+
+#### Run backend locally
+```powershell
+cd backend
+.\.venv\Scripts\activate
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 19001
+```
+
+#### Run frontend locally
 ```powershell
 cd frontend
 npm run dev
 ```
 
-## How To Run Locally With Docker
-
-### Prerequisites
-- Docker Desktop installed and running
-- Docker Desktop configured to use WSL2 backend
-- WSL2 enabled on Windows
-
-### What Docker Runs
-- `backend`
-- `ollama`
-- `postgres`
-
-The frontend is intentionally excluded from the default Docker workflow for development.
-
-### Backend Stack First Run
+### After pulling new code
 ```powershell
-cd D:\Personal\Projects\ai-medical-triage-system
-Copy-Item .env.example .env -ErrorAction SilentlyContinue
-docker compose up --build
+git pull
+cd backend
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+alembic upgrade head
+cd ..
+.\backend\.venv\Scripts\python scripts\seed_doctors.py
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
+cd frontend
+npm install
+npm run dev
 ```
 
-### Service URLs
+## Docker usage rules
+
+### `docker compose up` is enough when:
+- you only need Postgres and Ollama running
+- you changed application code but are running backend/frontend locally
+- you are restarting infrastructure after a reboot or a branch pull
+
+Recommended command:
+```powershell
+docker compose up -d postgres ollama
+```
+
+### `docker compose up --build` is needed only when:
+- you explicitly want the optional backend container profile
+- `backend/Dockerfile` changed
+- backend Python dependencies changed and you want them inside the backend image
+
+Optional backend container workflow:
+```powershell
+docker compose --profile backend up --build backend postgres ollama
+```
+
+## Optional helper scripts
+
+### Infrastructure only
+```powershell
+.\scripts\dev-infra.ps1
+```
+
+### Backend
+```powershell
+.\scripts\dev-backend.ps1
+```
+
+### Frontend
+```powershell
+.\scripts\dev-frontend.ps1
+```
+
+## URLs
+- Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:19001`
+- Backend docs: `http://localhost:19001/docs`
 - Ollama API: `http://localhost:11434`
 - Postgres: `localhost:5432`
 
-### Change Model (Ollama)
-Edit root `.env`:
-```env
-OLLAMA_MODEL=llama3.2
-```
-Then restart:
+## Doctor directory seed data
+
+Canonical doctor seed file:
+- `backend/data/doctors/alexandria_public_directory_seed.json`
+
+Import command:
 ```powershell
-docker compose up --build
+.\backend\.venv\Scripts\python scripts\seed_doctors.py
 ```
 
-### Rebuild RAG Index
-Set in root `.env`:
-```env
-RAG_REBUILD_INDEX=true
-```
-Run:
+Optional maintainer refresh command:
 ```powershell
-docker compose up --build backend
-```
-After rebuild, switch it back to:
-```env
-RAG_REBUILD_INDEX=false
+.\backend\.venv\Scripts\python scripts\build_alexandria_doctor_seed.py
 ```
 
-### Run RAG Evaluation
+What it does:
+- imports a curated public doctor directory dataset focused on Alexandria first
+- the current canonical seed contains 119 Alexandria-focused public doctor listings
+- stores provenance on each seeded doctor:
+  - `source_name`
+  - `source_url`
+  - `booking_url`
+  - `area`
+  - `city`
+- removes legacy fake prototype doctors from older friend-branch data
+- upserts by `source_url` / doctor identity so the seed stays reproducible
+
+Public data source used in this branch:
+- Vezeeta public doctor directory/profile pages
+- specialty coverage in the canonical seed includes Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, and Family Medicine
+
+## Clean local demo dataset
+
+Canonical local cleanup + reseed command:
 ```powershell
-cd backend
-python -m app.rag.eval.evaluator --k 3 --retriever embedding
-```
-Report output:
-```text
-backend/reports/rag_eval_report.json
+.\backend\.venv\Scripts\python scripts\reset_local_project_data.py
 ```
 
-### Database Migrations (Alembic)
-```powershell
-cd backend
-alembic upgrade head
-```
+What it does:
+- removes local smoke-test and dummy records from:
+  - `users`
+  - `patient_profiles`
+  - `doctor_profiles`
+  - `appointments`
+  - `visits`
+- recreates the schema if the local SQLite file is empty
+- reimports the canonical Alexandria public doctor directory seed
+- seeds valid local login accounts for one admin, several doctors, and several patients
+- populates the database with Egypt-like patient profiles, visit history, and 76 appointments with 58 past appointments
 
-## Docker Desktop Storage On D:\
+Seeded local credentials after reset:
+- admin: `admin.ops@aimts-eg.com` / `AdminPass123!`
+- doctor: `doctor.neurology@aimts-eg.com` / `DoctorPass123!`
+- patient: `patient.mariam.hassan@aimts-eg.com` / `PatientPass123!`
 
-If `C:\` is low on space, move Docker Desktop disk image to `D:\docker-wsl`.
+Use this script for local/demo data only. It is intended to replace residue from smoke tests and previous manual experiments.
 
-### Preferred Method (Docker Desktop UI)
-1. Quit Docker Desktop from tray icon: `Quit Docker Desktop`.
-2. Open PowerShell and run:
-```powershell
-wsl --shutdown
-```
-3. Start Docker Desktop.
-4. Open `Settings` -> `Resources` -> `Advanced`.
-5. Set `Disk image location` to:
-```text
-D:\docker-wsl
-```
-6. Click `Apply & Restart`.
+## Hybrid triage response
 
-### Verify Move And Data
-```powershell
-docker info
-docker system df
-docker volume ls
-docker images
-```
-
-Then verify project startup:
-```powershell
-cd D:\Personal\Projects\ai-medical-triage-system
-docker compose up --build
-```
-
-## Hybrid Triage Response
-
-`POST /api/v1/triage` now returns a patient-friendly hybrid response that combines:
-- `urgency_level` and legacy-compatible `triage_level`
+`POST /api/v1/triage` returns a structured, patient-friendly response that combines:
+- `urgency_level` / legacy-compatible `triage_level`
 - `urgency_label`
+- `urgency_reason`
 - `patient_friendly_explanation`
 - `clinical_summary`
 - ranked `suspected_conditions`
 - `recommended_specialty`
+- `specialty_reason`
 - `suggested_doctors`
 - `recommended_actions`
 - `supporting_references`
 - `history_used`
-
-Important behavior:
-- Anonymous triage is allowed when you send only `query`
-- If you send `patient_id`, the request must be authenticated and authorized to use that patient profile
-- Suspected conditions are a shortlist of possibilities, not a confirmed diagnosis
-
-## Patient National ID Parsing
-
-Patient profiles now support:
-- `national_id`
-- `date_of_birth`
-- `inferred_governorate_code`
-- `inferred_governorate`
-- `current_governorate`
+- `disclaimer`
 
 Behavior:
-- `national_id` must be a valid 14-digit Egyptian national ID
-- backend derives the birth date and the governorate encoded inside the ID
-- `current_governorate` stays editable because the governorate encoded in the ID should not be treated as guaranteed current residence
-- if `current_governorate` is empty during save, it is prefilled from the inferred governorate
+- anonymous triage is allowed for `query` only
+- `patient_id` requires authentication and authorization
+- possible conditions are not presented as a confirmed diagnosis
+- recommended doctor cards can hand off directly into appointment booking
 
-## Tests And Lint
+## Patient national ID parsing
+
+Patient registration and profile editing support:
+- `national_id`
+- derived `date_of_birth`
+- derived `inferred_governorate_code`
+- derived `inferred_governorate`
+- editable `current_governorate`
+
+Rules:
+- `national_id` must be a valid 14-digit Egyptian national ID
+- date of birth is derived from the ID
+- the governorate encoded in the ID is stored separately from current residence
+- gender is restricted to `Male` or `Female`
+
+## Validation
 
 ### Backend
 ```powershell
@@ -250,59 +282,31 @@ black --check app tests
 ```powershell
 cd frontend
 npm run lint
-npm run test
+npm run test -- --run
 npm run build
 ```
 
-## Environment Variables
+## API surface
+- `GET /api/v1/health`
+- `POST /api/v1/triage`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/patients/me`
+- `GET /api/v1/patients/me`
+- `GET /api/v1/patients/{patient_id}`
+- `POST /api/v1/doctors/me`
+- `GET /api/v1/doctors/me`
+- `GET /api/v1/doctors/{doctor_id}`
+- `GET /api/v1/doctors/specialty/{specialty}`
+- `POST /api/v1/appointments/`
+- `PATCH /api/v1/appointments/{appointment_id}/status`
+- `GET /api/v1/appointments/`
+- `POST /api/v1/visits/`
+- `GET /api/v1/visits/`
+- `GET /api/v1/visits/patient/{patient_id}`
+- `POST /api/v1/records/import`
 
-### `backend/.env`
-- `APP_NAME=AI Medical Triage System API`
-- `API_V1_PREFIX=/api/v1`
-- `LOG_LEVEL=INFO`
-- `CORS_ORIGINS=http://localhost:5173,http://localhost:3000`
-- `DATABASE_URL=sqlite:///./triage.db`
-- `DB_AUTO_CREATE=false`
-- `JWT_SECRET_KEY=change-me-in-production`
-- `JWT_ALGORITHM=HS256`
-- `JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60`
-- `RAG_DATA_DIR=./data`
-- `RAG_RETRIEVER=stub` (`stub`, `tfidf`, `embedding`)
-- `RAG_TOP_K=3`
-- `OLLAMA_HOST=http://localhost:11434`
-- `OLLAMA_MODEL=llama3.2`
-- `REASONER_MODE=ollama`
-- `STRICT_REASONER=false`
-- `TFIDF_MAX_FEATURES=1000`
-- `TFIDF_NGRAM_MIN=1`
-- `TFIDF_NGRAM_MAX=2`
-- `RAG_EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2`
-- `RAG_CACHE_DIR=./.cache/rag`
-- `RAG_CHUNK_SIZE=2000`
-- `RAG_CHUNK_OVERLAP=200`
-- `RAG_REBUILD_INDEX=false`
-- `PATIENT_HISTORY_VISIT_LIMIT=10`
-- `PATIENT_HISTORY_TOP_MATCHES=3`
-
-### `frontend/.env`
-- `VITE_API_BASE_URL=http://localhost:19001`
-
-### Root `.env` (for Docker Compose)
-- `OLLAMA_MODEL=llama3.2`
-- `REASONER_MODE=ollama`
-- `STRICT_REASONER=false`
-- `RAG_REBUILD_INDEX=false`
-- `DATABASE_URL=postgresql+psycopg2://triage:triage@postgres:5432/triage`
-- `POSTGRES_DB=triage`
-- `POSTGRES_USER=triage`
-- `POSTGRES_PASSWORD=triage`
-- `JWT_SECRET_KEY=change-me-in-production`
-- `DB_AUTO_CREATE=false`
-
-## Troubleshooting
-- Port conflict:
-  - change local port mapping in `docker-compose.yml` and update `VITE_API_BASE_URL`.
-- CORS errors:
-  - ensure frontend origin is present in `CORS_ORIGINS` and restart backend.
-- Missing WSL distro confusion:
-  - run `wsl -l -v --all` to list all distros Docker can use.
+Legacy compatibility:
+- `GET /health`
+- `POST /triage`

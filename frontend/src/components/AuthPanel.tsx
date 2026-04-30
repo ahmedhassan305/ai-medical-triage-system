@@ -3,6 +3,8 @@ import { useState } from "react";
 import type { RoleType } from "../api/dto";
 import SectionPanel from "./SectionPanel";
 
+type PatientSexOption = "" | "Male" | "Female";
+
 type AuthPanelProps = {
   loading: boolean;
   error: string | null;
@@ -13,7 +15,7 @@ type AuthPanelProps = {
     role: RoleType;
     full_name?: string;
     national_id?: string;
-    sex?: string;
+    sex?: Exclude<PatientSexOption, "">;
   }) => Promise<void>;
 };
 
@@ -31,7 +33,7 @@ export default function AuthPanel({
   // Patient registration fields
   const [fullName, setFullName] = useState("");
   const [nationalId, setNationalId] = useState("");
-  const [sex, setSex] = useState("");
+  const [sex, setSex] = useState<PatientSexOption>("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,7 +43,14 @@ export default function AuthPanel({
       return;
     }
 
-    const registerPayload: any = {
+    const registerPayload: {
+      email: string;
+      password: string;
+      role: RoleType;
+      full_name?: string;
+      national_id?: string;
+      sex?: Exclude<PatientSexOption, "">;
+    } = {
       email: email.trim(),
       password,
       role,
@@ -50,7 +59,9 @@ export default function AuthPanel({
     if (role === "patient") {
       registerPayload.full_name = fullName.trim();
       registerPayload.national_id = nationalId.trim();
-      registerPayload.sex = sex;
+      if (sex) {
+        registerPayload.sex = sex;
+      }
     }
 
     await onRegister(registerPayload);
@@ -202,7 +213,9 @@ export default function AuthPanel({
                     <select
                       id="auth-sex"
                       value={sex}
-                      onChange={(event) => setSex(event.target.value)}
+                      onChange={(event) =>
+                        setSex(event.target.value as PatientSexOption)
+                      }
                       required
                     >
                       <option value="">Select gender</option>

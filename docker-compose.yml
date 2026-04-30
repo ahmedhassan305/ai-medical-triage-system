@@ -1,31 +1,45 @@
 services:
   backend:
+    profiles: ["backend"]
     build:
       context: ./backend
+    command: python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 19001
     ports:
-      - "19001:19001"
+      - "${HOST_BACKEND_PORT:-19001}:19001"
     depends_on:
-      - ollama
-      - postgres
+      ollama:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       REASONER_MODE: ${REASONER_MODE:-ollama}
       STRICT_REASONER: ${STRICT_REASONER:-false}
-      RAG_RETRIEVER: embedding
+      RAG_RETRIEVER: ${RAG_RETRIEVER:-tfidf}
       RAG_REBUILD_INDEX: ${RAG_REBUILD_INDEX:-false}
       RAG_DATA_DIR: /app/data
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://triage:triage@postgres:5432/triage}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
       DB_AUTO_CREATE: ${DB_AUTO_CREATE:-false}
     volumes:
-      - ./backend/data:/app/data
+      - ./backend:/app
       - rag_cache:/app/.cache
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:19001/health', timeout=5).read()\"",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   ollama:
     image: ollama/ollama
     ports:
-      - "11434:11434"
+      - "${HOST_OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_models:/root/.ollama
     environment:
@@ -42,6 +56,12 @@ services:
             echo "Model $$OLLAMA_MODEL already exists, skipping pull."
           fi
           wait "$$pid"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q \"$${OLLAMA_MODEL:-llama3.2}\""]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
 
   postgres:
     image: postgres:16-alpine
@@ -50,9 +70,18 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-triage}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triage}
     ports:
-      - "5432:5432"
+      - "${HOST_POSTGRES_PORT:-5437}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-triage} -d ${POSTGRES_DB:-triage}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   rag_cache:

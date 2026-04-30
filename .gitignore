@@ -24,3 +24,9 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+.runlogs/
