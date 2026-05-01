@@ -160,18 +160,6 @@ export default function HomePage() {
     ): Promise<boolean> => {
       try {
         const currentUser = await fetchCurrentUser();
-        const patientProfileRequest =
-          currentUser.role === "patient" || currentUser.role === "admin"
-            ? fetchMyPatientProfile().catch((error) =>
-                isStatus(error, 404) ? null : Promise.reject(error),
-              )
-            : Promise.resolve(null);
-        const doctorProfileRequest =
-          currentUser.role === "doctor" || currentUser.role === "admin"
-            ? fetchMyDoctorProfile().catch((error) =>
-                isStatus(error, 404) ? null : Promise.reject(error),
-              )
-            : Promise.resolve(null);
         const [
           nextPatientProfile,
           nextDoctorProfile,
@@ -180,8 +168,16 @@ export default function HomePage() {
           nextAppointments,
           nextWorkspaceVisits,
         ] = await Promise.all([
-          patientProfileRequest,
-          doctorProfileRequest,
+          currentUser.role === "patient" || currentUser.role === "admin"
+            ? fetchMyPatientProfile().catch((error) =>
+                isStatus(error, 404) ? null : Promise.reject(error),
+              )
+            : Promise.resolve(null),
+          currentUser.role === "doctor" || currentUser.role === "admin"
+            ? fetchMyDoctorProfile().catch((error) =>
+                isStatus(error, 404) ? null : Promise.reject(error),
+              )
+            : Promise.resolve(null),
           listDoctors().catch(() => []),
           currentUser.role === "patient"
             ? Promise.resolve([])

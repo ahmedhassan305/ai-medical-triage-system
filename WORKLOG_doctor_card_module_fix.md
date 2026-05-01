@@ -10,3 +10,5 @@
 - Investigated the GitHub PR lint report that still referenced stale errors in `doctors.ts` and `HomePage.tsx`.
 - Confirmed the current branch and remote both point at the corrected commit and local `npm run lint` plus `npm run build` pass.
 - Noted that `gh` is not available in the local shell, so a follow-up commit is being used to trigger a fresh GitHub Actions run.
+- Simplified `HomePage.tsx` by inlining the profile requests into `Promise.all`, removing the variables named by GitHub annotations.
+- Updated `doctors.ts` to use `axios.isAxiosError` instead of an `AxiosError` cast.
