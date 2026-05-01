@@ -7,3 +7,6 @@
 - Added `DoctorCard.tsx` at the exact imported path with a default export.
 - Confirmed the build error persisted because `DoctorCard.tsx` was still untracked on the active branch.
 - Verified `npm run build` and `npm run lint` pass once the untracked file is present.
+- Investigated the GitHub PR lint report that still referenced stale errors in `doctors.ts` and `HomePage.tsx`.
+- Confirmed the current branch and remote both point at the corrected commit and local `npm run lint` plus `npm run build` pass.
+- Noted that `gh` is not available in the local shell, so a follow-up commit is being used to trigger a fresh GitHub Actions run.
