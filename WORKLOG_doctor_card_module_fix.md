@@ -12,3 +12,5 @@
 - Noted that `gh` is not available in the local shell, so a follow-up commit is being used to trigger a fresh GitHub Actions run.
 - Simplified `HomePage.tsx` by inlining the profile requests into `Promise.all`, removing the variables named by GitHub annotations.
 - Updated `doctors.ts` to use `axios.isAxiosError` instead of an `AxiosError` cast.
+- Checked the latest GitHub check annotations for commit `46ac986` and found the active frontend failure was `npm run test`, not lint.
+- Reproduced the failing `triage-handoff-render` test locally and matched the reserve appointment button text to the expected `Reserve Appointment` copy.

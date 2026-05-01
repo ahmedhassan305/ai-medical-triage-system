@@ -92,7 +92,7 @@ export default function DoctorCard({
             className="button button--primary"
             onClick={onReserveAppointment}
           >
-            Reserve appointment
+            Reserve Appointment
           </button>
         ) : doctor.booking_url ? (
           <a
