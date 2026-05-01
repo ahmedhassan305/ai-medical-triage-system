@@ -12,9 +12,24 @@ export async function listDoctors(): Promise<DoctorProfileResponseDto[]> {
   return response.data;
 }
 
-export async function fetchMyDoctorProfile(): Promise<DoctorProfileResponseDto> {
-  const response = await api.get<DoctorProfileResponseDto>(apiPaths.doctors.me);
-  return response.data;
+// export async function fetchMyDoctorProfile(): Promise<DoctorProfileResponseDto> {
+//   const response = await api.get<DoctorProfileResponseDto>(apiPaths.doctors.me);
+//   return response.data;
+// }
+export async function fetchMyDoctorProfile(): Promise<DoctorProfileResponseDto | null> {
+  try {
+    const response = await api.get<DoctorProfileResponseDto>(apiPaths.doctors.me);
+    return response.data;
+  } catch (error: any) {
+    // If user is not a doctor → backend returns 403 → ignore it
+    if (error?.response?.status === 403) {
+      console.log("User is not a doctor, skipping doctor profile");
+      return null;
+    }
+
+    // Any other error → throw it (real problem)
+    throw error;
+  }
 }
 
 export async function upsertMyDoctorProfile(
