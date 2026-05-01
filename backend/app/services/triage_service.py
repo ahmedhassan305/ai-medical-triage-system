@@ -59,6 +59,9 @@ MEDIUM_RISK_KEYWORDS: tuple[str, ...] = (
     "infection",
     "migraine",
     "dizziness",
+    "numbness",
+    "tingling",
+    "weakness",
 )
 
 HEAD_TRAUMA_TERMS: tuple[str, ...] = (
@@ -144,6 +147,45 @@ SEVERE_ABDOMINAL_TERMS: tuple[str, ...] = (
     "rigid abdomen",
     "abdomen is hard",
 )
+SPINE_NEURO_TERMS: tuple[str, ...] = (
+    "back pain",
+    "neck pain",
+    "spine",
+    "spinal",
+    "cervical",
+    "lumbar",
+    "thoracic",
+    "disc",
+    "herniated",
+    "sciatica",
+)
+
+LIMB_NEURO_TERMS: tuple[str, ...] = (
+    "numbness",
+    "tingling",
+    "pins and needles",
+    "numb",
+    "weakness in arm",
+    "weakness in leg",
+    "arm weakness",
+    "leg weakness",
+    "can't feel",
+    "lost feeling",
+    "paresthesia",
+    "radiculopathy",
+)
+
+BLADDER_BOWEL_TERMS: tuple[str, ...] = (
+    "can't urinate",
+    "can't pass urine",
+    "lost bladder",
+    "lost bowel",
+    "bladder control",
+    "bowel control",
+    "incontinence",
+    "saddle anesthesia",
+)
+
 GI_MISLEADING_KEYWORDS_DURING_HEAD_TRAUMA: set[str] = {
     "feel nauseous",
     "feeling sick",
@@ -223,6 +265,10 @@ SPECIALTY_RULES: dict[str, tuple[str, ...]] = {
         "brain aneurysm",
         "hematoma",
         "head trauma",
+        "radiculopathy",
+        "myelopathy",
+        "cord compression",
+        "cauda equina",
     ),
     "Orthopedics": (
         "fracture",
@@ -234,6 +280,11 @@ SPECIALTY_RULES: dict[str, tuple[str, ...]] = {
         "knee",
         "bone",
         "trauma",
+        "herniated disc",
+        "disc herniation",
+        "sciatica",
+        "cervical",
+        "lumbar",
     ),
     "Dermatology": (
         "rash",
@@ -267,7 +318,7 @@ SPECIALTY_FALLBACKS: dict[str, tuple[str, ...]] = {
     "Pulmonology": ("Pulmonology", "Internal Medicine"),
     "Cardiology": ("Cardiology", "Internal Medicine"),
     "Gastroenterology": ("Gastroenterology", "Internal Medicine"),
-    "Orthopedics": ("Orthopedics",),
+    "Orthopedics": ("Orthopedics", "Neurology"),
     "Psychiatry": ("Psychiatry",),
     "Dermatology": ("Dermatology",),
     "Internal Medicine": ("Internal Medicine",),
@@ -321,6 +372,10 @@ def _assess_red_flags(
     chunks: list[RetrievedChunk],
 ) -> RedFlagAssessment:
     combined_text = f"{query}\n{patient_context or ''}".lower()
+    logger.info("DEBUG spine=%s limb=%s text_preview=%s",
+        any(t in combined_text for t in SPINE_NEURO_TERMS),
+        any(t in combined_text for t in LIMB_NEURO_TERMS),
+        combined_text[:100])
     warnings: list[str] = []
     conditions: list[str] = []
     actions: list[str] = []
@@ -555,6 +610,69 @@ def _assess_red_flags(
         ):
             warnings.append(
                 "Dangerous head-injury references matched the symptom description"
+            )
+
+    # Spinal cord / nerve root compression detection
+    spine_pain = any(term in combined_text for term in SPINE_NEURO_TERMS)
+    limb_numbness_weakness = any(term in combined_text for term in LIMB_NEURO_TERMS)
+    bladder_bowel_dysfunction = any(term in combined_text for term in BLADDER_BOWEL_TERMS)
+
+    if spine_pain and limb_numbness_weakness:
+        if bladder_bowel_dysfunction:
+            urgency_floor = "high"
+            specialty_override = specialty_override or "Neurology"
+            warnings.append(
+                "Back/neck pain with limb neurological symptoms and bladder/bowel involvement"
+            )
+            conditions.extend([
+                "Cauda equina syndrome",
+                "Spinal cord compression",
+                "Central disc herniation",
+            ])
+            actions.extend([
+                (
+                    "Seek emergency care now — bladder or bowel symptoms with back pain "
+                    "may indicate spinal cord compression."
+                ),
+                "Do not wait; this combination requires urgent imaging and specialist review.",
+            ])
+            patient_message = patient_message or (
+                "Back pain combined with numbness or weakness in your limbs AND bladder or "
+                "bowel changes can be a medical emergency affecting your spinal cord. "
+                "Please go to an emergency department now."
+            )
+            clinical_note = clinical_note or (
+                "Back/neck pain with limb neurological deficits and sphincter involvement "
+                "raises concern for cauda equina syndrome or cord compression — requires "
+                "emergency MRI."
+            )
+        else:
+            urgency_floor = max(
+                urgency_floor, "medium", key=lambda level: LEVEL_PRIORITY[level]
+            )
+            specialty_override = specialty_override or "Orthopedics"
+            warnings.append("Back/neck pain with limb numbness or weakness")
+            conditions.extend([
+                "Cervical radiculopathy",
+                "Lumbar radiculopathy",
+                "Herniated intervertebral disc",
+            ])
+            actions.extend([
+                "Arrange prompt medical review for spine assessment.",
+                (
+                    "Seek urgent care if weakness worsens, spreads, or bladder/bowel "
+                    "control is affected."
+                ),
+            ])
+            patient_message = patient_message or (
+                "Back or neck pain together with numbness or tingling in your arm or leg "
+                "may point to a nerve being compressed in your spine. This needs medical "
+                "attention to prevent worsening."
+            )
+            clinical_note = clinical_note or (
+                "Spinal pain with peripheral neurological symptoms (numbness/weakness) "
+                "suggests radiculopathy or early myelopathy. Prompt clinical and imaging "
+                "assessment advised."
             )
 
     if not warnings:
@@ -885,7 +1003,7 @@ def _collect_condition_scores(
         _add_condition_score(
             scores,
             condition_name,
-            6.8,  # Increased from 5.2 - red flags are non-negotiable
+            9,  # Increased from 5.2 - red flags are non-negotiable
             "Red-flag symptom combination makes this condition important to exclude.",
         )
 
