@@ -1,0 +1,9 @@
+# DoctorCard Module Fix
+
+## 2026-05-02
+
+- Rechecked `frontend/src/components/TriagePanel.tsx` and confirmed it imports `./DoctorCard`.
+- Confirmed `frontend/src/components/DoctorCard.tsx` was missing from the components directory.
+- Added `DoctorCard.tsx` at the exact imported path with a default export.
+- Confirmed the build error persisted because `DoctorCard.tsx` was still untracked on the active branch.
+- Verified `npm run build` and `npm run lint` pass once the untracked file is present.
