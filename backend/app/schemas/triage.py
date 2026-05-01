@@ -19,6 +19,12 @@ class DoctorSuggestion(BaseModel):
     source_name: str | None = None
     source_url: str | None = None
     booking_url: str | None = None
+    earliest_available_slot: str | None = None
+    # Optional fields for enhanced doctor card display
+    rating: float | None = None  # e.g., 4.5 out of 5
+    recommendation_reason: str | None = None  # Why this doctor was recommended
+    distance_km: float | None = None  # Distance from patient location in kilometers
+    specialty_match_reason: str | None = None  # Explanation of specialty match
 
 
 class SupportingReference(BaseModel):
