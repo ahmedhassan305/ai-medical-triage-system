@@ -12,3 +12,6 @@
 - Fixed `StatusBadge` to read icons from `colors.icon`, matching `StatusDisplayInfo`.
 - Verified `npm run lint`, `npm run test`, and `npm run build` pass in `frontend`.
 - Verified backend `ruff check app tests`, `black --check app tests`, and `pytest` pass after formatting `backend/app/main.py`.
+- Pushed recovery commit `7831dc9` to `origin/feature/ahmed-maher-doctor-ranking-appointments-ui`.
+- Verified backend `/health` responds with `{"status":"ok"}` on `http://localhost:19001`.
+- Started Vite on `http://localhost:5173` and verified the frontend root returns HTTP 200.
