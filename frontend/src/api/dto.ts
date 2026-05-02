@@ -164,6 +164,10 @@ export type DoctorSuggestionDto = {
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;
+  rating?: number | null;
+  recommendation_reason?: string | null;
+  distance_km?: number | null;
+  specialty_match_reason?: string | null;
 };
 
 export type SuspectedConditionDto = {
