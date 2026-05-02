@@ -291,7 +291,7 @@ export default function DoctorCard({
             className="button button--primary button--small"
             onClick={onReserveAppointment}
           >
-            Reserve appointment
+            Reserve Appointment
           </button>
         )}
       </div>

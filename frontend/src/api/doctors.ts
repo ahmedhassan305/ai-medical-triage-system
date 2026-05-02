@@ -4,6 +4,7 @@ import type {
   DoctorProfileUpsertDto,
 } from "./dto";
 import { apiPaths } from "./paths";
+import axios from "axios";
 
 export async function listDoctors(): Promise<DoctorProfileResponseDto[]> {
   const response = await api.get<DoctorProfileResponseDto[]>(
@@ -20,14 +21,11 @@ export async function fetchMyDoctorProfile(): Promise<DoctorProfileResponseDto |
   try {
     const response = await api.get<DoctorProfileResponseDto>(apiPaths.doctors.me);
     return response.data;
-  } catch (error: any) {
-    // If user is not a doctor → backend returns 403 → ignore it
-    if (error?.response?.status === 403) {
-      console.log("User is not a doctor, skipping doctor profile");
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
       return null;
     }
 
-    // Any other error → throw it (real problem)
     throw error;
   }
 }

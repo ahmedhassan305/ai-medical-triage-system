@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { AppointmentResponseDto, DoctorProfileResponseDto, PatientProfileResponseDto } from "../api/dto";
 import AppointmentList from "./AppointmentList";
-import { AppointmentStatus } from "../lib/appointmentStatus";
 
 /**
  * AppointmentStatusDemo - Test component showcasing appointment status system
@@ -401,7 +400,10 @@ function StatusLegendItem({ status, label, icon, color }: StatusLegendItemProps)
   };
 
   return (
-    <div className={`p-2 rounded border text-center ${colorMap[color as keyof typeof colorMap]}`}>
+    <div
+      className={`p-2 rounded border text-center ${colorMap[color as keyof typeof colorMap]}`}
+      data-status={status}
+    >
       <div className="text-lg mb-1">{icon}</div>
       <div className="text-xs font-medium">{label}</div>
     </div>
@@ -436,6 +438,14 @@ function InfoPanel({ viewType }: InfoPanelProps) {
         "Shows appointments where this doctor is assigned",
         "Can review pending patient requests",
         "Can approve, reject, or complete appointments",
+      ],
+    },
+    admin: {
+      title: "Admin View",
+      content: [
+        "See all appointments across the system",
+        "Review patient and doctor scheduling activity",
+        "Track appointment status distribution across the workspace",
       ],
     },
   };

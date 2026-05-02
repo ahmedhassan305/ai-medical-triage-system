@@ -13,19 +13,17 @@
  * Normalized appointment status types
  * These represent the complete lifecycle of an appointment
  */
-export enum AppointmentStatus {
-  // Upcoming/Active States
-  PENDING = "pending", // Requested, awaiting doctor approval
-  ACTIVE = "active", // Approved and scheduled for future date
-  UPCOMING = "upcoming", // Scheduled appointment coming soon (alias for active)
+export const AppointmentStatus = {
+  PENDING: "pending",
+  ACTIVE: "active",
+  UPCOMING: "upcoming",
+  COMPLETED: "completed",
+  REJECTED: "rejected",
+  CANCELLED: "cancelled",
+} as const;
 
-  // Completed States
-  COMPLETED = "completed", // Visited/consulted
-
-  // Rejected/Cancelled States
-  REJECTED = "rejected", // Doctor rejected the request
-  CANCELLED = "cancelled", // User/admin cancelled the appointment
-}
+export type AppointmentStatus =
+  (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
 
 /**
  * Status group types for filtering and organization

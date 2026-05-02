@@ -180,12 +180,8 @@ export default function HomePage() {
           nextAppointments,
           nextWorkspaceVisits,
         ] = await Promise.all([
-          fetchMyPatientProfile().catch((error) =>
-            isStatus(error, 404) ? null : Promise.reject(error),
-          ),
-          fetchMyDoctorProfile().catch((error) =>
-            isStatus(error, 404) ? null : Promise.reject(error),
-          ),
+          patientProfileRequest,
+          doctorProfileRequest,
           listDoctors().catch(() => []),
           currentUser.role === "patient"
             ? Promise.resolve([])

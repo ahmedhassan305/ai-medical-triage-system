@@ -1,7 +1,6 @@
 import type { AppointmentResponseDto } from "../api/dto";
 import type { AppointmentStatus, AppointmentStatusGroup } from "./appointmentStatus";
 import {
-  AppointmentStatus as Status,
   normalizeBackendStatus,
   isActiveOrUpcoming,
   isCompleted,

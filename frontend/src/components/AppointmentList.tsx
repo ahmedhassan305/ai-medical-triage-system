@@ -9,9 +9,9 @@ import {
   getAppointmentStats,
   type AppointmentWithStatus,
 } from "../lib/appointmentFilters";
-import { StatusBadge, StatusIndicator, StatusGroupHeader } from "./StatusBadge";
+import { StatusBadge, StatusGroupHeader } from "./StatusBadge";
 
-type AppointmentListProps = {
+export type AppointmentListProps = {
   appointments: AppointmentResponseDto[];
   doctors: DoctorProfileResponseDto[];
   patients: PatientProfileResponseDto[];
@@ -110,7 +110,7 @@ export function AppointmentList({
       });
     }
 
-    return result;
+    return sortAppointmentsByDate(result);
   }, [normalizedAppointments, filter, doctorMap, patientMap, currentRole, currentUserId]);
 
   // Group filtered results by status

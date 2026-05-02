@@ -1,7 +1,7 @@
-import type { AppointmentStatus } from "../../lib/appointmentStatus";
-import { getStatusDisplay } from "../../lib/appointmentStatus";
+import type { AppointmentStatus } from "../lib/appointmentStatus";
+import { getStatusDisplay } from "../lib/appointmentStatus";
 
-type StatusBadgeProps = {
+export type StatusBadgeProps = {
   status: AppointmentStatus;
   size?: "sm" | "md" | "lg";
   showIcon?: boolean;
@@ -27,7 +27,8 @@ export function StatusBadge({
   className = "",
 }: StatusBadgeProps) {
   const displayInfo = getStatusDisplay(status);
-  const { label, description, colors, icon } = displayInfo;
+  const { label, description, colors } = displayInfo;
+  const { icon } = colors;
 
   const sizeClasses = {
     sm: "px-2 py-1 text-xs",
@@ -47,11 +48,14 @@ export function StatusBadge({
     >
       {showIcon && <span className="flex-shrink-0">{icon}</span>}
       <span className="flex-1">{label}</span>
+      {showDescription && (
+        <span className="text-xs opacity-80">{description}</span>
+      )}
     </div>
   );
 }
 
-type StatusIndicatorProps = {
+export type StatusIndicatorProps = {
   status: AppointmentStatus;
   inline?: boolean;
   className?: string;
@@ -71,7 +75,8 @@ export function StatusIndicator({
   className = "",
 }: StatusIndicatorProps) {
   const displayInfo = getStatusDisplay(status);
-  const { label, colors, icon } = displayInfo;
+  const { label, colors } = displayInfo;
+  const { icon } = colors;
 
   const containerClass = inline ? "inline-flex" : "flex";
 
@@ -86,7 +91,7 @@ export function StatusIndicator({
   );
 }
 
-type StatusGroupHeaderProps = {
+export type StatusGroupHeaderProps = {
   groupLabel: string;
   count: number;
   isExpanded?: boolean;
