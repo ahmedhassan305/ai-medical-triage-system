@@ -187,7 +187,9 @@ def test_doctor_can_create_and_lookup_patient_by_national_id(
     assert lookup_response.json()["id"] == created_patient["id"]
 
 
-def test_doctor_can_search_patient_by_id_with_formatted_text(client: TestClient) -> None:
+def test_doctor_can_search_patient_by_id_with_formatted_text(
+    client: TestClient,
+) -> None:
     doctor_headers = _register_and_login(
         client,
         email="search-text-doctor@example.com",
