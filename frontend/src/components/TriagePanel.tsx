@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 
 import type {
   DoctorSuggestionDto,
@@ -199,7 +199,7 @@ function StaffPatientLookup({
                   event.target.value.replace(/\D/g, "").slice(0, 14),
                 )
               }
-              placeholder="14-digit الرقم القومي"
+              placeholder="14-digit Ø§Ù„Ø±Ù‚Ù… Ø§Ù„Ù‚ÙˆÙ…ÙŠ"
             />
           </div>
 
@@ -530,8 +530,8 @@ export default function TriagePanel({
         <div className="result-layout">
           <section className="result-card result-card--hero">
             <div className="result-card__meta">
-              <span className={`badge badge--${result.urgency_level}`}>
-                {result.urgency_level.toUpperCase()}
+              <span className={`badge badge--${result.triage_level}`}>
+                {result.triage_level.toUpperCase()}
               </span>
               <span className="muted-copy">
                 {result.history_used
@@ -731,3 +731,5 @@ export default function TriagePanel({
     </SectionPanel>
   );
 }
+
+

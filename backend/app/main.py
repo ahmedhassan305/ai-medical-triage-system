@@ -7,7 +7,7 @@ from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import add_request_logging_middleware
 from app.db.session import create_all
-from app.services.triage_service import get_reasoner
+from app.services.triage_service import get_reasoner, _preload_model
 
 
 def create_app() -> FastAPI:
@@ -34,8 +34,12 @@ def create_app() -> FastAPI:
 
     if settings.strict_reasoner:
         get_reasoner()
+    # Preload model into VRAM on startup
+    import threading as _threading
+    _threading.Thread(target=_preload_model, daemon=True).start()
 
     return app
 
 
 app = create_app()
+

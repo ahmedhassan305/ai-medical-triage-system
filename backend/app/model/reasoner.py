@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -74,6 +74,7 @@ class StubReasoner:
             clinical_summary=_fallback_clinical_summary(
                 triage_level,
                 possible_conditions,
+                query,
             ),
             patient_friendly_explanation=explanation,
             possible_conditions=possible_conditions,
@@ -88,7 +89,7 @@ class OllamaReasoner:
         self,
         host: str | None = None,
         model: str | None = None,
-        timeout_seconds: float = 45.0,
+        timeout_seconds: float = 180.0,
     ) -> None:
         self.host = (host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip(
             "/"
@@ -155,7 +156,8 @@ class OllamaReasoner:
             "urgency_level": "medium",
             "clinical_summary": (
                 "Respiratory symptoms with fever could reflect an acute lower "
-                "respiratory infection."
+                "respiratory infection. The patient reports productive cough and elevated temperature, "
+                "consistent with pneumonia or acute bronchitis based on retrieved medical literature."
             ),
             "patient_friendly_explanation": (
                 "Your symptoms may be related to a chest or breathing infection. "
@@ -164,14 +166,14 @@ class OllamaReasoner:
             ),
             "possible_conditions": [
                 {
-                    "name": "Bronchitis",
-                    "explanation": "Cough and fever can fit this pattern.",
+                    "name": "Pneumonia",
+                    "explanation": "Fever with persistent productive cough and respiratory findings can fit this pattern.",
                 },
                 {
-                    "name": "Pneumonia",
+                    "name": "Acute Bronchitis",
                     "explanation": (
-                        "Fever with persistent cough can sometimes point to a "
-                        "lung infection."
+                        "Fever and productive cough are classic findings. "
+                        "Usually self-limited but medical review is prudent."
                     ),
                 },
             ],
@@ -180,41 +182,50 @@ class OllamaReasoner:
                 "Arrange a same-day medical review if symptoms are worsening.",
                 "Seek urgent help if breathing becomes difficult.",
             ],
-            "red_flags": ["trouble breathing", "blue lips"],
+            "red_flags": ["trouble breathing", "blue lips", "coughing up blood"],
         }
         context_text = (
             "\n\n".join(contexts[:3]) if contexts else "No retrieved evidence."
         )
         patient_block = patient_context or "No patient history provided."
         return (
-            "You are a careful medical triage assistant. "
-            "You do not give a confirmed diagnosis. "
+            "You are a careful medical triage assistant with expertise in clinical reasoning. "
+            "You do not give a confirmed diagnosis but provide careful clinical assessment. "
             "Use plain, reassuring language for non-doctors. "
-            "Use the retrieved evidence when it is relevant.\n\n"
+            "Use the retrieved medical evidence when it is relevant. "
+            "IMPORTANT: Explicitly identify and name specific medical conditions from your clinical reasoning.\n\n"
             "Return ONLY valid JSON with this exact shape:\n"
             "{\n"
             '  "urgency_level": "low|medium|high",\n'
-            '  "clinical_summary": "short clinician-style summary",\n'
+            '  "clinical_summary": "detailed clinician-style summary with specific condition names identified from reasoning",\n'
             '  "patient_friendly_explanation": "simple explanation for the patient",\n'
             '  "possible_conditions": [\n'
-            '    {"name": "condition", "explanation": "why it may fit"}\n'
+            '    {"name": "specific condition name", "explanation": "why it may fit based on symptoms", "likelihood": "more likely|possible|less likely"}\n'
             "  ],\n"
             '  "recommended_specialty": "specialty name or null",\n'
             '  "recommended_actions": ["action 1", "action 2"],\n'
             '  "red_flags": ["warning sign 1", "warning sign 2"]\n'
             "}\n\n"
             "Rules:\n"
-            "- possible_conditions must contain 1 to 3 possibilities.\n"
+            "- Gastroenterology is ONLY for: vomiting blood, blood in stool, jaundice/yellow skin, liver disease, severe abdominal pain, colonoscopy-related, bowel disease. Weight loss, fatigue, general stomach discomfort = Internal Medicine.\n"
+            "- recommended_specialty MUST be exactly one of: Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, Family Medicine. No other values are allowed.\n"
+            "- possible_conditions must contain 1 to 3 specific medical conditions.\n"
+            ""
+            "- ALWAYS include the most likely specific condition name (e.g., 'Pneumonia', 'Myocardial infarction', 'Meningitis').\n"
+            "- Use exact medical terminology in condition names for extraction by downstream systems.\n"
             "- Use wording such as 'possible condition' or 'may be related to'.\n"
             "- Do not overstate certainty.\n"
             "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
-            "- If symptoms sound dangerous, set urgency_level to high.\n\n"
+            "- If symptoms sound dangerous, set urgency_level to high.\n"
+            "- Be explicit about clinical reasoning - name the specific conditions you are considering.\n\n"
             "Example JSON:\n"
             f"{json.dumps(example_payload, indent=2)}\n\n"
             f"Symptoms: {query}\n"
             f"Safety baseline urgency: {triage_level}\n\n"
             f"Patient context:\n{patient_block}\n\n"
-            f"Retrieved evidence:\n{context_text}\n"
+            f"Retrieved medical evidence:\n{context_text}\n"
+            "Note: Do NOT mention scores, percentages, or source rankings in your response. Do not copy the example explanation verbatim.\n"
+            f"\nNow analyze this case and provide detailed clinical reasoning with specific condition names."
         )
 
 
@@ -307,13 +318,40 @@ def _fallback_explanation(
 def _fallback_clinical_summary(
     triage_level: TriageLevel,
     possible_conditions: list[ReasonerCondition],
+    query: str,
 ) -> str:
+    query_text = query.strip().rstrip(".")
     if possible_conditions:
+        top_condition = possible_conditions[0].name
+        if triage_level == "high":
+            return (
+                f"{query_text.capitalize()} is concerning for {top_condition}. "
+                "Immediate evaluation is advised."
+            )
+        if triage_level == "medium":
+            return (
+                f"{query_text.capitalize()} may be related to {top_condition}. "
+                "It is best to seek medical review soon."
+            )
         return (
-            f"{triage_level.title()} urgency presentation with possible "
-            f"{possible_conditions[0].name.lower()}."
+            f"{query_text.capitalize()} may be related to {top_condition}. "
+            "Monitor symptoms and follow up if they persist or worsen."
         )
-    return f"{triage_level.title()} urgency symptom presentation."
+
+    if triage_level == "high":
+        return (
+            f"{query_text.capitalize()} is concerning and may reflect a serious medical issue. "
+            "Seek immediate care."
+        )
+    if triage_level == "medium":
+        return (
+            f"{query_text.capitalize()} suggests a condition worth reviewing soon. "
+            "Arrange care if symptoms continue or worsen."
+        )
+    return (
+        f"{query_text.capitalize()} appears less urgent but should be monitored. "
+        "Follow up if symptoms do not improve."
+    )
 
 
 def _fallback_actions(triage_level: TriageLevel) -> list[str]:
@@ -360,3 +398,13 @@ def _fallback_specialty(
     if any(token in lowered for token in ("fracture", "sprain", "arthritis")):
         return "Orthopedics"
     return "General Practice"
+
+
+
+
+
+
+
+
+
+
