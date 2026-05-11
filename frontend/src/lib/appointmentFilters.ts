@@ -156,7 +156,7 @@ export function sortAppointmentsByStatusGroup(
 export function searchAppointments(
   appointments: AppointmentWithStatus[],
   doctors: Record<number, { full_name: string; specialty: string }>,
-  patients: Record<number, { full_name: string }>,
+  patients: Record<number, { full_name: string; national_id?: string | null }>,
   query: string,
 ): AppointmentWithStatus[] {
   const lowerQuery = query.toLowerCase().trim();
@@ -172,12 +172,14 @@ export function searchAppointments(
     const doctorName = doctor?.full_name.toLowerCase() || "";
     const specialty = doctor?.specialty.toLowerCase() || "";
     const patientName = patient?.full_name.toLowerCase() || "";
+    const patientNationalId = patient?.national_id?.toLowerCase() || "";
     const reason = apt.reason.toLowerCase() || "";
 
     return (
       doctorName.includes(lowerQuery) ||
       specialty.includes(lowerQuery) ||
       patientName.includes(lowerQuery) ||
+      patientNationalId.includes(lowerQuery) ||
       reason.includes(lowerQuery)
     );
   });

@@ -187,6 +187,86 @@ def test_doctor_can_create_and_lookup_patient_by_national_id(
     assert lookup_response.json()["id"] == created_patient["id"]
 
 
+def test_doctor_can_search_patient_by_id_with_formatted_text(client: TestClient) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="search-text-doctor@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers,
+        full_name="Search Text Doctor",
+        specialty="Internal Medicine",
+    )
+
+    create_response = client.post(
+        "/api/v1/patients/",
+        headers=doctor_headers,
+        json={
+            "full_name": "Patient Query Test",
+            "sex": "Female",
+            "national_id": "30101010300001",
+            "current_governorate": "Cairo",
+            "smoker": False,
+            "alcoholic": False,
+            "chronic_conditions": [],
+        },
+    )
+    assert create_response.status_code == 201
+    created_patient = create_response.json()
+
+    response = client.get(
+        f"/api/v1/patients/{created_patient['id']}/search-result",
+        headers=doctor_headers,
+    )
+    assert response.status_code == 200
+    assert response.text == (
+        "----------------------------\n"
+        "🔍 Patient Search Result\n"
+        "----------------------------\n\n"
+        "🆔 Patient ID:\n"
+        f"{created_patient['id']}\n\n"
+        "👤 Patient Name:\n"
+        "Patient Query Test\n\n"
+        "✅ Status:\n"
+        "Patient found successfully.\n\n"
+        "----------------------------"
+    )
+
+
+def test_doctor_searching_nonexistent_patient_returns_formatted_not_found_text(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="search-text-doctor2@example.com",
+        role="doctor",
+    )
+    _create_doctor_profile(
+        client,
+        doctor_headers,
+        full_name="Search Text Doctor 2",
+        specialty="Family Medicine",
+    )
+
+    response = client.get(
+        "/api/v1/patients/999999/search-result",
+        headers=doctor_headers,
+    )
+    assert response.status_code == 200
+    assert response.text == (
+        "----------------------------\n"
+        "🔍 Patient Search Result\n"
+        "----------------------------\n\n"
+        "🆔 Patient ID:\n"
+        "999999\n\n"
+        "❌ Status:\n"
+        "No patient found with this ID.\n\n"
+        "----------------------------"
+    )
+
+
 def test_managed_patient_create_rejects_invalid_sex(client: TestClient) -> None:
     admin_headers = _register_and_login(
         client,

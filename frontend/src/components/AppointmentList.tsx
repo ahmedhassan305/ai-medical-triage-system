@@ -142,7 +142,7 @@ export function AppointmentList({
         <div className="flex-1">
           <input
             type="text"
-            placeholder="Search by doctor, specialty, patient, or reason..."
+            placeholder="Search by doctor, specialty, patient, national ID, or reason..."
             value={filter.searchQuery}
             onChange={(e) =>
               setFilter({ ...filter, searchQuery: e.target.value })
