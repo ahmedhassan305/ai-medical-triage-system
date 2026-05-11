@@ -22,6 +22,7 @@ export default function RecordsImportPanel({
   onSelectPatient,
   onImport,
 }: RecordsImportPanelProps) {
+  const [patientSearch, setPatientSearch] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -33,6 +34,16 @@ export default function RecordsImportPanel({
     await onImport(selectedPatientId, file);
     setFile(null);
   }
+
+  const filteredPatients = patients.filter((patient) => {
+    const search = patientSearch.trim();
+    if (!search) {
+      return true;
+    }
+    const nationalId = patient.national_id?.toLowerCase() ?? "";
+    return nationalId.includes(search.toLowerCase()) ||
+      patient.full_name.toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <SectionPanel
@@ -65,6 +76,16 @@ export default function RecordsImportPanel({
 
       <form className="form-grid" onSubmit={handleSubmit}>
         <div className="field">
+          <label htmlFor="records-patient-search">Patient national ID</label>
+          <input
+            id="records-patient-search"
+            type="text"
+            value={patientSearch}
+            onChange={(event) => setPatientSearch(event.target.value)}
+            placeholder="Enter patient national ID"
+          />
+        </div>
+        <div className="field">
           <label htmlFor="records-patient">Patient</label>
           <select
             id="records-patient"
@@ -76,9 +97,9 @@ export default function RecordsImportPanel({
             }
           >
             <option value="">Select patient</option>
-            {patients.map((patient) => (
+            {filteredPatients.map((patient) => (
               <option key={patient.id} value={patient.id}>
-                {patient.full_name}
+                {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
               </option>
             ))}
           </select>

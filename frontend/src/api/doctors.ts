@@ -23,7 +23,7 @@ export async function fetchMyDoctorProfile(): Promise<DoctorProfileResponseDto |
     return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.status === 403) {
-      return null;  
+      return null;
     }
 
     throw error;
