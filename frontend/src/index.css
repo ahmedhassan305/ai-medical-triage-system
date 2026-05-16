@@ -406,6 +406,29 @@ textarea {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.button--active {
+  background: rgba(0, 1, 0, 0.12);
+  border-color: rgba(15, 118, 110, 0.24);
+  color: var(--accent);
+}
+
+.clarification-panel,
+.clarification-list,
+.clarification-question {
+  display: grid;
+  gap: 16px;
+}
+
+.clarification-panel h3 {
+  margin: 6px 0 4px;
+}
+
+.clarification-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .segmented-control {
   display: inline-grid;
   grid-template-columns: repeat(2, 1fr);

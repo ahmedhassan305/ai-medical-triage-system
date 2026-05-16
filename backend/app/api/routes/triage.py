@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_optional_current_user
@@ -16,6 +16,9 @@ def triage_route(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> TriageResponse:
+    if payload.patient_id is not None and current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
     return run_triage(
         payload.query,
         patient_id=payload.patient_id,

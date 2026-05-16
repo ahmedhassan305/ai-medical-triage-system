@@ -5,6 +5,9 @@ export type RegisterRequestDto = {
   email: string;
   password: string;
   role: RoleType;
+  full_name?: string;
+  national_id?: string;
+  sex?: "Male" | "Female";
 };
 
 export type LoginRequestDto = {
@@ -29,7 +32,9 @@ export type TokenResponseDto = {
 export type PatientProfileUpsertDto = {
   full_name: string;
   age: number;
-  sex: string;
+  sex: "Male" | "Female";
+  national_id?: string | null;
+  current_governorate?: string | null;
   smoker: boolean;
   alcoholic: boolean;
   chronic_conditions: string[];
@@ -38,14 +43,29 @@ export type PatientProfileUpsertDto = {
 export type PatientProfileResponseDto = PatientProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  date_of_birth?: string | null;
+  inferred_governorate_code?: string | null;
+  inferred_governorate?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ManagedPatientProfileCreateDto = {
+  full_name: string;
+  sex: "Male" | "Female";
+  national_id: string;
+  current_governorate?: string | null;
+  smoker: boolean;
+  alcoholic: boolean;
+  chronic_conditions: string[];
 };
 
 export type DoctorProfileUpsertDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  area?: string | null;
+  city?: string | null;
 };
 
 export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
@@ -105,17 +125,59 @@ export type DoctorSuggestionDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  area?: string | null;
+  city?: string | null;
+  booking_url?: string | null;
+  source_url?: string | null;
+  source_name?: string | null;
+};
+
+export type ClarificationQuestionDto = {
+  id: string;
+  question: string;
+  options: string[] | null;
+};
+
+export type ClarificationAnswerDto = {
+  question_id: string;
+  answer: string;
+};
+
+export type SupportingReferenceDto = {
+  title: string;
+  source: string;
+  url?: string | null;
+  snippet: string;
+};
+
+export type SuspectedConditionDto = {
+  name: string;
+  likelihood: "more likely" | "more_likely" | "possible" | "less likely" | "less_likely";
+  explanation: string;
 };
 
 export type TriageResponseDto = {
   triage_level: TriageLevel;
+  urgency_level: TriageLevel;
+  confidence_score: number;
+  needs_clarification: boolean;
+  questions: ClarificationQuestionDto[];
+  urgency_label: string;
+  urgency_reason: string;
   summary: string;
+  clinical_summary: string;
   actions: string[];
+  recommended_actions: string[];
+  red_flags: string[];
   disclaimer: string;
   history_used: boolean;
   simple_reasoning?: string;
   plain_language_explanation?: string;
+  patient_friendly_explanation: string;
   recommended_specialty?: string;
+  specialty_reason: string;
   suspected_condition?: string;
-  suggested_doctors?: DoctorSuggestionDto[];
+  suspected_conditions: SuspectedConditionDto[];
+  supporting_references: SupportingReferenceDto[];
+  suggested_doctors: DoctorSuggestionDto[];
 };

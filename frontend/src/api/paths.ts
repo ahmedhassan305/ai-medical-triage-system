@@ -3,6 +3,7 @@ export const API_V1_PREFIX = "/api/v1";
 export const apiPaths = {
   health: `${API_V1_PREFIX}/health`,
   triage: `${API_V1_PREFIX}/triage`,
+  clarify: `${API_V1_PREFIX}/clarify`,
   auth: {
     register: `${API_V1_PREFIX}/auth/register`,
     login: `${API_V1_PREFIX}/auth/login`,

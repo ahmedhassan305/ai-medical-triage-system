@@ -666,6 +666,7 @@ export default function HomePage() {
             onClearLinkedPatient={handleClearLinkedTriagePatient}
             onCreatePatientProfile={handleCreateManagedPatientProfile}
             onSubmit={handleRunTriage}
+            onClarificationComplete={setTriageResult}
             onReserveAppointment={
               currentUser.role === "doctor" ? undefined : handleReserveAppointment
             }
