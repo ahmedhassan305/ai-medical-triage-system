@@ -74,6 +74,20 @@ class ReasonerCondition(BaseModel):
     likelihood: Literal["more likely", "possible", "less likely"] = "possible"
 
 
+class ClinicalFeatures(BaseModel):
+    chief_complaint: str | None = None
+    symptoms: list[str] = []
+    body_systems: list[str] = []
+    onset: Literal["sudden", "recent", "longstanding", "unknown"] = "unknown"
+    duration: str | None = None
+    severity: Literal["mild", "moderate", "severe", "unknown"] = "unknown"
+    progression: Literal["worsening", "improving", "unknown"] = "unknown"
+    red_flags_present: list[str] = []
+    red_flags_denied: list[str] = []
+    risk_factors: list[str] = []
+    missing_critical_details: list[str] = []
+
+
 class StructuredReasoningOutput(BaseModel):
     urgency_level: TriageLevel
     clinical_summary: str = ""
@@ -82,4 +96,5 @@ class StructuredReasoningOutput(BaseModel):
     recommended_specialty: str | None = None
     recommended_actions: list[str] = []
     red_flags: list[str] = []
+    clinical_features: ClinicalFeatures | None = None
 

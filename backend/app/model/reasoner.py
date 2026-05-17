@@ -8,11 +8,8 @@ from typing import Protocol
 import httpx
 
 from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
-from app.schemas.triage import (
-    ReasonerCondition,
-    StructuredReasoningOutput,
-    TriageLevel,
-)
+from app.schemas.triage import ReasonerCondition, StructuredReasoningOutput, TriageLevel
+from app.services.clinical_features import extract_clinical_features
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +55,7 @@ class StubReasoner:
         triage_level: TriageLevel,
         patient_context: str | None = None,
     ) -> StructuredReasoningOutput:
+        clinical_features = extract_clinical_features(query)
         possible_conditions = _guess_conditions(query)
         red_flags = _extract_red_flags(query)
         explanation = _fallback_explanation(
@@ -84,6 +82,7 @@ class StubReasoner:
             recommended_specialty=specialty,
             recommended_actions=actions,
             red_flags=red_flags,
+            clinical_features=clinical_features,
         )
 
 
@@ -189,6 +188,19 @@ class OllamaReasoner:
                 "Seek urgent help if breathing becomes difficult.",
             ],
             "red_flags": ["trouble breathing", "blue lips", "coughing up blood"],
+            "clinical_features": {
+                "chief_complaint": "cough",
+                "symptoms": ["cough", "fever"],
+                "body_systems": ["respiratory"],
+                "onset": "recent",
+                "duration": "2 days",
+                "severity": "moderate",
+                "progression": "unknown",
+                "red_flags_present": [],
+                "red_flags_denied": [],
+                "risk_factors": [],
+                "missing_critical_details": ["whether breathing is difficult"],
+            },
         }
         context_text = (
             "\n\n".join(contexts[:3]) if contexts else "No retrieved evidence."
@@ -210,7 +222,20 @@ class OllamaReasoner:
             "  ],\n"
             '  "recommended_specialty": "specialty name or null",\n'
             '  "recommended_actions": ["action 1", "action 2"],\n'
-            '  "red_flags": ["warning sign 1", "warning sign 2"]\n'
+            '  "red_flags": ["warning sign 1", "warning sign 2"],\n'
+            '  "clinical_features": {\n'
+            '    "chief_complaint": "plain clinical concept or null",\n'
+            '    "symptoms": ["normalized symptom 1", "normalized symptom 2"],\n'
+            '    "body_systems": ["cardiac|respiratory|neurologic|gastrointestinal|musculoskeletal|skin|mental_health|ent|eye|general"],\n'
+            '    "onset": "sudden|recent|longstanding|unknown",\n'
+            '    "duration": "brief free-text duration or null",\n'
+            '    "severity": "mild|moderate|severe|unknown",\n'
+            '    "progression": "worsening|improving|unknown",\n'
+            '    "red_flags_present": ["normalized red flag"],\n'
+            '    "red_flags_denied": ["normalized denied red flag"],\n'
+            '    "risk_factors": ["risk factor"],\n'
+            '    "missing_critical_details": ["missing detail that would change urgency or routing"]\n'
+            "  }\n"
             "}\n\n"
             "Rules:\n"
             "- Treat retrieved evidence as supporting material, not as truth.\n"
@@ -224,6 +249,9 @@ class OllamaReasoner:
             ""
             "- ALWAYS include the most likely specific condition name (e.g., 'Pneumonia', 'Myocardial infarction', 'Meningitis').\n"
             "- Use exact medical terminology in condition names for extraction by downstream systems.\n"
+            "- Fill clinical_features from meaning, not exact wording. Normalize patient language such as 'can't catch my breath' to 'breathing difficulty'.\n"
+            "- Preserve denied symptoms in clinical_features.red_flags_denied when the patient clearly says a warning sign is absent.\n"
+            "- Keep clinical_features.missing_critical_details focused on information that would change urgency or specialty.\n"
             "- Use wording such as 'possible condition' or 'may be related to'.\n"
             "- Do not overstate certainty.\n"
             "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
