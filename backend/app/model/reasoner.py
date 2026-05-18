@@ -156,8 +156,9 @@ class OllamaReasoner:
             "urgency_level": "medium",
             "clinical_summary": (
                 "Respiratory symptoms with fever could reflect an acute lower "
-                "respiratory infection. The patient reports productive cough and elevated temperature, "
-                "consistent with pneumonia or acute bronchitis based on retrieved medical literature."
+                "respiratory infection. The patient reports productive cough and "
+                "elevated temperature, consistent with pneumonia or acute "
+                "bronchitis based on retrieved medical literature."
             ),
             "patient_friendly_explanation": (
                 "Your symptoms may be related to a chest or breathing infection. "
@@ -167,7 +168,10 @@ class OllamaReasoner:
             "possible_conditions": [
                 {
                     "name": "Pneumonia",
-                    "explanation": "Fever with persistent productive cough and respiratory findings can fit this pattern.",
+                    "explanation": (
+                        "Fever with persistent productive cough and respiratory "
+                        "findings can fit this pattern."
+                    ),
                 },
                 {
                     "name": "Acute Bronchitis",
@@ -189,43 +193,60 @@ class OllamaReasoner:
         )
         patient_block = patient_context or "No patient history provided."
         return (
-            "You are a careful medical triage assistant with expertise in clinical reasoning. "
-            "You do not give a confirmed diagnosis but provide careful clinical assessment. "
+            "You are a careful medical triage assistant with expertise in "
+            "clinical reasoning. "
+            "You do not give a confirmed diagnosis but provide careful "
+            "clinical assessment. "
             "Use plain, reassuring language for non-doctors. "
             "Use the retrieved medical evidence when it is relevant. "
-            "IMPORTANT: Explicitly identify and name specific medical conditions from your clinical reasoning.\n\n"
+            "IMPORTANT: Explicitly identify and name specific medical "
+            "conditions from your clinical reasoning.\n\n"
             "Return ONLY valid JSON with this exact shape:\n"
             "{\n"
             '  "urgency_level": "low|medium|high",\n'
-            '  "clinical_summary": "detailed clinician-style summary with specific condition names identified from reasoning",\n'
+            '  "clinical_summary": "detailed clinician-style summary with "'
+            '"specific condition names identified from reasoning",\n'
             '  "patient_friendly_explanation": "simple explanation for the patient",\n'
             '  "possible_conditions": [\n'
-            '    {"name": "specific condition name", "explanation": "why it may fit based on symptoms", "likelihood": "more likely|possible|less likely"}\n'
+            '    {"name": "specific condition name", "explanation": "why it "'
+            '"may fit based on symptoms", "likelihood": "more likely|"'
+            '"possible|less likely"}\n'
             "  ],\n"
             '  "recommended_specialty": "specialty name or null",\n'
             '  "recommended_actions": ["action 1", "action 2"],\n'
             '  "red_flags": ["warning sign 1", "warning sign 2"]\n'
             "}\n\n"
             "Rules:\n"
-            "- Gastroenterology is ONLY for: vomiting blood, blood in stool, jaundice/yellow skin, liver disease, severe abdominal pain, colonoscopy-related, bowel disease. Weight loss, fatigue, general stomach discomfort = Internal Medicine.\n"
-            "- recommended_specialty MUST be exactly one of: Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, Family Medicine. No other values are allowed.\n"
+            "- Gastroenterology is ONLY for: vomiting blood, blood in stool, "
+            "jaundice/yellow skin, liver disease, severe abdominal pain, "
+            "colonoscopy-related, bowel disease. Weight loss, fatigue, "
+            "general stomach discomfort = Internal Medicine.\n"
+            "- recommended_specialty MUST be exactly one of: Cardiology, "
+            "Neurology, Neurosurgery, Internal Medicine, Gastroenterology, "
+            "Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, "
+            "Pediatrics, Family Medicine. No other values are allowed.\n"
             "- possible_conditions must contain 1 to 3 specific medical conditions.\n"
             ""
-            "- ALWAYS include the most likely specific condition name (e.g., 'Pneumonia', 'Myocardial infarction', 'Meningitis').\n"
-            "- Use exact medical terminology in condition names for extraction by downstream systems.\n"
+            "- ALWAYS include the most likely specific condition name (e.g., "
+            "'Pneumonia', 'Myocardial infarction', 'Meningitis').\n"
+            "- Use exact medical terminology in condition names for extraction "
+            "by downstream systems.\n"
             "- Use wording such as 'possible condition' or 'may be related to'.\n"
             "- Do not overstate certainty.\n"
             "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
             "- If symptoms sound dangerous, set urgency_level to high.\n"
-            "- Be explicit about clinical reasoning - name the specific conditions you are considering.\n\n"
+            "- Be explicit about clinical reasoning - name the specific "
+            "conditions you are considering.\n\n"
             "Example JSON:\n"
             f"{json.dumps(example_payload, indent=2)}\n\n"
             f"Symptoms: {query}\n"
             f"Safety baseline urgency: {triage_level}\n\n"
             f"Patient context:\n{patient_block}\n\n"
             f"Retrieved medical evidence:\n{context_text}\n"
-            "Note: Do NOT mention scores, percentages, or source rankings in your response. Do not copy the example explanation verbatim.\n"
-            f"\nNow analyze this case and provide detailed clinical reasoning with specific condition names."
+            "Note: Do NOT mention scores, percentages, or source rankings in "
+            "your response. Do not copy the example explanation verbatim.\n"
+            "\nNow analyze this case and provide detailed clinical reasoning "
+            "with specific condition names."
         )
 
 
@@ -340,7 +361,8 @@ def _fallback_clinical_summary(
 
     if triage_level == "high":
         return (
-            f"{query_text.capitalize()} is concerning and may reflect a serious medical issue. "
+            f"{query_text.capitalize()} is concerning and may reflect a "
+            "serious medical issue. "
             "Seek immediate care."
         )
     if triage_level == "medium":
@@ -398,13 +420,3 @@ def _fallback_specialty(
     if any(token in lowered for token in ("fracture", "sprain", "arthritis")):
         return "Orthopedics"
     return "General Practice"
-
-
-
-
-
-
-
-
-
-

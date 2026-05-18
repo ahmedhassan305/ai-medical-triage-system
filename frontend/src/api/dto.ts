@@ -5,6 +5,9 @@ export type RegisterRequestDto = {
   email: string;
   password: string;
   role: RoleType;
+  full_name?: string;
+  national_id?: string;
+  sex?: "Male" | "Female";
 };
 
 export type LoginRequestDto = {
@@ -29,7 +32,19 @@ export type TokenResponseDto = {
 export type PatientProfileUpsertDto = {
   full_name: string;
   age: number;
-  sex: string;
+  sex: "Male" | "Female";
+  national_id?: string | null;
+  current_governorate?: string | null;
+  smoker: boolean;
+  alcoholic: boolean;
+  chronic_conditions: string[];
+};
+
+export type ManagedPatientProfileCreateDto = {
+  full_name: string;
+  sex: "Male" | "Female";
+  national_id: string;
+  current_governorate?: string | null;
   smoker: boolean;
   alcoholic: boolean;
   chronic_conditions: string[];
@@ -38,6 +53,9 @@ export type PatientProfileUpsertDto = {
 export type PatientProfileResponseDto = PatientProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  date_of_birth?: string | null;
+  inferred_governorate_code?: string | null;
+  inferred_governorate?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -46,21 +64,47 @@ export type DoctorProfileUpsertDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  area?: string | null;
+  city?: string | null;
 };
 
 export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  department_id?: number | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  booking_url?: string | null;
   created_at: string;
   updated_at: string;
 };
 
+export type ClinicDto = {
+  id: number;
+  name: string;
+  area?: string | null;
+  city?: string | null;
+  address?: string | null;
+  is_active?: boolean;
+};
+
+export type AppointmentSlotDto = {
+  id: number;
+  doctor_id: number;
+  clinic_id?: number | null;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  clinic?: ClinicDto | null;
+};
+
 export type AppointmentCreateDto = {
   patient_id: number;
-  doctor_id: number;
+  doctor_id?: number | null;
   reason: string;
   notes?: string | null;
   scheduled_for?: string | null;
+  slot_id?: number | null;
 };
 
 export type AppointmentStatusUpdateDto = {
@@ -70,8 +114,12 @@ export type AppointmentStatusUpdateDto = {
 
 export type AppointmentResponseDto = AppointmentCreateDto & {
   id: number;
+  doctor_id: number;
+  clinic_id?: number | null;
   status: string;
   requested_at: string;
+  slot?: AppointmentSlotDto | null;
+  clinic?: ClinicDto | null;
 };
 
 export type VisitCreateDto = {
@@ -105,17 +153,56 @@ export type DoctorSuggestionDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  clinic_id?: number | null;
+  area?: string | null;
+  city?: string | null;
+  earliest_available_slot?: string | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  booking_url?: string | null;
+  rating?: number | null;
+  recommendation_reason?: string | null;
+  distance_km?: number | null;
+  specialty_match_reason?: string | null;
+};
+
+export type SuspectedConditionDto = {
+  name: string;
+  likelihood:
+    | "more_likely"
+    | "more likely"
+    | "possible"
+    | "less_likely"
+    | "less likely";
+  explanation: string;
+};
+
+export type SupportingReferenceDto = {
+  title: string;
+  source: string;
+  url?: string | null;
+  snippet: string;
 };
 
 export type TriageResponseDto = {
   triage_level: TriageLevel;
+  urgency_level: TriageLevel;
+  urgency_label?: string;
+  urgency_reason?: string;
   summary: string;
-  actions: string[];
-  disclaimer: string;
-  history_used: boolean;
+  clinical_summary?: string;
   simple_reasoning?: string;
   plain_language_explanation?: string;
-  recommended_specialty?: string;
-  suspected_condition?: string;
-  suggested_doctors?: DoctorSuggestionDto[];
+  patient_friendly_explanation?: string;
+  actions: string[];
+  recommended_actions: string[];
+  red_flags: string[];
+  recommended_specialty?: string | null;
+  specialty_reason?: string | null;
+  suspected_condition?: string | null;
+  suspected_conditions: SuspectedConditionDto[];
+  supporting_references: SupportingReferenceDto[];
+  suggested_doctors: DoctorSuggestionDto[];
+  disclaimer: string;
+  history_used: boolean;
 };

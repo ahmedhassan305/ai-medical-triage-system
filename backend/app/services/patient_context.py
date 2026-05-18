@@ -17,9 +17,33 @@ class PatientContextResult:
 
 # Synonym map for better semantic matching without embedding model
 SYMPTOM_SYNONYMS: dict[str, list[str]] = {
-    "back pain": ["spine", "lumbar", "cervical", "vertebr", "disc", "sciatica", "backache"],
-    "numbness": ["tingling", "pins and needles", "neuropathy", "radiculopathy", "paresthesia", "sensation loss"],
-    "arm": ["upper limb", "shoulder", "elbow", "wrist", "hand", "finger", "radial", "ulnar"],
+    "back pain": [
+        "spine",
+        "lumbar",
+        "cervical",
+        "vertebr",
+        "disc",
+        "sciatica",
+        "backache",
+    ],
+    "numbness": [
+        "tingling",
+        "pins and needles",
+        "neuropathy",
+        "radiculopathy",
+        "paresthesia",
+        "sensation loss",
+    ],
+    "arm": [
+        "upper limb",
+        "shoulder",
+        "elbow",
+        "wrist",
+        "hand",
+        "finger",
+        "radial",
+        "ulnar",
+    ],
     "leg": ["lower limb", "hip", "knee", "ankle", "foot", "sciatic", "femoral"],
     "headache": ["migraine", "head pain", "cephalgia", "head pressure"],
     "chest pain": ["chest tightness", "angina", "cardiac", "heart pain"],
@@ -78,7 +102,9 @@ def _similarity(query: str, symptoms: str) -> float:
     return min(1.0, jaccard + phrase_bonus)
 
 
-def _chronic_condition_relevance(query: str, chronic_conditions: list[str]) -> list[str]:
+def _chronic_condition_relevance(
+    query: str, chronic_conditions: list[str]
+) -> list[str]:
     """Return chronic conditions relevant to the current query."""
     if not chronic_conditions:
         return []
@@ -157,7 +183,9 @@ class PatientContextProvider:
                 pass
             matched_ids.append(visit.id)
             date_str = (
-                visit.created_at.strftime("%Y-%m-%d") if visit.created_at else "unknown date"
+                visit.created_at.strftime("%Y-%m-%d")
+                if visit.created_at
+                else "unknown date"
             )
             visit_lines.append(
                 f"  - [{date_str}] (relevance={score:.2f})\n"
@@ -170,10 +198,10 @@ class PatientContextProvider:
         if visit_lines:
             context_parts.append(
                 "=== RELEVANT MEDICAL HISTORY ===\n"
-                "Use the following past visits to inform urgency and differential diagnosis. "
-                "Recurrence of similar symptoms or a known chronic condition matching the "
-                "complaint should raise clinical concern.\n"
-                + "\n".join(visit_lines)
+                "Use the following past visits to inform urgency and differential "
+                "diagnosis. Recurrence of similar symptoms or a known chronic "
+                "condition matching the "
+                "complaint should raise clinical concern.\n" + "\n".join(visit_lines)
             )
         else:
             context_parts.append("=== MEDICAL HISTORY ===\nNo prior visits on record.")

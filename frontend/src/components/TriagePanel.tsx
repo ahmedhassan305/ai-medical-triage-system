@@ -9,6 +9,7 @@ import type {
   VisitResponseDto,
 } from "../api/dto";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import DoctorCard from "./DoctorCard";
 import SectionPanel from "./SectionPanel";
 import TriageForm from "./TriageForm";
 
@@ -66,8 +67,10 @@ const LIKELIHOOD_LABELS: Record<
   string
 > = {
   more_likely: "More likely",
+  "more likely": "More likely",
   possible: "Possible",
   less_likely: "Less likely",
+  "less likely": "Less likely",
 };
 
 function summarize(text?: string | null, fallback = "No summary available."): string {
@@ -628,56 +631,33 @@ export default function TriagePanel({
                 </p>
               ) : (
                 <div className="stack-md">
-                  {result.suggested_doctors.map((doctor) => (
-                    <article key={doctor.id} className="doctor-suggestion-card">
-                      <div className="doctor-suggestion-card__header">
-                        <div>
-                          <strong>{doctor.full_name}</strong>
-                          <p className="muted-copy">
-                            {doctor.specialty} · {doctor.clinic}
-                          </p>
-                          {doctor.area && (
-                            <p className="muted-copy">
-                              {doctor.area}
-                              {doctor.city && `, ${doctor.city}`}
-                            </p>
-                          )}
-                          {doctor.source_name ? (
-                            <p className="muted-copy">
-                              Public listing: {doctor.source_name}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="doctor-suggestion-card__actions">
-                        {(doctor.booking_url || doctor.source_url) && (
-                          <a
-                            className="button button--ghost button--small"
-                            href={doctor.booking_url || doctor.source_url || "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Open public listing
-                          </a>
-                        )}
-                        {onReserveAppointment ? (
-                          <button
-                            type="button"
-                            className="button button--primary button--small"
-                            onClick={() =>
-                              onReserveAppointment(
-                                doctor,
-                                result.recommended_specialty || "General Practice",
-                                query,
-                              )
-                            }
-                          >
-                            Reserve Appointment
-                          </button>
-                        ) : null}
-                      </div>
-                    </article>
-                  ))}
+                  {result.suggested_doctors.map((doctor) => {
+                    const patientLoc =
+                      role === "patient"
+                        ? patientProfile?.current_governorate ||
+                          patientProfile?.inferred_governorate
+                        : linkedPatient?.current_governorate ||
+                          linkedPatient?.inferred_governorate;
+
+                    return (
+                      <DoctorCard
+                        key={doctor.id}
+                        doctor={doctor}
+                        specialty={result.recommended_specialty || "General Practice"}
+                        patientLocation={patientLoc || null}
+                        onReserveAppointment={
+                          onReserveAppointment
+                            ? () =>
+                                onReserveAppointment(
+                                  doctor,
+                                  result.recommended_specialty || "General Practice",
+                                  query,
+                                )
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>

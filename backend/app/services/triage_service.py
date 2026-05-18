@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.models import DoctorProfile
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
+from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
 from app.rag.embedding_retriever import EmbeddingRetriever
 from app.rag.retriever import Retriever, StubRetriever
 from app.rag.tfidf_retriever import TfidfRetriever
 from app.schemas.triage import DoctorSuggestion, TriageLevel, TriageResponse
 from app.services.patient_context import PatientContextProvider
-from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -175,26 +175,30 @@ def get_reasoner() -> Reasoner:
     return _build_reasoner()
 
 
-
-
 def _preload_model() -> None:
     """Preload the LLM model into VRAM on startup."""
-    import httpx as _httpx
     import os as _os
-    host = _os.getenv('OLLAMA_HOST', 'http://localhost:11434').rstrip('/')
-    model = _os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
+
+    import httpx as _httpx
+
+    host = _os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    model = _os.getenv("OLLAMA_MODEL", "llama3.2:3b")
     try:
-        logger.info('preloading_model model=%s', model)
+        logger.info("preloading_model model=%s", model)
         with _httpx.Client(timeout=60.0) as client:
-            client.post(f'{host}/api/generate', json={
-                'model': model,
-                'prompt': 'hi',
-                'stream': False,
-                'options': {'num_predict': 1},
-            })
-        logger.info('model_preloaded model=%s', model)
+            client.post(
+                f"{host}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": "hi",
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                },
+            )
+        logger.info("model_preloaded model=%s", model)
     except Exception as e:
-        logger.warning('model_preload_failed error=%s', e)
+        logger.warning("model_preload_failed error=%s", e)
+
 
 def clear_runtime_state() -> None:
     get_retriever.cache_clear()
@@ -357,7 +361,7 @@ def get_suspected_condition(
     Falls back to keyword matching for robustness.
     """
     if reasoner_output is not None and hasattr(reasoner_output, "possible_conditions"):
-        possible_conditions = getattr(reasoner_output, "possible_conditions")
+        possible_conditions = reasoner_output.possible_conditions
         if possible_conditions:
             first = possible_conditions[0]
             if isinstance(first, dict):
@@ -447,32 +451,53 @@ def _get_age_context(age: int | None) -> str:
         return ""
 
     if age < 1:
-        return "NEONATE/INFANT - Critical: Monitor vital signs closely, fever in infants <3 months is emergency."
+        return (
+            "NEONATE/INFANT - Critical: Monitor vital signs closely, "
+            "fever in infants <3 months is emergency."
+        )
     elif age < 5:
-        return "TODDLER/PRESCHOOL - High risk: Dehydration, airway compromise, fever. Watch for lethargy."
+        return (
+            "TODDLER/PRESCHOOL - High risk: Dehydration, airway compromise, "
+            "fever. Watch for lethargy."
+        )
     elif age < 13:
-        return "CHILD - Consider pediatric norms: Heart rate, respiratory rate, blood pressure vary by age."
+        return (
+            "CHILD - Consider pediatric norms: Heart rate, respiratory rate, "
+            "blood pressure vary by age."
+        )
     elif age < 18:
-        return "ADOLESCENT - Consider psychosocial factors, contraception counseling if relevant."
+        return (
+            "ADOLESCENT - Consider psychosocial factors, contraception "
+            "counseling if relevant."
+        )
     elif age < 65:
         return "ADULT - Standard adult presentation."
     else:
-        return "GERIATRIC - Higher risk: Polypharmacy, atypical presentations, falls, cognitive changes."
+        return (
+            "GERIATRIC - Higher risk: Polypharmacy, atypical presentations, "
+            "falls, cognitive changes."
+        )
 
 
 def _llm_classify_urgency(query: str) -> TriageLevel:
     """Fast urgency pre-classification using Ollama LLM."""
-    import httpx as _httpx
     import os as _os
+
+    import httpx as _httpx
+
     host = _os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
     model = _os.getenv("OLLAMA_MODEL", "llama3.2:3b")
     prompt = (
         "You are a medical triage assistant. A patient says:\n"
         f'"{query}"\n\n'
         "Classify the urgency:\n"
-        "- high: life-threatening, needs emergency care NOW (e.g. stroke, heart attack, not breathing, blue lips, suicidal, overdose, throat closing, severe trauma)\n"
-        "- medium: needs medical attention within 24 hours (e.g. fever, fracture, moderate pain, worrying symptoms)\n"
-        "- low: can monitor at home or routine appointment (e.g. mild cold, minor ache, chronic stable condition)\n\n"
+        "- high: life-threatening, needs emergency care NOW (e.g. stroke, "
+        "heart attack, not breathing, blue lips, suicidal, overdose, "
+        "throat closing, severe trauma)\n"
+        "- medium: needs medical attention within 24 hours (e.g. fever, "
+        "fracture, moderate pain, worrying symptoms)\n"
+        "- low: can monitor at home or routine appointment (e.g. mild cold, "
+        "minor ache, chronic stable condition)\n\n"
         "Examples:\n"
         "- 'my chest burns after eating pizza' = low (heartburn, not cardiac)\n"
         "- 'i burned my finger on the stove' = medium (minor burn)\n"
@@ -480,17 +505,21 @@ def _llm_classify_urgency(query: str) -> TriageLevel:
         "- 'i have a small cut that is bleeding' = low (minor wound)\n"
         "- 'my shoulder hurts after exercise' = medium (musculoskeletal)\n"
         "- 'my baby has blue lips and cannot breathe' = high (emergency)\n"
-        "- 'i have crushing chest pain spreading to my arm' = high (cardiac emergency)\n\n"
+        "- 'i have crushing chest pain spreading to my arm' = high "
+        "(cardiac emergency)\n\n"
         "Reply with exactly ONE word: high, medium, or low."
     )
     try:
         with _httpx.Client(timeout=15.0) as client:
-            r = client.post(f"{host}/api/generate", json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": 0.0, "num_predict": 5},
-            })
+            r = client.post(
+                f"{host}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.0, "num_predict": 5},
+                },
+            )
             text = r.json().get("response", "").strip().lower()
             if "high" in text:
                 return "high"
@@ -507,9 +536,18 @@ def _classify_with_age(query: str, age: int | None = None) -> TriageLevel:
 
     if age is not None and age < 5:
         pedi_high_risk = (
-            "fever", "stridor", "drooling", "retracting", "cyanosis",
-            "lethargy", "unresponsive", "seizure", "dehydration",
-            "not eating", "vomiting", "diarrhea for hours"
+            "fever",
+            "stridor",
+            "drooling",
+            "retracting",
+            "cyanosis",
+            "lethargy",
+            "unresponsive",
+            "seizure",
+            "dehydration",
+            "not eating",
+            "vomiting",
+            "diarrhea for hours",
         )
         if _match_any(query, pedi_high_risk):
             level = "high"
@@ -566,16 +604,53 @@ def triage(
 ) -> TriageResponse:
     normalized_query = query.strip()
     triage_level = _llm_classify_urgency(normalized_query)
-    _spine_pain = any(t in normalized_query.lower() for t in ('back pain','back hurts','back ache','backache','neck pain','neck hurts','spine','spinal','cervical','lumbar','disc','herniated','sciatica'))
-    _limb_neuro = any(t in normalized_query.lower() for t in ('numbness','tingling','numb','weakness','paresthesia','radiculopathy'))
-    _bladder = any(t in normalized_query.lower() for t in ('bladder','bowel','incontinence'))
+    normalized_lower = normalized_query.lower()
+    _spine_pain = any(
+        term in normalized_lower
+        for term in (
+            "back pain",
+            "back hurts",
+            "back ache",
+            "backache",
+            "neck pain",
+            "neck hurts",
+            "spine",
+            "spinal",
+            "cervical",
+            "lumbar",
+            "disc",
+            "herniated",
+            "sciatica",
+        )
+    )
+    _limb_neuro = any(
+        term in normalized_lower
+        for term in (
+            "numbness",
+            "tingling",
+            "numb",
+            "weakness",
+            "paresthesia",
+            "radiculopathy",
+        )
+    )
+    _bladder = any(
+        term in normalized_lower for term in ("bladder", "bowel", "incontinence")
+    )
     if _spine_pain and _limb_neuro:
-        _floor = 'high' if _bladder else 'medium'
-        triage_level = max(triage_level, _floor, key=lambda l: {'low':0,'medium':1,'high':2}[l])
+        _floor = "high" if _bladder else "medium"
+        level_rank = {"low": 0, "medium": 1, "high": 2}
+        triage_level = max(
+            triage_level,
+            _floor,
+            key=lambda level: level_rank[level],
+        )
     settings = get_settings()
 
     age_context = _get_age_context(age)
-    retrieval_query = f"{normalized_query} {age_context}" if age_context else normalized_query
+    retrieval_query = (
+        f"{normalized_query} {age_context}" if age_context else normalized_query
+    )
 
     contexts = get_retriever().retrieve(retrieval_query, top_k=settings.rag_top_k)
     chunks = get_retriever().retrieve_chunks(retrieval_query, top_k=settings.rag_top_k)
@@ -607,13 +682,19 @@ def triage(
     )
     actions = _build_actions(triage_level)
 
-    summary_text = summary.clinical_summary if hasattr(summary, 'clinical_summary') else str(summary)
+    summary_text = (
+        summary.clinical_summary
+        if hasattr(summary, "clinical_summary")
+        else str(summary)
+    )
     simple_reasoning = simplify_reasoning(summary_text)
     recommended_specialty = get_recommended_specialty(normalized_query, summary_text)
-    rag_context_str = " ".join([
-        (str(getattr(c, 'title', '') or '') + " " + str(getattr(c, 'body', '') or '')[:200]).strip()
-        for c in contexts
-    ]) if contexts else ""
+    rag_context_parts = []
+    for context in contexts:
+        title = str(getattr(context, "title", "") or "")
+        body = str(getattr(context, "body", "") or "")[:200]
+        rag_context_parts.append(f"{title} {body}".strip())
+    rag_context_str = " ".join(rag_context_parts) if contexts else ""
     suspected_condition = get_suspected_condition(
         normalized_query,
         summary_text,
@@ -627,39 +708,181 @@ def triage(
         else get_recommended_specialty(normalized_query, summary_text)
     )
     # Snap specialty to valid Alexandria list
-    _VALID = ['Cardiology','Neurology','Neurosurgery','Internal Medicine','Gastroenterology','Dermatology','Psychiatry','Ophthalmology','Orthopedics','ENT','Pediatrics','Family Medicine']
-    _SNAP = {'physical medicine':'Orthopedics','rehabilitation':'Orthopedics','pmr':'Orthopedics','rheumatology':'Internal Medicine','pulmonology':'Internal Medicine','general practice':'Family Medicine','vascular':'Cardiology','spine':'Orthopedics','orthopedic':'Orthopedics','cardiac':'Cardiology','heart':'Cardiology','skin':'Dermatology','mental':'Psychiatry','psychological':'Psychiatry','eye':'Ophthalmology','vision':'Ophthalmology','ear':'ENT','nose':'ENT','throat':'ENT','hearing':'ENT','tinnitus':'ENT','ringing in my ears':'ENT','nosebleed':'ENT','earache':'ENT','sore throat':'ENT','swallowing':'ENT','voice':'ENT','losing my hearing':'ENT','blocked ear':'ENT','ear pain':'ENT','throat closing':'ENT','cannot swallow':'ENT','trouble swallowing':'ENT','child':'Pediatrics','stomach':'Gastroenterology','liver':'Gastroenterology','vomiting blood':'Gastroenterology','blood in stool':'Gastroenterology','yellow skin':'Gastroenterology','yellow eyes':'Gastroenterology','jaundice':'Gastroenterology','bowel':'Gastroenterology','rectal':'Gastroenterology','hepatitis':'Gastroenterology','abdominal':'Gastroenterology','diarrhea':'Gastroenterology','constipated':'Gastroenterology','indigestion':'Gastroenterology','neuro':'Neurology','neurosurg':'Neurosurgery','urology':'Internal Medicine','gynecology':'Internal Medicine','oncology':'Internal Medicine','endocrinology':'Internal Medicine'}
+    _VALID = [
+        "Cardiology",
+        "Neurology",
+        "Neurosurgery",
+        "Internal Medicine",
+        "Gastroenterology",
+        "Dermatology",
+        "Psychiatry",
+        "Ophthalmology",
+        "Orthopedics",
+        "ENT",
+        "Pediatrics",
+        "Family Medicine",
+    ]
+    _SNAP = {
+        "physical medicine": "Orthopedics",
+        "rehabilitation": "Orthopedics",
+        "pmr": "Orthopedics",
+        "rheumatology": "Internal Medicine",
+        "pulmonology": "Internal Medicine",
+        "general practice": "Family Medicine",
+        "vascular": "Cardiology",
+        "spine": "Orthopedics",
+        "orthopedic": "Orthopedics",
+        "cardiac": "Cardiology",
+        "heart": "Cardiology",
+        "skin": "Dermatology",
+        "mental": "Psychiatry",
+        "psychological": "Psychiatry",
+        "eye": "Ophthalmology",
+        "vision": "Ophthalmology",
+        "ear": "ENT",
+        "nose": "ENT",
+        "throat": "ENT",
+        "hearing": "ENT",
+        "tinnitus": "ENT",
+        "ringing in my ears": "ENT",
+        "nosebleed": "ENT",
+        "earache": "ENT",
+        "sore throat": "ENT",
+        "swallowing": "ENT",
+        "voice": "ENT",
+        "losing my hearing": "ENT",
+        "blocked ear": "ENT",
+        "ear pain": "ENT",
+        "throat closing": "ENT",
+        "cannot swallow": "ENT",
+        "trouble swallowing": "ENT",
+        "child": "Pediatrics",
+        "stomach": "Gastroenterology",
+        "liver": "Gastroenterology",
+        "vomiting blood": "Gastroenterology",
+        "blood in stool": "Gastroenterology",
+        "yellow skin": "Gastroenterology",
+        "yellow eyes": "Gastroenterology",
+        "jaundice": "Gastroenterology",
+        "bowel": "Gastroenterology",
+        "rectal": "Gastroenterology",
+        "hepatitis": "Gastroenterology",
+        "abdominal": "Gastroenterology",
+        "diarrhea": "Gastroenterology",
+        "constipated": "Gastroenterology",
+        "indigestion": "Gastroenterology",
+        "neuro": "Neurology",
+        "neurosurg": "Neurosurgery",
+        "urology": "Internal Medicine",
+        "gynecology": "Internal Medicine",
+        "oncology": "Internal Medicine",
+        "endocrinology": "Internal Medicine",
+    }
     if recommended_specialty:
         import re as _re
-        recommended_specialty = _re.split(r' or |and/or|/|,|;', recommended_specialty, maxsplit=1)[0].strip()
-        recommended_specialty = recommended_specialty.split('(')[0].strip()
+
+        recommended_specialty = _re.split(
+            r" or |and/or|/|,|;",
+            recommended_specialty,
+            maxsplit=1,
+        )[0].strip()
+        recommended_specialty = recommended_specialty.split("(")[0].strip()
     # If query mentions child/baby/toddler, override to Pediatrics
     # Condition-based specialty override
-    _cond_text = (getattr(summary,'clinical_summary','') or '').lower() + ' ' + ' '.join([getattr(c,'name','') for c in getattr(summary,'possible_conditions',[])]).lower()
+    possible_condition_names = [
+        getattr(condition, "name", "")
+        for condition in getattr(summary, "possible_conditions", [])
+    ]
+    _cond_text = (
+        (getattr(summary, "clinical_summary", "") or "").lower()
+        + " "
+        + " ".join(possible_condition_names).lower()
+    )
     _COND_MAP = {
-        'tonsillitis':'ENT','pharyngitis':'ENT','laryngitis':'ENT','otitis':'ENT','sinusitis':'ENT','epistaxis':'ENT','tinnitus':'ENT','hearing loss':'ENT',
-        'conjunctivitis':'Ophthalmology','glaucoma':'Ophthalmology','cataract':'Ophthalmology','uveitis':'Ophthalmology','keratitis':'Ophthalmology',
-        'appendicitis':'Gastroenterology','cholecystitis':'Gastroenterology','pancreatitis':'Gastroenterology','gastritis':'Gastroenterology','colitis':'Gastroenterology','cirrhosis':'Gastroenterology',
-        'radiculopathy':'Orthopedics','herniated':'Orthopedics','fracture':'Orthopedics','tendinitis':'Orthopedics','sciatica':'Orthopedics','scoliosis':'Orthopedics','arthritis':'Orthopedics',
-        'meningitis':'Neurology','migraine':'Neurology','epilepsy':'Neurology','parkinson':'Neurology','neuropathy':'Neurology','encephalitis':'Neurology','dementia':'Neurology',
-        'depression':'Psychiatry','anxiety disorder':'Psychiatry','schizophrenia':'Psychiatry','bipolar':'Psychiatry','ocd':'Psychiatry','psychosis':'Psychiatry',
-        'eczema':'Dermatology','psoriasis':'Dermatology','melanoma':'Dermatology','cellulitis':'Dermatology','dermatitis':'Dermatology',
-        'bronchiolitis':'Pediatrics','croup':'Pediatrics','kawasaki':'Pediatrics',
-        'myocarditis':'Cardiology','arrhythmia':'Cardiology','heart failure':'Cardiology','angina':'Cardiology','pericarditis':'Cardiology','anaphylaxis':'Dermatology','urticaria':'Dermatology','hives':'Dermatology',
-        'diabetes':'Internal Medicine','hypertension':'Internal Medicine','anemia':'Internal Medicine','pneumonia':'Internal Medicine','bronchitis':'Internal Medicine',
+        "tonsillitis": "ENT",
+        "pharyngitis": "ENT",
+        "laryngitis": "ENT",
+        "otitis": "ENT",
+        "sinusitis": "ENT",
+        "epistaxis": "ENT",
+        "tinnitus": "ENT",
+        "hearing loss": "ENT",
+        "conjunctivitis": "Ophthalmology",
+        "glaucoma": "Ophthalmology",
+        "cataract": "Ophthalmology",
+        "uveitis": "Ophthalmology",
+        "keratitis": "Ophthalmology",
+        "appendicitis": "Gastroenterology",
+        "cholecystitis": "Gastroenterology",
+        "pancreatitis": "Gastroenterology",
+        "gastritis": "Gastroenterology",
+        "colitis": "Gastroenterology",
+        "cirrhosis": "Gastroenterology",
+        "radiculopathy": "Orthopedics",
+        "herniated": "Orthopedics",
+        "fracture": "Orthopedics",
+        "tendinitis": "Orthopedics",
+        "sciatica": "Orthopedics",
+        "scoliosis": "Orthopedics",
+        "arthritis": "Orthopedics",
+        "meningitis": "Neurology",
+        "migraine": "Neurology",
+        "epilepsy": "Neurology",
+        "parkinson": "Neurology",
+        "neuropathy": "Neurology",
+        "encephalitis": "Neurology",
+        "dementia": "Neurology",
+        "depression": "Psychiatry",
+        "anxiety disorder": "Psychiatry",
+        "schizophrenia": "Psychiatry",
+        "bipolar": "Psychiatry",
+        "ocd": "Psychiatry",
+        "psychosis": "Psychiatry",
+        "eczema": "Dermatology",
+        "psoriasis": "Dermatology",
+        "melanoma": "Dermatology",
+        "cellulitis": "Dermatology",
+        "dermatitis": "Dermatology",
+        "bronchiolitis": "Pediatrics",
+        "croup": "Pediatrics",
+        "kawasaki": "Pediatrics",
+        "myocarditis": "Cardiology",
+        "arrhythmia": "Cardiology",
+        "heart failure": "Cardiology",
+        "angina": "Cardiology",
+        "pericarditis": "Cardiology",
+        "anaphylaxis": "Dermatology",
+        "urticaria": "Dermatology",
+        "hives": "Dermatology",
+        "diabetes": "Internal Medicine",
+        "hypertension": "Internal Medicine",
+        "anemia": "Internal Medicine",
+        "pneumonia": "Internal Medicine",
+        "bronchitis": "Internal Medicine",
     }
     for _cond, _spec in _COND_MAP.items():
         if _cond in _cond_text:
             recommended_specialty = _spec
             break
-    _child_terms = ('my baby','my child','my toddler','my infant','year old','years old','month old')
+    _child_terms = (
+        "my baby",
+        "my child",
+        "my toddler",
+        "my infant",
+        "year old",
+        "years old",
+        "month old",
+    )
     if any(t in normalized_query.lower() for t in _child_terms):
-        recommended_specialty = 'Pediatrics'
+        recommended_specialty = "Pediatrics"
     if recommended_specialty not in _VALID:
-        _lower = (recommended_specialty or '').lower()
-        recommended_specialty = next((v for k, v in _SNAP.items() if k in _lower), 'Internal Medicine')
-    if recommended_specialty == 'Family Medicine':
-        recommended_specialty = 'Internal Medicine'
+        _lower = (recommended_specialty or "").lower()
+        recommended_specialty = next(
+            (value for key, value in _SNAP.items() if key in _lower),
+            "Internal Medicine",
+        )
+    if recommended_specialty == "Family Medicine":
+        recommended_specialty = "Internal Medicine"
 
     suggested_doctors = (
         get_suggested_doctors(db, recommended_specialty)
@@ -668,7 +891,8 @@ def triage(
     )
 
     logger.info(
-        "triage_completed triage_level=%s query_length=%s contexts=%s specialty=%s condition=%s",
+        "triage_completed triage_level=%s query_length=%s contexts=%s "
+        "specialty=%s condition=%s",
         triage_level,
         len(normalized_query),
         len(contexts),
@@ -679,16 +903,44 @@ def triage(
     return TriageResponse(
         triage_level=triage_level,
         urgency_level=triage_level,
-        urgency_label="High" if triage_level == "high" else "Medium" if triage_level == "medium" else "Low",
-        urgency_reason=(summary.clinical_summary[:300] if hasattr(summary, 'clinical_summary') and summary.clinical_summary else ' '.join(summary.red_flags[:2]) if hasattr(summary, 'red_flags') and summary.red_flags else normalized_query),
+        urgency_label=(
+            "High"
+            if triage_level == "high"
+            else "Medium" if triage_level == "medium" else "Low"
+        ),
+        urgency_reason=(
+            summary.clinical_summary[:300]
+            if hasattr(summary, "clinical_summary") and summary.clinical_summary
+            else (
+                " ".join(summary.red_flags[:2])
+                if hasattr(summary, "red_flags") and summary.red_flags
+                else normalized_query
+            )
+        ),
         summary=summary_text,
         clinical_summary=summary_text,
         simple_reasoning=simple_reasoning,
-        plain_language_explanation=summary.patient_friendly_explanation if hasattr(summary, 'patient_friendly_explanation') else simple_reasoning,
-        patient_friendly_explanation=summary.patient_friendly_explanation if hasattr(summary, 'patient_friendly_explanation') else simple_reasoning,
-        actions=summary.recommended_actions if hasattr(summary, 'recommended_actions') and summary.recommended_actions else actions,
-        recommended_actions=summary.recommended_actions if hasattr(summary, 'recommended_actions') else actions,
-        red_flags=summary.red_flags if hasattr(summary, 'red_flags') else [],
+        plain_language_explanation=(
+            summary.patient_friendly_explanation
+            if hasattr(summary, "patient_friendly_explanation")
+            else simple_reasoning
+        ),
+        patient_friendly_explanation=(
+            summary.patient_friendly_explanation
+            if hasattr(summary, "patient_friendly_explanation")
+            else simple_reasoning
+        ),
+        actions=(
+            summary.recommended_actions
+            if hasattr(summary, "recommended_actions") and summary.recommended_actions
+            else actions
+        ),
+        recommended_actions=(
+            summary.recommended_actions
+            if hasattr(summary, "recommended_actions")
+            else actions
+        ),
+        red_flags=summary.red_flags if hasattr(summary, "red_flags") else [],
         recommended_specialty=recommended_specialty,
         specialty_reason=(
             f"Recommended based on the most likely condition: {recommended_specialty}."
@@ -697,10 +949,32 @@ def triage(
         ),
         suspected_condition=suspected_condition,
         suspected_conditions=[
-            {'name': getattr(c,'name',''), 'likelihood': (['more likely','possible','less likely']+['less likely']*10)[i], 'explanation': getattr(c,'explanation','')}
-            for i, c in enumerate(summary.possible_conditions if hasattr(summary,'possible_conditions') else [])
+            {
+                "name": getattr(condition, "name", ""),
+                "likelihood": (
+                    ["more likely", "possible", "less likely"] + ["less likely"] * 10
+                )[index],
+                "explanation": getattr(condition, "explanation", ""),
+            }
+            for index, condition in enumerate(
+                summary.possible_conditions
+                if hasattr(summary, "possible_conditions")
+                else []
+            )
         ],
-        supporting_references=[{'title': c.title, 'source': c.source, 'url': c.url, 'snippet': c.text[:400] if c.text else ''} for c in chunks] if chunks else [],
+        supporting_references=(
+            [
+                {
+                    "title": chunk.title,
+                    "source": chunk.source,
+                    "url": chunk.url,
+                    "snippet": chunk.text[:400] if chunk.text else "",
+                }
+                for chunk in chunks
+            ]
+            if chunks
+            else []
+        ),
         suggested_doctors=suggested_doctors,
         history_used=history_used,
         disclaimer=(
@@ -708,24 +982,3 @@ def triage(
             "emergency, seek immediate care."
         ),
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
