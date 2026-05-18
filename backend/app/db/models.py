@@ -110,6 +110,14 @@ class PatientProfile(Base):
     medical_history: Mapped[list["MedicalHistory"]] = relationship(
         back_populates="patient"
     )
+    structured_history: Mapped[list["PatientMedicalHistoryEntry"]] = relationship(
+        back_populates="patient",
+        cascade="all, delete-orphan",
+    )
+    lab_results: Mapped[list["PatientLabResult"]] = relationship(
+        back_populates="patient",
+        cascade="all, delete-orphan",
+    )
     symptom_links: Mapped[list["PatientSymptom"]] = relationship(
         back_populates="patient",
         cascade="all, delete-orphan",
@@ -498,6 +506,50 @@ class MedicalHistory(Base):
     appointment: Mapped[Appointment | None] = relationship(
         back_populates="medical_history_entries"
     )
+
+
+class PatientMedicalHistoryEntry(Base):
+    __tablename__ = "patient_medical_history_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("patient_profiles.id", ondelete="CASCADE"),
+        index=True,
+    )
+    category: Mapped[str] = mapped_column(String(60), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    occurred_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    patient: Mapped[PatientProfile] = relationship(back_populates="structured_history")
+
+
+class PatientLabResult(Base):
+    __tablename__ = "patient_lab_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    patient_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("patient_profiles.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    lab_name: Mapped[str] = mapped_column(String(120), index=True)
+    value: Mapped[str] = mapped_column(String(60))
+    unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    reference_range: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    patient: Mapped[PatientProfile | None] = relationship(back_populates="lab_results")
 
 
 class TriageAssessment(Base):

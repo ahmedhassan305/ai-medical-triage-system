@@ -9,6 +9,7 @@ import type {
   RoleType,
   VisitResponseDto,
 } from "../api/dto";
+import { createPatientMedicalHistoryEntry } from "../api/patients";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
 import {
   composeDoctorSpecialty,
@@ -648,6 +649,11 @@ export default function ProfilePanel({
   const [chronicConditionsInput, setChronicConditionsInput] = useState(
     patientProfile?.chronic_conditions.join(", ") ?? "",
   );
+  const [historyCategory, setHistoryCategory] = useState("diagnosed_condition");
+  const [historyTitle, setHistoryTitle] = useState("");
+  const [historyNotes, setHistoryNotes] = useState("");
+  const [historySaving, setHistorySaving] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState<string | null>(null);
 
   const parsedNationalId = useMemo(
     () =>
@@ -692,6 +698,32 @@ export default function ProfilePanel({
       area: doctorForm.area?.trim() || null,
       city: doctorForm.city?.trim() || null,
     });
+  }
+
+  async function submitMedicalHistoryEntry(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!patientProfile || !historyTitle.trim()) {
+      return;
+    }
+    setHistorySaving(true);
+    setHistoryMessage(null);
+    try {
+      await createPatientMedicalHistoryEntry(patientProfile.id, {
+        category: historyCategory,
+        title: historyTitle.trim(),
+        notes: historyNotes.trim() || null,
+        status: "active",
+      });
+      setHistoryTitle("");
+      setHistoryNotes("");
+      setHistoryMessage("Medical history entry saved.");
+    } catch {
+      setHistoryMessage("Could not save medical history entry.");
+    } finally {
+      setHistorySaving(false);
+    }
   }
 
   const dateOfBirth =
@@ -897,6 +929,67 @@ export default function ProfilePanel({
               }
             >
               {savingPatient ? "Saving..." : "Save patient profile"}
+            </button>
+          </form>
+        </SectionPanel>
+      ) : null}
+
+      {role === "patient" && patientProfile ? (
+        <SectionPanel
+          eyebrow="Medical history"
+          title="Important history entries"
+          description="Add structured details that should inform future triage, such as diagnosed conditions, injuries, surgeries, allergies, medications, hospitalizations, and family history."
+        >
+          <form className="form-grid" onSubmit={submitMedicalHistoryEntry}>
+            <div className="field">
+              <label htmlFor="history-category">Category</label>
+              <select
+                id="history-category"
+                value={historyCategory}
+                onChange={(event) => setHistoryCategory(event.target.value)}
+              >
+                <option value="diagnosed_condition">Diagnosed condition</option>
+                <option value="injury">Injury</option>
+                <option value="surgery">Surgery</option>
+                <option value="allergy">Allergy</option>
+                <option value="medication">Current medication</option>
+                <option value="hospitalization">Past hospitalization</option>
+                <option value="family_history">Family history</option>
+                <option value="note">Important note</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="history-title">Title</label>
+              <input
+                id="history-title"
+                value={historyTitle}
+                onChange={(event) => setHistoryTitle(event.target.value)}
+                placeholder="Asthma, knee injury, penicillin allergy..."
+              />
+            </div>
+
+            <div className="field field--full">
+              <label htmlFor="history-notes">Notes</label>
+              <textarea
+                id="history-notes"
+                rows={3}
+                value={historyNotes}
+                onChange={(event) => setHistoryNotes(event.target.value)}
+                placeholder="Add timing, severity, treatment, or relevant context."
+              />
+            </div>
+
+            {historyMessage ? (
+              <div className="notice field--full">{historyMessage}</div>
+            ) : null}
+
+            <button
+              type="submit"
+              className="button button--primary"
+              disabled={historySaving || !historyTitle.trim()}
+            >
+              {historySaving ? "Saving..." : "Add history entry"}
             </button>
           </form>
         </SectionPanel>

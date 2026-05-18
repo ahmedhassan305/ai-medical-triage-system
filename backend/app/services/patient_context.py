@@ -7,7 +7,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import PatientProfile, Visit
+from app.db.models import Appointment, PatientLabResult, PatientProfile, Visit
 from app.rag.embedding_model import get_embedding_model
 
 
@@ -172,6 +172,21 @@ class PatientContextProvider:
             .limit(self.visit_limit)
             .all()
         )
+        appointments = (
+            db.query(Appointment)
+            .filter(Appointment.patient_id == patient_id)
+            .order_by(Appointment.requested_at.desc())
+            .limit(5)
+            .all()
+        )
+        history_entries = list(patient.structured_history or [])[:10]
+        lab_results = (
+            db.query(PatientLabResult)
+            .filter(PatientLabResult.patient_id == patient_id)
+            .order_by(PatientLabResult.uploaded_at.desc())
+            .limit(12)
+            .all()
+        )
 
         # Score visits using expanded similarity
         ranked = sorted(
@@ -230,6 +245,38 @@ class PatientContextProvider:
             )
 
         context_parts = [demographics]
+        if history_entries:
+            context_parts.append(
+                "=== STRUCTURED PATIENT HISTORY ===\n"
+                + "\n".join(
+                    (
+                        f"  - {entry.category}: {entry.title}"
+                        f" ({entry.status or 'status unknown'})"
+                        f" | Notes: {entry.notes or 'n/a'}"
+                    )
+                    for entry in history_entries
+                )
+            )
+        if lab_results:
+            context_parts.append(
+                "=== RECENT LAB VALUES ===\n"
+                + "\n".join(
+                    (f"  - {lab.lab_name}: {lab.value}" f" {lab.unit or ''}".strip())
+                    for lab in lab_results
+                )
+            )
+        if appointments:
+            context_parts.append(
+                "=== RECENT APPOINTMENT CONTEXT ===\n"
+                + "\n".join(
+                    (
+                        f"  - Appointment #{appointment.id}: "
+                        f"{appointment.status}, "
+                        f"{appointment.reason}"
+                    )
+                    for appointment in appointments
+                )
+            )
         if visit_lines:
             context_parts.append(
                 "=== RELEVANT MEDICAL HISTORY ===\n"
