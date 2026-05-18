@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   ManagedPatientProfileCreateDto,
+  PatientMedicalHistoryEntryCreateDto,
+  PatientMedicalHistoryEntryResponseDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
 } from "./dto";
@@ -42,6 +44,26 @@ export async function createManagedPatientProfile(
 ): Promise<PatientProfileResponseDto> {
   const response = await api.post<PatientProfileResponseDto>(
     apiPaths.patients.create,
+    payload,
+  );
+  return response.data;
+}
+
+export async function listPatientMedicalHistory(
+  patientId: number,
+): Promise<PatientMedicalHistoryEntryResponseDto[]> {
+  const response = await api.get<PatientMedicalHistoryEntryResponseDto[]>(
+    apiPaths.patients.medicalHistory(patientId),
+  );
+  return response.data;
+}
+
+export async function createPatientMedicalHistoryEntry(
+  patientId: number,
+  payload: PatientMedicalHistoryEntryCreateDto,
+): Promise<PatientMedicalHistoryEntryResponseDto> {
+  const response = await api.post<PatientMedicalHistoryEntryResponseDto>(
+    apiPaths.patients.medicalHistory(patientId),
     payload,
   );
   return response.data;

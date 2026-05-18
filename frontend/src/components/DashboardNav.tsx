@@ -1,4 +1,5 @@
 import type { RoleType, UserResponseDto } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 
 export type DashboardTab =
   | "overview"
@@ -17,21 +18,21 @@ type DashboardNavProps = {
 
 type NavItem = {
   id: DashboardTab;
-  label: string;
+  label: Parameters<ReturnType<typeof useLanguage>["t"]>[0];
   roles: RoleType[];
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "overview", label: "Overview", roles: ["patient", "doctor", "admin"] },
-  { id: "profile", label: "Profile", roles: ["patient", "doctor", "admin"] },
-  { id: "triage", label: "Triage", roles: ["patient", "doctor", "admin"] },
+  { id: "overview", label: "navOverview", roles: ["patient", "doctor", "admin"] },
+  { id: "profile", label: "navProfile", roles: ["patient", "doctor", "admin"] },
+  { id: "triage", label: "navTriage", roles: ["patient", "doctor", "admin"] },
   {
     id: "appointments",
-    label: "Appointments",
+    label: "navAppointments",
     roles: ["patient", "doctor", "admin"],
   },
-  { id: "visits", label: "Visits", roles: ["patient", "doctor", "admin"] },
-  { id: "records", label: "Records", roles: ["doctor", "admin"] },
+  { id: "visits", label: "navVisits", roles: ["patient", "doctor", "admin"] },
+  { id: "records", label: "navRecords", roles: ["doctor", "admin"] },
 ];
 
 export default function DashboardNav({
@@ -40,13 +41,14 @@ export default function DashboardNav({
   onSelectTab,
   onLogout,
 }: DashboardNavProps) {
+  const { language, setLanguage, t } = useLanguage();
   const items = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
   const roleWorkspaceLabel =
     user.role === "admin"
-      ? "Operations control center"
+      ? t("operationsControlCenter")
       : user.role === "doctor"
-        ? "Clinical workflow hub"
-        : "My care workspace";
+        ? t("clinicalWorkflowHub")
+        : t("myCareWorkspace");
   const roleWorkspaceCopy =
     user.role === "admin"
       ? "Coverage, approvals, and system posture."
@@ -74,13 +76,30 @@ export default function DashboardNav({
             className={selectedTab === item.id ? "is-active" : ""}
             onClick={() => onSelectTab(item.id)}
           >
-            {item.label}
+            {t(item.label)}
           </button>
         ))}
       </nav>
 
+      <div className="language-toggle" aria-label="Language">
+        <button
+          type="button"
+          className={language === "en" ? "is-active" : ""}
+          onClick={() => setLanguage("en")}
+        >
+          {t("languageEnglish")}
+        </button>
+        <button
+          type="button"
+          className={language === "ar" ? "is-active" : ""}
+          onClick={() => setLanguage("ar")}
+        >
+          {t("languageArabic")}
+        </button>
+      </div>
+
       <button type="button" className="button button--ghost" onClick={onLogout}>
-        Logout
+        {t("logout")}
       </button>
     </aside>
   );

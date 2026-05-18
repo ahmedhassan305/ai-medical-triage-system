@@ -21,12 +21,13 @@ import {
   upsertMyPatientProfile,
 } from "../api/patients";
 import { importRecords } from "../api/records";
-import { triage, type TriageResponse } from "../api/triage";
+import { extractLabPdf, triage, type TriageResponse } from "../api/triage";
 import { createVisit, listPatientVisits, listWorkspaceVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
   DoctorSuggestionDto,
   DoctorProfileResponseDto,
+  LabValueDto,
   ManagedPatientProfileCreateDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
@@ -48,6 +49,7 @@ import {
   buildAppointmentPrefill,
   type AppointmentPrefill,
 } from "../lib/appointmentPrefill";
+import { useLanguage } from "../i18n/useLanguage";
 import { clearSession, readSession, writeSession } from "../lib/session";
 
 function isStatus(error: unknown, statusCode: number): boolean {
@@ -55,6 +57,7 @@ function isStatus(error: unknown, statusCode: number): boolean {
 }
 
 export default function HomePage() {
+  const { t } = useLanguage();
   const [session, setSession] = useState<TokenResponseDto | null>(() => readSession());
   const [user, setUser] = useState<UserResponseDto | null>(null);
   const [patientProfile, setPatientProfile] =
@@ -88,6 +91,9 @@ export default function HomePage() {
 
   const [triageQuery, setTriageQuery] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResponse | null>(null);
+  const [triageLabValues, setTriageLabValues] = useState<LabValueDto[]>([]);
+  const [triageLabLoading, setTriageLabLoading] = useState(false);
+  const [triageLabError, setTriageLabError] = useState<string | null>(null);
   const [appointmentPrefill, setAppointmentPrefill] =
     useState<AppointmentPrefill | null>(null);
   const [triagePatientNationalId, setTriagePatientNationalId] = useState("");
@@ -389,12 +395,33 @@ export default function HomePage() {
     setTriageError(null);
     setTriageResult(null);
     try {
-      const result = await triage(triageQuery.trim(), selectedPatientId ?? undefined);
+      const result = await triage(
+        triageQuery.trim(),
+        selectedPatientId ?? undefined,
+        triageLabValues,
+      );
       setTriageResult(result);
     } catch (error) {
       setTriageError(getErrorMessage(error, "Failed to run triage."));
     } finally {
       setTriageLoading(false);
+    }
+  }
+
+  async function handleLabFileChange(file: File | null) {
+    setTriageLabError(null);
+    setTriageLabValues([]);
+    if (!file) {
+      return;
+    }
+    setTriageLabLoading(true);
+    try {
+      const extracted = await extractLabPdf(file, selectedPatientId ?? undefined);
+      setTriageLabValues(extracted.values);
+    } catch (error) {
+      setTriageLabError(getErrorMessage(error, "Failed to extract lab PDF."));
+    } finally {
+      setTriageLabLoading(false);
     }
   }
 
@@ -580,36 +607,36 @@ export default function HomePage() {
     { title: string; description: string }
   > = {
     overview: {
-      title: "Workspace overview",
+      title: t("workspaceOverview"),
       description:
         currentUser.role === "admin"
-          ? "Operational visibility across appointments, specialty coverage, and activity."
+          ? t("overviewAdminDescription")
           : currentUser.role === "doctor"
-            ? "A live clinician workspace for schedule review, visits, and patient workload."
-            : "A personal care workspace for your next appointment, triage guidance, and visit history.",
+            ? t("overviewDoctorDescription")
+            : t("overviewPatientDescription"),
     },
     profile: {
-      title: "Profile",
+      title: t("profileTitle"),
       description:
         currentUser.role === "admin"
-          ? "Review patients, doctors, appointments, and recent medical history from one operations workspace."
-          : "Keep role details accurate so triage, scheduling, and history stay aligned.",
+          ? t("profileAdminDescription")
+          : t("profileDescription"),
     },
     triage: {
-      title: "Triage",
-      description: "Describe symptoms to get urgency guidance, likely conditions, and doctor suggestions.",
+      title: t("triageTitle"),
+      description: t("triageDescription"),
     },
     appointments: {
-      title: "Appointments",
-      description: "Coordinate requests, approvals, and confirmed visits without leaving the workspace.",
+      title: t("appointmentsTitle"),
+      description: t("appointmentsDescription"),
     },
     visits: {
-      title: "Visits",
-      description: "Review clinical notes or create new visit records from the care workflow.",
+      title: t("visitsTitle"),
+      description: t("visitsDescription"),
     },
     records: {
-      title: "Records",
-      description: "Import external records into the structured visit history.",
+      title: t("recordsTitle"),
+      description: t("recordsDescription"),
     },
   };
 
@@ -666,7 +693,11 @@ export default function HomePage() {
             patientCreateLoading={triagePatientCreateLoading}
             patientCreateError={triagePatientCreateError}
             query={triageQuery}
+            labValues={triageLabValues}
+            labLoading={triageLabLoading}
+            labError={triageLabError}
             onQueryChange={setTriageQuery}
+            onLabFileChange={handleLabFileChange}
             onLookupNationalIdChange={setTriagePatientNationalId}
             onLookupPatient={handleLookupPatientByNationalId}
             onClearLinkedPatient={handleClearLinkedTriagePatient}
@@ -747,7 +778,7 @@ export default function HomePage() {
         <main className="dashboard-main">
           <header className="dashboard-main__header">
             <div>
-              <p className="dashboard-main__eyebrow">Live care workspace</p>
+              <p className="dashboard-main__eyebrow">{t("liveCareWorkspace")}</p>
               <h2>{tabMeta[selectedTab].title}</h2>
               <p className="dashboard-main__copy">
                 {tabMeta[selectedTab].description}
@@ -756,14 +787,14 @@ export default function HomePage() {
 
             <div className="status-bubble">
               <span>{currentUser.role.toUpperCase()}</span>
-              <strong>API connected</strong>
+              <strong>{t("apiConnected")}</strong>
             </div>
           </header>
 
           {pageError ? <div className="notice notice--error">{pageError}</div> : null}
 
           {dashboardLoading ? (
-            <div className="loading-card">Loading workspace...</div>
+            <div className="loading-card">{t("loadingWorkspace")}</div>
           ) : (
             renderPanel()
           )}

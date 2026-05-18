@@ -147,6 +147,57 @@ export type RecordsImportResultDto = {
 export type TriageRequestDto = {
   query: string;
   patient_id?: number;
+  lab_values?: LabValueDto[];
+};
+
+export type DoctorScheduleDto = {
+  id: number;
+  doctor_id: number;
+  doctor_clinic_id?: number | null;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  location_label?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DoctorScheduleCreateDto = Omit<
+  DoctorScheduleDto,
+  "id" | "doctor_id" | "created_at" | "updated_at"
+>;
+
+export type PatientMedicalHistoryEntryCreateDto = {
+  category: string;
+  title: string;
+  occurred_on?: string | null;
+  status?: string | null;
+  notes?: string | null;
+};
+
+export type PatientMedicalHistoryEntryResponseDto =
+  PatientMedicalHistoryEntryCreateDto & {
+    id: number;
+    patient_id: number;
+    created_at: string;
+    updated_at: string;
+  };
+
+export type LabValueDto = {
+  lab_name: string;
+  value: string;
+  unit?: string | null;
+  reference_range?: string | null;
+};
+
+export type LabPdfExtractionResponseDto = {
+  filename: string;
+  values: LabValueDto[];
+  warning: string;
 };
 
 export type DoctorSuggestionDto = {

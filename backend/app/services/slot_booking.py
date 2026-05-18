@@ -24,6 +24,11 @@ DEFAULT_DEMO_END_TIME = time(17, 0)
 OPEN_SLOT_STATUSES = {"open"}
 RESERVED_SLOT_STATUS = "reserved"
 BOOKED_SLOT_STATUS = "booked"
+DEFAULT_WORKING_DAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday")
+DEFAULT_START_TIME = time(9, 0)
+DEFAULT_BREAK_START = time(13, 0)
+DEFAULT_BREAK_END = time(14, 0)
+DEFAULT_END_TIME = time(17, 0)
 
 
 class SlotBookingError(Exception):
@@ -182,6 +187,67 @@ def _load_existing_slots(
         .all()
     )
     return {(slot.doctor_clinic_id, slot.start_at, slot.end_at): slot for slot in slots}
+
+
+def ensure_primary_doctor_clinic(db: Session, doctor: DoctorProfile) -> DoctorClinic:
+    existing = get_primary_doctor_clinic(db, doctor.id)
+    if existing is not None:
+        return existing
+    clinic = Clinic(
+        name=doctor.clinic or f"{doctor.full_name} Clinic",
+        area=doctor.area,
+        city=doctor.city,
+        is_active=True,
+    )
+    db.add(clinic)
+    db.flush()
+    link = DoctorClinic(
+        doctor_id=doctor.id,
+        clinic_id=clinic.id,
+        is_primary=True,
+        is_active=True,
+    )
+    db.add(link)
+    db.flush()
+    return link
+
+
+def ensure_demo_availability_for_doctor(db: Session, doctor: DoctorProfile) -> int:
+    doctor_clinic = ensure_primary_doctor_clinic(db, doctor)
+    existing_count = (
+        db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == doctor.id).count()
+    )
+    if existing_count:
+        return 0
+
+    created = 0
+    for day in DEFAULT_WORKING_DAYS:
+        for start_time, end_time in (
+            (DEFAULT_START_TIME, DEFAULT_BREAK_START),
+            (DEFAULT_BREAK_END, DEFAULT_END_TIME),
+        ):
+            db.add(
+                DoctorSchedule(
+                    doctor_id=doctor.id,
+                    doctor_clinic_id=doctor_clinic.id,
+                    day_of_week=day,
+                    start_time=start_time,
+                    end_time=end_time,
+                    slot_minutes=DEFAULT_SLOT_MINUTES,
+                    location_label=doctor_clinic.clinic.name,
+                    is_active=True,
+                )
+            )
+            created += 1
+    return created
+
+
+def ensure_demo_availability_for_all_doctors(db: Session) -> int:
+    created = 0
+    for doctor in db.query(DoctorProfile).order_by(DoctorProfile.id.asc()).all():
+        created += ensure_demo_availability_for_doctor(db, doctor)
+    db.commit()
+    return created
 
 
 def generate_slots_for_doctor(

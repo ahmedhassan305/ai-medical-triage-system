@@ -6,6 +6,7 @@ import type {
   TriageResponseDto,
   VisitResponseDto,
 } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import type { DashboardTab } from "./DashboardNav";
 
 type OverviewPanelProps = {
@@ -26,13 +27,6 @@ type QuickAction = {
   description: string;
   tab: DashboardTab;
   tone?: "primary" | "ghost";
-};
-
-const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
-  requested: "Requested",
-  approved: "Confirmed",
-  rejected: "Rejected",
-  completed: "Completed",
 };
 
 const REQUIRED_SPECIALTIES = [
@@ -101,8 +95,20 @@ function classForStatus(status: string): string {
   }
 }
 
-function appointmentStatusLabel(status: string): string {
-  return APPOINTMENT_STATUS_LABELS[status] || status;
+function appointmentStatusLabel(status: string, t: ReturnType<typeof useLanguage>["t"]): string {
+  if (status === "requested") {
+    return t("requested");
+  }
+  if (status === "approved") {
+    return t("confirmed");
+  }
+  if (status === "completed") {
+    return t("completed");
+  }
+  if (status === "rejected") {
+    return t("rejected");
+  }
+  return status;
 }
 
 function topDoctorForAppointment(
@@ -163,28 +169,29 @@ function normalizeStatus(status: string): "good" | "pending" | "problem" | "info
 }
 
 function primaryPatientAction(
+  t: ReturnType<typeof useLanguage>["t"],
   triageResult: TriageResponseDto | null,
   nextAppointment: AppointmentResponseDto | null,
 ): QuickAction {
   if (!triageResult) {
     return {
-      label: "Run triage",
-      description: "Start with symptom review to get urgency and specialty guidance.",
+      label: t("runTriage"),
+      description: t("runTriageActionCopy"),
       tab: "triage",
       tone: "primary",
     };
   }
   if (!nextAppointment) {
     return {
-      label: "Book appointment",
-      description: "Convert the latest triage result into a confirmed doctor follow-up.",
+      label: t("bookAppointment"),
+      description: t("bookAppointmentActionCopy"),
       tab: "appointments",
       tone: "primary",
     };
   }
   return {
-    label: "Prepare for appointment",
-    description: "Review the booking status and latest notes before the visit.",
+    label: t("prepareForAppointment"),
+    description: t("prepareAppointmentActionCopy"),
     tab: "appointments",
     tone: "primary",
   };
@@ -199,11 +206,13 @@ function QuickActions({
   actions: QuickAction[];
   onNavigate: (tab: DashboardTab) => void;
 }) {
+  const { t } = useLanguage();
+
   return (
     <section className="workspace-card workspace-card--actions">
       <div className="workspace-card__header">
         <div>
-          <p className="micro-label">Quick actions</p>
+          <p className="micro-label">{t("quickActions")}</p>
           <h3>{title}</h3>
         </div>
       </div>
@@ -270,13 +279,15 @@ function PatientOverview({
   triageResult: TriageResponseDto | null;
   onNavigate: (tab: DashboardTab) => void;
 }) {
+  const { t } = useLanguage();
+
   if (!patientProfile) {
     return (
       <div className="workspace-dashboard workspace-dashboard--patient">
         <section className="dashboard-hero dashboard-hero--patient">
           <div>
-            <p className="dashboard-hero__eyebrow">My care space</p>
-            <h3>Complete your patient profile to unlock triage and booking.</h3>
+            <p className="dashboard-hero__eyebrow">{t("myCareSpace")}</p>
+            <h3>{t("completeProfileTitle")}</h3>
             <p>
               Your profile links national ID details, visit history, and future doctor
               recommendations.
@@ -304,13 +315,13 @@ function PatientOverview({
     triageResult?.recommended_actions[0] ||
     "Run triage if symptoms change or you need a new recommendation.";
   const latestSuggestedDoctor = triageResult?.suggested_doctors[0] || null;
-  const primaryAction = primaryPatientAction(triageResult, nextAppointment);
+  const primaryAction = primaryPatientAction(t, triageResult, nextAppointment);
 
   return (
     <div className="workspace-dashboard workspace-dashboard--patient">
       <section className="dashboard-hero dashboard-hero--patient">
         <div>
-          <p className="dashboard-hero__eyebrow">My care space</p>
+          <p className="dashboard-hero__eyebrow">{t("myCareSpace")}</p>
           <h3>{patientProfile.full_name}, here is your next care step.</h3>
           <p>
             Keep appointments, triage guidance, and recent visit notes in one calm
@@ -323,7 +334,7 @@ function PatientOverview({
           <span className="hero-pill">
             {patientProfile.current_governorate ||
               patientProfile.inferred_governorate ||
-              "Governorate pending"}
+              t("governoratePending")}
           </span>
         </div>
       </section>
@@ -332,8 +343,8 @@ function PatientOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Care status</p>
-              <h3>Your current care summary</h3>
+              <p className="micro-label">{t("careStatus")}</p>
+              <h3>{t("currentCareSummary")}</h3>
             </div>
             <span className={`badge badge--${triageResult?.urgency_level || "neutral"}`}>
               {triageResult ? triageResult.urgency_level.toUpperCase() : "NO TRIAGE"}
@@ -341,30 +352,30 @@ function PatientOverview({
           </div>
           <div className="care-status-grid">
             <article className={`status-card status-card--${nextAppointment ? normalizeStatus(nextAppointment.status) : "info"}`}>
-              <span>Appointment</span>
+              <span>{t("appointment")}</span>
               <strong>
                 {nextAppointment
-                  ? appointmentStatusLabel(nextAppointment.status)
-                  : "No appointment booked"}
+                  ? appointmentStatusLabel(nextAppointment.status, t)
+                  : t("noAppointmentBooked")}
               </strong>
               <p>
                 {nextAppointment
                   ? formatDateTime(nextAppointment.scheduled_for)
-                  : "Book once you are ready to follow up."}
+                  : t("bookWhenReady")}
               </p>
             </article>
             <article className={`status-card status-card--${triageResult ? normalizeStatus(triageResult.urgency_level === "high" ? "rejected" : triageResult.urgency_level === "medium" ? "requested" : "approved") : "info"}`}>
-              <span>Latest triage</span>
-              <strong>{triageResult ? triageResult.urgency_label : "Not started"}</strong>
-              <p>{triageResult ? nextAction : "Run triage to get urgency guidance."}</p>
+              <span>{t("latestTriage")}</span>
+              <strong>{triageResult ? triageResult.urgency_label : t("notStarted")}</strong>
+              <p>{triageResult ? nextAction : t("runTriageGuidance")}</p>
             </article>
             <article className={`status-card status-card--${latestVisit ? "good" : "info"}`}>
-              <span>Visit history</span>
-              <strong>{latestVisit ? "History available" : "No visits yet"}</strong>
+              <span>{t("visitHistory")}</span>
+              <strong>{latestVisit ? t("historyAvailable") : t("noVisitsYet")}</strong>
               <p>
                 {latestVisit
-                  ? latestVisit.diagnosis || "Recent visit recorded."
-                  : "Doctor visit notes will appear here after your first consultation."}
+                  ? latestVisit.diagnosis || t("recentVisitRecorded")
+                  : t("visitNotesWillAppear")}
               </p>
             </article>
           </div>
@@ -383,16 +394,16 @@ function PatientOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Next appointment</p>
+              <p className="micro-label">{t("nextAppointment")}</p>
               <h3>
                 {nextAppointment
-                  ? appointmentStatusLabel(nextAppointment.status)
-                  : "No appointment booked yet"}
+                  ? appointmentStatusLabel(nextAppointment.status, t)
+                  : t("noAppointmentBookedYet")}
               </h3>
             </div>
             {nextAppointment ? (
               <span className={`badge badge--status-${nextAppointment.status}`}>
-                {appointmentStatusLabel(nextAppointment.status)}
+                {appointmentStatusLabel(nextAppointment.status, t)}
               </span>
             ) : null}
           </div>
@@ -401,7 +412,7 @@ function PatientOverview({
             <>
               <div className="status-track">
                 <div className={`status-track__step ${classForStatus("requested")}`}>
-                  <strong>Request submitted</strong>
+                  <strong>{t("requestSubmitted")}</strong>
                   <span>{formatDateTime(nextAppointment.requested_at)}</span>
                 </div>
                 <div
@@ -413,43 +424,43 @@ function PatientOverview({
                         : "is-pending"
                   }`}
                 >
-                  <strong>Clinic review</strong>
+                  <strong>{t("clinicReview")}</strong>
                   <span>
                     {nextAppointment.status === "approved"
-                      ? "Confirmed"
+                      ? t("confirmed")
                       : nextAppointment.status === "rejected"
-                        ? "Rejected"
-                        : "Awaiting review"}
+                        ? t("rejected")
+                        : t("awaitingReview")}
                   </span>
                 </div>
                 <div className="status-track__step is-pending">
-                  <strong>Visit day</strong>
+                  <strong>{t("visitDay")}</strong>
                   <span>{formatDateTime(nextAppointment.scheduled_for)}</span>
                 </div>
               </div>
               <div className="detail-list">
                 <div>
-                  <span>Doctor</span>
+                  <span>{t("doctor")}</span>
                   <strong>
                     {nextDoctor?.full_name || `Doctor #${nextAppointment.doctor_id}`}
                   </strong>
                 </div>
                 <div>
-                  <span>Specialty</span>
+                  <span>{t("specialty")}</span>
                   <strong>{nextDoctor?.specialty || "Specialty pending"}</strong>
                 </div>
                 <div>
-                  <span>Reason</span>
+                  <span>{t("reason")}</span>
                   <strong>{summarize(nextAppointment.reason)}</strong>
                 </div>
               </div>
             </>
           ) : (
             <EmptyPrompt
-              eyebrow="Booking"
+              eyebrow={t("bookAppointment")}
               title="You do not have an active appointment yet."
               body="Run triage to get a specialty recommendation, then reserve an appointment directly from the result."
-              actionLabel="Book appointment"
+              actionLabel={t("bookAppointment")}
               actionTab="appointments"
               onNavigate={onNavigate}
             />
@@ -459,11 +470,11 @@ function PatientOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Latest triage</p>
+              <p className="micro-label">{t("latestTriage")}</p>
               <h3>
                 {triageResult
                   ? triageResult.urgency_label
-                  : "No triage completed in this session"}
+                  : t("noTriageCompleted")}
               </h3>
             </div>
             {triageResult ? (
@@ -478,20 +489,20 @@ function PatientOverview({
               <p>{summarize(triageResult.patient_friendly_explanation, "")}</p>
               <div className="detail-list">
                 <div>
-                  <span>Recommended specialty</span>
+                  <span>{t("recommendedSpecialty")}</span>
                   <strong>
-                    {triageResult.recommended_specialty || "General Practice"}
+                    {triageResult.recommended_specialty || t("generalPractice")}
                   </strong>
                 </div>
                 <div>
-                  <span>Top next step</span>
+                  <span>{t("topNextStep")}</span>
                   <strong>{nextAction}</strong>
                 </div>
               </div>
               {latestSuggestedDoctor ? (
                 <div className="spotlight-inline">
                   <div>
-                    <span>Latest doctor recommendation</span>
+                    <span>{t("latestDoctorRecommendation")}</span>
                     <strong>{latestSuggestedDoctor.full_name}</strong>
                     <p>
                       {latestSuggestedDoctor.specialty}
@@ -512,10 +523,10 @@ function PatientOverview({
             </div>
           ) : (
             <EmptyPrompt
-              eyebrow="Triage"
-              title="No triage result yet."
+              eyebrow={t("triageTitle")}
+              title={t("noTriageResultYet")}
               body="Describe current symptoms to get urgency guidance, possible conditions, and doctor suggestions."
-              actionLabel="Run triage"
+              actionLabel={t("runTriage")}
               actionTab="triage"
               onNavigate={onNavigate}
             />
@@ -525,8 +536,8 @@ function PatientOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Latest visit</p>
-              <h3>{latestVisit ? "Recent clinical summary" : "No visit history yet"}</h3>
+              <p className="micro-label">{t("latestVisit")}</p>
+              <h3>{latestVisit ? t("recentClinicalSummary") : t("noVisitHistoryYet")}</h3>
             </div>
           </div>
 
@@ -534,22 +545,22 @@ function PatientOverview({
             <div className="stack-md">
               <div className="detail-list">
                 <div>
-                  <span>Recorded</span>
+                  <span>{t("recorded")}</span>
                   <strong>{formatDateTime(latestVisit.created_at)}</strong>
                 </div>
                 <div>
-                  <span>Diagnosis</span>
-                  <strong>{latestVisit.diagnosis || "Not recorded"}</strong>
+                  <span>{t("diagnosis")}</span>
+                  <strong>{latestVisit.diagnosis || t("notRecorded")}</strong>
                 </div>
               </div>
               <p>{summarize(latestVisit.notes || latestVisit.symptoms)}</p>
             </div>
           ) : (
             <EmptyPrompt
-              eyebrow="History"
-              title="No visit records are linked to your profile yet."
+              eyebrow={t("history")}
+              title={t("noVisitRecordsLinked")}
               body="Once a doctor creates a visit, the summary will appear here and improve future triage context."
-              actionLabel="View visits"
+              actionLabel={t("viewVisits")}
               actionTab="visits"
               onNavigate={onNavigate}
             />
@@ -557,30 +568,30 @@ function PatientOverview({
         </section>
 
         <QuickActions
-          title="Secondary actions"
+          title={t("secondaryActions")}
           onNavigate={onNavigate}
           actions={[
             {
-              label: "Book appointment",
+              label: t("bookAppointment"),
               description:
-                "Choose a doctor or continue from a triage recommendation.",
+                t("bookAppointmentActionCopy"),
               tab: "appointments",
             },
             {
-              label: "Run triage",
-              description: "Check urgency and get a specialty recommendation.",
+              label: t("runTriage"),
+              description: t("runTriageActionCopy"),
               tab: "triage",
             },
             {
-              label: "Update profile",
+              label: t("updateProfile"),
               description:
-                "Review national ID details, governorate, and chronic conditions.",
+                t("updateProfileCopy"),
               tab: "profile",
             },
             {
-              label: "View visits",
+              label: t("viewVisits"),
               description:
-                "Read your latest diagnoses, notes, and prescriptions.",
+                t("viewVisitsCopy"),
               tab: "visits",
             },
           ]}
@@ -603,12 +614,14 @@ function DoctorOverview({
   recentVisits: VisitResponseDto[];
   onNavigate: (tab: DashboardTab) => void;
 }) {
+  const { t } = useLanguage();
+
   if (!doctorProfile) {
     return (
       <div className="workspace-dashboard workspace-dashboard--doctor">
         <section className="dashboard-hero dashboard-hero--doctor dashboard-hero--warning">
           <div>
-            <p className="dashboard-hero__eyebrow">Clinician workspace</p>
+            <p className="dashboard-hero__eyebrow">{t("clinicalWorkflowHub")}</p>
             <h3>Complete your doctor profile to activate scheduling and patient workflows.</h3>
             <p>
               Your clinic and specialty details are required before appointment
@@ -626,7 +639,7 @@ function DoctorOverview({
 
         <div className="workspace-grid workspace-grid--doctor">
           <section className="workspace-card workspace-card--skeleton">
-            <p className="micro-label">Appointments</p>
+            <p className="micro-label">{t("appointmentsTitle")}</p>
             <h3>Scheduling activates after profile setup</h3>
             <p>
               Once your profile is complete, new appointment requests and approved
@@ -638,19 +651,19 @@ function DoctorOverview({
             onNavigate={onNavigate}
             actions={[
               {
-                label: "Complete profile",
+                label: t("completeProfile"),
                 description:
                   "Set your specialty and clinic so patients can find you.",
                 tab: "profile",
                 tone: "primary",
               },
               {
-                label: "Review appointments",
+                label: t("reviewAppointments"),
                 description: "Open the scheduling workspace after setup.",
                 tab: "appointments",
               },
               {
-                label: "Import records",
+                label: t("importRecords"),
                 description:
                   "Record imports become useful once patient work starts.",
                 tab: "records",
@@ -685,7 +698,7 @@ function DoctorOverview({
     <div className="workspace-dashboard workspace-dashboard--doctor">
       <section className="dashboard-hero dashboard-hero--doctor">
         <div>
-          <p className="dashboard-hero__eyebrow">Clinician workspace</p>
+          <p className="dashboard-hero__eyebrow">{t("clinicalWorkflowHub")}</p>
           <h3>{doctorProfile.full_name}</h3>
           <p>
             {doctorProfile.specialty} · {doctorProfile.clinic}
@@ -703,8 +716,8 @@ function DoctorOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Today's focus</p>
-              <h3>What needs your attention</h3>
+              <p className="micro-label">{t("todaysFocus")}</p>
+              <h3>{t("doctorHeroTitle")}</h3>
             </div>
           </div>
           <div className="care-status-grid">
@@ -713,7 +726,7 @@ function DoctorOverview({
                 pendingApprovals.length > 0 ? "pending" : "good"
               }`}
             >
-              <span>Pending approvals</span>
+              <span>{t("pendingApprovals")}</span>
               <strong>{pendingApprovals.length}</strong>
               <p>
                 {pendingApprovals.length > 0
@@ -726,7 +739,7 @@ function DoctorOverview({
                 upcomingAppointments.length > 0 ? "info" : "good"
               }`}
             >
-              <span>Confirmed appointments</span>
+              <span>{t("confirmedAppointments")}</span>
               <strong>{upcomingAppointments.length}</strong>
               <p>
                 {upcomingAppointments.length > 0
@@ -735,7 +748,7 @@ function DoctorOverview({
               </p>
             </article>
             <article className="status-card status-card--good">
-              <span>Active patient load</span>
+              <span>{t("activeWorkload")}</span>
               <strong>{uniquePatientLoad}</strong>
               <p>Distinct patients currently flowing through your workspace.</p>
             </article>
@@ -745,8 +758,8 @@ function DoctorOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Today and next</p>
-              <h3>Confirmed appointments</h3>
+              <p className="micro-label">{t("upcomingAppointments")}</p>
+              <h3>{t("confirmedAppointments")}</h3>
             </div>
             <button
               type="button"
@@ -771,7 +784,7 @@ function DoctorOverview({
                     </div>
                     <div className="activity-meta">
                       <span className={`badge badge--status-${appointment.status}`}>
-                        {appointmentStatusLabel(appointment.status)}
+                        {appointmentStatusLabel(appointment.status, t)}
                       </span>
                       <small>{formatDateTime(getAppointmentDisplayDate(appointment))}</small>
                     </div>
@@ -784,7 +797,7 @@ function DoctorOverview({
               eyebrow="Schedule"
               title="No upcoming appointments yet."
               body="As soon as patients book you or triage handoffs convert into requests, the schedule will appear here."
-              actionLabel="Review appointments"
+              actionLabel={t("reviewAppointments")}
               actionTab="appointments"
               onNavigate={onNavigate}
             />
@@ -794,7 +807,7 @@ function DoctorOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Pending approvals</p>
+              <p className="micro-label">{t("pendingApprovals")}</p>
               <h3>{pendingApprovals.length} requests awaiting your decision</h3>
             </div>
           </div>
@@ -834,8 +847,8 @@ function DoctorOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Recent visits created</p>
-              <h3>Latest clinical notes</h3>
+              <p className="micro-label">{t("recentVisits")}</p>
+              <h3>{t("recentVisitNotes")}</h3>
             </div>
           </div>
           {recentVisits.length > 0 ? (
@@ -863,7 +876,7 @@ function DoctorOverview({
               eyebrow="Visits"
               title="No visits have been documented yet."
               body="Create a visit after a consultation so symptoms, diagnosis, and prescriptions are stored in patient history."
-              actionLabel="Create visit"
+              actionLabel={t("createVisit")}
               actionTab="visits"
               onNavigate={onNavigate}
             />
@@ -873,8 +886,8 @@ function DoctorOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Completed work</p>
-              <h3>Recently finished appointments</h3>
+              <p className="micro-label">{t("completed")}</p>
+              <h3>{t("completed")}</h3>
             </div>
           </div>
           {completedAppointments.length > 0 ? (
@@ -908,29 +921,29 @@ function DoctorOverview({
         </section>
 
         <QuickActions
-          title="Workflow shortcuts"
+          title={t("workflowShortcuts")}
           onNavigate={onNavigate}
           actions={[
             {
-              label: "Review appointments",
-              description: "Approve or reject incoming requests quickly.",
+              label: t("reviewAppointments"),
+              description: t("manageAppointmentsCopy"),
               tab: "appointments",
               tone: "primary",
             },
             {
-              label: "Create visit",
-              description: "Capture symptoms, diagnosis, and prescriptions.",
+              label: t("createVisit"),
+              description: t("visitsDescription"),
               tab: "visits",
             },
             {
-              label: "Import records",
-              description: "Bring external visit records into patient history.",
+              label: t("importRecords"),
+              description: t("importRecordsCopy"),
               tab: "records",
             },
             {
-              label: "Update profile",
+              label: t("updateProfile"),
               description:
-                "Keep specialty and clinic details accurate for patient discovery.",
+                t("profileDescription"),
               tab: "profile",
             },
           ]}
@@ -953,6 +966,8 @@ function AdminOverview({
   recentVisits: VisitResponseDto[];
   onNavigate: (tab: DashboardTab) => void;
 }) {
+  const { t } = useLanguage();
+
   const coverage = countBySpecialty(doctors);
   const coverageMap = new Map(coverage);
   const demand = countAppointmentDemand(appointments, doctors);
@@ -1016,8 +1031,8 @@ function AdminOverview({
     <div className="workspace-dashboard workspace-dashboard--admin">
       <section className="dashboard-hero dashboard-hero--admin">
         <div>
-          <p className="dashboard-hero__eyebrow">Admin control center</p>
-          <h3>Operational command view for the care platform.</h3>
+          <p className="dashboard-hero__eyebrow">{t("adminControlCenter")}</p>
+          <h3>{t("adminHeroTitle")}</h3>
           <p>
             Watch appointment flow, doctor coverage, and recent workspace activity
             from one place.
@@ -1028,7 +1043,7 @@ function AdminOverview({
           <span className="hero-pill">{patients.length} patients registered</span>
           <span className="hero-pill">
             {weakCoverage.length === 0
-              ? "Coverage balanced"
+              ? t("coverageBalanced")
               : `${weakCoverage.length} specialties need attention`}
           </span>
         </div>
@@ -1038,8 +1053,8 @@ function AdminOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Action required</p>
-              <h3>Immediate operational priorities</h3>
+              <p className="micro-label">{t("actionRequired")}</p>
+              <h3>{t("immediatePriorities")}</h3>
             </div>
           </div>
           {actionAlerts.length > 0 ? (
@@ -1048,18 +1063,18 @@ function AdminOverview({
                 <article key={alert} className="activity-item">
                   <div>
                     <strong>{alert}</strong>
-                    <p>Use the admin actions below to resolve this quickly.</p>
+                    <p>{t("useAdminActions")}</p>
                   </div>
                   <div className="activity-meta">
-                    <span className="badge badge--status-rejected">attention</span>
+                    <span className="badge badge--status-rejected">{t("attention")}</span>
                   </div>
                 </article>
               ))}
             </div>
           ) : (
             <div className="empty-prompt empty-prompt--compact">
-              <h4>No urgent admin actions right now.</h4>
-              <p>The control center is stable across appointments, coverage, and records.</p>
+              <h4>{t("noUrgentAdminActions")}</h4>
+              <p>{t("controlCenterStable")}</p>
             </div>
           )}
         </section>
@@ -1067,8 +1082,8 @@ function AdminOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Admin actions</p>
-              <h3>Act on the workspace</h3>
+              <p className="micro-label">{t("adminActions")}</p>
+              <h3>{t("actOnWorkspace")}</h3>
             </div>
           </div>
           <div className="action-grid">
@@ -1077,32 +1092,32 @@ function AdminOverview({
               className="action-shortcut"
               onClick={() => onNavigate("appointments")}
             >
-              <strong>Manage appointments</strong>
-              <span>Review pending bookings, confirmations, and past activity.</span>
+              <strong>{t("manageAppointments")}</strong>
+              <span>{t("manageAppointmentsCopy")}</span>
             </button>
             <button
               type="button"
               className="action-shortcut action-shortcut--ghost"
               onClick={() => onNavigate("profile")}
             >
-              <strong>Review profiles</strong>
-              <span>Inspect patient and doctor records from the admin profile workspace.</span>
+              <strong>{t("reviewProfiles")}</strong>
+              <span>{t("reviewProfilesCopy")}</span>
             </button>
             <button
               type="button"
               className="action-shortcut action-shortcut--ghost"
               onClick={() => onNavigate("records")}
             >
-              <strong>Import records</strong>
-              <span>Bring in external medical history when staff need it.</span>
+              <strong>{t("importRecords")}</strong>
+              <span>{t("importRecordsCopy")}</span>
             </button>
             <button
               type="button"
               className="action-shortcut action-shortcut--ghost"
               onClick={() => onNavigate("triage")}
             >
-              <strong>Update doctor directory</strong>
-              <span>Open staff-assisted triage and review the doctor handoff experience.</span>
+              <strong>{t("updateDoctorDirectory")}</strong>
+              <span>{t("updateDoctorDirectoryCopy")}</span>
             </button>
           </div>
         </section>
@@ -1110,33 +1125,33 @@ function AdminOverview({
         <section className="workspace-card workspace-card--feature">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Top operational metrics</p>
-              <h3>Live system posture</h3>
+              <p className="micro-label">{t("topOperationalMetrics")}</p>
+              <h3>{t("liveSystemPosture")}</h3>
             </div>
           </div>
           <div className="admin-metric-grid">
             <article className="metric-card">
-              <span>Total patients</span>
+              <span>{t("totalPatients")}</span>
               <strong>{patients.length}</strong>
             </article>
             <article className="metric-card">
-              <span>Total doctors</span>
+              <span>{t("totalDoctors")}</span>
               <strong>{doctors.length}</strong>
             </article>
             <article className="metric-card">
-              <span>Pending appointments</span>
+              <span>{t("pendingAppointments")}</span>
               <strong>{appointmentsByStatus.requested}</strong>
             </article>
             <article className="metric-card">
-              <span>Confirmed appointments</span>
+              <span>{t("confirmedAppointments")}</span>
               <strong>{appointmentsByStatus.approved}</strong>
             </article>
             <article className="metric-card">
-              <span>Rejected appointments</span>
+              <span>{t("rejectedAppointments")}</span>
               <strong>{appointmentsByStatus.rejected}</strong>
             </article>
             <article className="metric-card">
-              <span>Recent visits</span>
+              <span>{t("recentVisits")}</span>
               <strong>{recentVisits.length}</strong>
             </article>
           </div>
@@ -1145,16 +1160,16 @@ function AdminOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Appointment funnel</p>
-              <h3>Status breakdown</h3>
+              <p className="micro-label">{t("appointmentFunnel")}</p>
+              <h3>{t("statusBreakdown")}</h3>
             </div>
           </div>
           <div className="funnel-list">
             {[
-              ["Requested", appointmentsByStatus.requested],
-              ["Confirmed", appointmentsByStatus.approved],
-              ["Completed", appointmentsByStatus.completed],
-              ["Rejected", appointmentsByStatus.rejected],
+              [t("requested"), appointmentsByStatus.requested],
+              [t("confirmed"), appointmentsByStatus.approved],
+              [t("completed"), appointmentsByStatus.completed],
+              [t("rejected"), appointmentsByStatus.rejected],
             ].map(([label, count]) => (
               <div key={label} className="funnel-row">
                 <span>{label}</span>
@@ -1178,17 +1193,17 @@ function AdminOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Coverage and demand</p>
-              <h3>Specialty balancing table</h3>
+              <p className="micro-label">{t("coverageAndDemand")}</p>
+              <h3>{t("specialtyBalancingTable")}</h3>
             </div>
           </div>
           {specialtyRows.length > 0 ? (
             <div className="ops-table">
               <div className="ops-table__header">
-                <span>Specialty</span>
-                <span>Doctors</span>
-                <span>Demand</span>
-                <span>Status</span>
+                <span>{t("specialty")}</span>
+                <span>{t("doctors")}</span>
+                <span>{t("demand")}</span>
+                <span>{t("status")}</span>
               </div>
               {specialtyRows.map((row) => (
                 <div key={row.specialty} className="ops-table__row">
@@ -1209,7 +1224,7 @@ function AdminOverview({
             </div>
           ) : (
             <div className="empty-prompt empty-prompt--compact">
-              <h4>No specialty balancing data yet.</h4>
+              <h4>{t("noSpecialtyData")}</h4>
               <p>
                 Coverage and demand will appear once appointments and doctor records are available.
               </p>
@@ -1220,13 +1235,13 @@ function AdminOverview({
         <section className="workspace-card workspace-card--activity-span">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Recent activity</p>
-              <h3>Registrations, additions, and care events</h3>
+              <p className="micro-label">{t("recentActivity")}</p>
+              <h3>{t("registrationsAdditionsEvents")}</h3>
             </div>
           </div>
           <div className="activity-columns">
             <div>
-              <h4>Recent patients</h4>
+              <h4>{t("recentPatients")}</h4>
               <div className="activity-list compact">
                 {recentPatients.slice(0, 3).map((patient) => (
                   <article key={patient.id} className="activity-item">
@@ -1235,7 +1250,7 @@ function AdminOverview({
                       <p>
                         {patient.current_governorate ||
                           patient.inferred_governorate ||
-                          "Governorate pending"}
+                          t("governoratePending")}
                       </p>
                     </div>
                     <div className="activity-meta">
@@ -1246,7 +1261,7 @@ function AdminOverview({
               </div>
             </div>
             <div>
-              <h4>Recent doctors</h4>
+              <h4>{t("recentDoctors")}</h4>
               <div className="activity-list compact">
                 {recentDoctors.slice(0, 3).map((doctor) => (
                   <article key={doctor.id} className="activity-item">
@@ -1262,13 +1277,13 @@ function AdminOverview({
               </div>
             </div>
             <div>
-              <h4>Recent appointments</h4>
+              <h4>{t("recentAppointments")}</h4>
               <div className="activity-list compact">
                 {recentAppointments.slice(0, 3).map((appointment) => (
                   <article key={appointment.id} className="activity-item">
                     <div>
                       <strong>{appointment.reason}</strong>
-                      <p>{appointmentStatusLabel(appointment.status)}</p>
+                      <p>{appointmentStatusLabel(appointment.status, t)}</p>
                     </div>
                     <div className="activity-meta">
                       <small>{formatDateTime(appointment.requested_at)}</small>
@@ -1278,12 +1293,12 @@ function AdminOverview({
               </div>
             </div>
             <div>
-              <h4>Recent visits</h4>
+              <h4>{t("recentVisits")}</h4>
               <div className="activity-list compact">
                 {recentVisits.slice(0, 3).map((visit) => (
                   <article key={visit.id} className="activity-item">
                     <div>
-                      <strong>{visit.diagnosis || "Visit note"}</strong>
+                      <strong>{visit.diagnosis || t("visitNote")}</strong>
                       <p>{summarize(visit.symptoms)}</p>
                     </div>
                     <div className="activity-meta">
@@ -1315,27 +1330,27 @@ function AdminOverview({
         <section className="workspace-card">
           <div className="workspace-card__header">
             <div>
-              <p className="micro-label">Workspace status</p>
-              <h3>System readiness</h3>
+              <p className="micro-label">{t("workspaceStatus")}</p>
+              <h3>{t("systemReadiness")}</h3>
             </div>
           </div>
           <div className="status-grid">
             <article className="status-card">
-              <span>Backend connection</span>
-              <strong>Connected</strong>
+              <span>{t("backendConnection")}</span>
+              <strong>{t("connected")}</strong>
               <p>The frontend is currently operating against the live API workspace.</p>
             </article>
             <article className="status-card">
-              <span>Doctor dataset</span>
-              <strong>{doctors.length >= 80 ? "Seed target reached" : "Seed target pending"}</strong>
+              <span>{t("doctorDataset")}</span>
+              <strong>{doctors.length >= 80 ? t("seedTargetReached") : t("seedTargetPending")}</strong>
               <p>
                 {doctors.length} doctors currently available for matching and booking
                 handoff.
               </p>
             </article>
             <article className="status-card">
-              <span>Coverage review</span>
-              <strong>{weakCoverage.length === 0 ? "Balanced" : "Needs follow-up"}</strong>
+              <span>{t("coverageReview")}</span>
+              <strong>{weakCoverage.length === 0 ? t("balanced") : t("needsFollowUp")}</strong>
               <p>
                 {weakCoverage.length === 0
                   ? "No required specialty is currently uncovered."

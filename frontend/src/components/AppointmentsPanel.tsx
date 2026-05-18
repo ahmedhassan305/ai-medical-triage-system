@@ -9,6 +9,7 @@ import type {
   RoleType,
 } from "../api/dto";
 import { findPatientByNationalId } from "../api/patients";
+import { useLanguage } from "../i18n/useLanguage";
 import type { AppointmentPrefill } from "../lib/appointmentPrefill";
 import SectionPanel from "./SectionPanel";
 
@@ -39,16 +40,19 @@ type AppointmentsPanelProps = {
   onClearPreFill?: () => void;
 };
 
-function renderStatusLabel(status: AppointmentResponseDto["status"]): string {
+function renderStatusLabel(
+  status: AppointmentResponseDto["status"],
+  t: ReturnType<typeof useLanguage>["t"],
+): string {
   switch (status) {
     case "requested":
-      return "Pending review";
+      return t("pendingReview");
     case "approved":
-      return "Confirmed";
+      return t("confirmed");
     case "completed":
-      return "Completed";
+      return t("completed");
     case "rejected":
-      return "Rejected";
+      return t("rejected");
     default:
       return status;
   }
@@ -86,6 +90,7 @@ export default function AppointmentsPanel({
   preFill,
   onClearPreFill,
 }: AppointmentsPanelProps) {
+  const { t } = useLanguage();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [doctorId, setDoctorId] = useState<number | "">(preFill?.doctorId ?? "");
   const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
@@ -355,25 +360,25 @@ export default function AppointmentsPanel({
             <p>{appointment.reason}</p>
           </div>
           <span className={`badge badge--status-${appointment.status}`}>
-            {renderStatusLabel(appointment.status)}
+            {renderStatusLabel(appointment.status, t)}
           </span>
         </div>
 
         <div className="detail-list">
           <div>
-            <strong>Patient</strong>
+            <strong>{t("patient")}</strong>
             <span>{getPatientName(appointment)}</span>
           </div>
           <div>
-            <strong>Doctor</strong>
+            <strong>{t("doctor")}</strong>
             <span>{getDoctorName(appointment)}</span>
           </div>
           <div>
-            <strong>Scheduled</strong>
+            <strong>{t("scheduled")}</strong>
             <span>{formatDateTime(appointment.scheduled_for)}</span>
           </div>
           <div>
-            <strong>Clinic</strong>
+            <strong>{t("clinicReview")}</strong>
             <span>{formatClinic(appointment)}</span>
           </div>
         </div>
@@ -444,7 +449,7 @@ export default function AppointmentsPanel({
             <div className="appointment-table__header">
               <span>ID</span>
               <span>Patient</span>
-              <span>Doctor</span>
+              <span>{t("doctor")}</span>
               <span>Date</span>
               <span>Status</span>
               <span>Action</span>
@@ -456,7 +461,7 @@ export default function AppointmentsPanel({
                 <span>{getDoctorName(appointment)}</span>
                 <span>{formatDateTime(appointment.scheduled_for)}</span>
                 <span className={`badge badge--status-${appointment.status}`}>
-                  {renderStatusLabel(appointment.status)}
+                  {renderStatusLabel(appointment.status, t)}
                 </span>
                 <button
                   type="button"
@@ -498,43 +503,43 @@ export default function AppointmentsPanel({
 
           <div className="detail-list detail-list--dense">
             <div>
-              <strong>Status</strong>
-              <span>{renderStatusLabel(selectedAppointment.status)}</span>
+              <strong>{t("status")}</strong>
+              <span>{renderStatusLabel(selectedAppointment.status, t)}</span>
             </div>
             <div>
-              <strong>Patient</strong>
+              <strong>{t("patient")}</strong>
               <span>{getPatientName(selectedAppointment)}</span>
             </div>
             <div>
-              <strong>Patient national ID</strong>
+              <strong>{t("patientNationalId")}</strong>
               <span>{patient?.national_id ?? "Not available"}</span>
             </div>
             <div>
-              <strong>Doctor</strong>
+              <strong>{t("doctor")}</strong>
               <span>{getDoctorName(selectedAppointment)}</span>
             </div>
             <div>
-              <strong>Specialty</strong>
+              <strong>{t("specialty")}</strong>
               <span>{getDoctorSpecialty(selectedAppointment)}</span>
             </div>
             <div>
-              <strong>Clinic</strong>
+              <strong>{t("clinicReview")}</strong>
               <span>{formatClinic(selectedAppointment)}</span>
             </div>
             <div>
-              <strong>Scheduled</strong>
+              <strong>{t("scheduled")}</strong>
               <span>{formatDateTime(selectedAppointment.scheduled_for)}</span>
             </div>
             <div>
-              <strong>Slot</strong>
+              <strong>{t("scheduled")}</strong>
               <span>{describeSlot(selectedAppointment.slot)}</span>
             </div>
             <div>
-              <strong>Reason</strong>
+              <strong>{t("reason")}</strong>
               <span>{selectedAppointment.reason}</span>
             </div>
             <div>
-              <strong>Notes</strong>
+              <strong>{t("notes")}</strong>
               <span>{selectedAppointment.notes ?? "No notes recorded"}</span>
             </div>
             <div>
@@ -584,8 +589,8 @@ export default function AppointmentsPanel({
 
   return (
     <SectionPanel
-      eyebrow="Coordination"
-      title="Appointments"
+      eyebrow={t("coordination")}
+      title={t("appointmentsTitle")}
       description="Patients request available slots, doctors review requests, and admins can inspect or update reservation status."
     >
       {role !== "doctor" ? (
@@ -628,7 +633,7 @@ export default function AppointmentsPanel({
 
               {role === "admin" ? (
                 <div className="field field--full patient-lookup-card">
-                  <label htmlFor="appointment-patient-national-id">Patient national ID</label>
+                  <label htmlFor="appointment-patient-national-id">{t("patientNationalId")}</label>
                   <div className="inline-filter">
                     <input
                       id="appointment-patient-national-id"
@@ -659,7 +664,7 @@ export default function AppointmentsPanel({
               ) : null}
 
               <div className="field">
-                <label htmlFor="appointment-specialty">Specialty</label>
+                <label htmlFor="appointment-specialty">{t("specialty")}</label>
                 <select
                   id="appointment-specialty"
                   value={selectedSpecialty}
@@ -678,7 +683,7 @@ export default function AppointmentsPanel({
               </div>
 
               <div className="field">
-                <label htmlFor="appointment-doctor">Doctor</label>
+                <label htmlFor="appointment-doctor">{t("doctor")}</label>
                 <select
                   id="appointment-doctor"
                   value={doctorId}
@@ -686,7 +691,7 @@ export default function AppointmentsPanel({
                     setDoctorId(event.target.value ? Number(event.target.value) : "")
                   }
                 >
-                  <option value="">Select doctor</option>
+                  <option value="">{t("selectDoctor")}</option>
                   {filteredDoctors.map((doctor) => (
                     <option key={doctor.id} value={doctor.id}>
                       {doctor.full_name} · {doctor.specialty} · {doctor.area ?? doctor.city ?? doctor.clinic}
@@ -732,7 +737,7 @@ export default function AppointmentsPanel({
               </div>
 
               <div className="field field--full">
-                <label htmlFor="appointment-reason">Reason</label>
+                <label htmlFor="appointment-reason">{t("reason")}</label>
                 <textarea
                   id="appointment-reason"
                   rows={3}
@@ -743,7 +748,7 @@ export default function AppointmentsPanel({
               </div>
 
               <div className="field field--full">
-                <label htmlFor="appointment-notes">Notes</label>
+                <label htmlFor="appointment-notes">{t("notes")}</label>
                 <input
                   id="appointment-notes"
                   value={notes}
@@ -771,7 +776,7 @@ export default function AppointmentsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Appointment history</p>
+                <p className="micro-label">{t("appointmentHistory")}</p>
                 <h3>{appointments.length} tracked bookings</h3>
               </div>
             </div>
@@ -824,7 +829,7 @@ export default function AppointmentsPanel({
             ) : (
               <div className="stack-md">
                 <div>
-                  <p className="micro-label">Active and upcoming</p>
+                  <p className="micro-label">{t("upcomingAppointments")}</p>
                   <div className="stack-md">
                     {activeAppointments.length === 0 ? (
                       <div className="empty-state">
@@ -869,7 +874,7 @@ export default function AppointmentsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Pending approvals</p>
+                <p className="micro-label">{t("pendingApprovals")}</p>
                 <h3>{pendingAppointments.length} requests need a decision</h3>
               </div>
             </div>
@@ -890,7 +895,7 @@ export default function AppointmentsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Confirmed appointments</p>
+                <p className="micro-label">{t("confirmedAppointments")}</p>
                 <h3>{confirmedAppointments.length} upcoming bookings</h3>
               </div>
             </div>
@@ -910,8 +915,8 @@ export default function AppointmentsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Past items</p>
-                <h3>Completed and rejected decisions</h3>
+                <p className="micro-label">{t("completed")}</p>
+                <h3>{t("completed")}</h3>
               </div>
             </div>
             <div className="stack-md">
@@ -933,3 +938,4 @@ export default function AppointmentsPanel({
     </SectionPanel>
   );
 }
+

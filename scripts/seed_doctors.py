@@ -19,6 +19,7 @@ from app.services.doctor_seed_importer import (  # noqa: E402
     import_seed_records,
     load_seed_records,
 )
+from app.services.slot_booking import ensure_demo_availability_for_all_doctors  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ def main() -> int:
             records,
             clean_legacy=not args.skip_clean_legacy,
         )
+        schedules_created = ensure_demo_availability_for_all_doctors(db)
 
     logger.info(
         (
@@ -75,6 +77,7 @@ def main() -> int:
         result.removed_legacy,
         result.total_seed_records,
     )
+    logger.info("Doctor availability seed complete: schedules_created=%s", schedules_created)
     return 0
 
 

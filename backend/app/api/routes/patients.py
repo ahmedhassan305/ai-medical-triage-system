@@ -6,13 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
-from app.db.models import PatientProfile, User
+from app.db.models import PatientMedicalHistoryEntry, PatientProfile, User
 from app.db.session import get_db
 from app.schemas.patient import (
     ManagedPatientProfileCreate,
+    PatientMedicalHistoryEntryCreate,
+    PatientMedicalHistoryEntryResponse,
     PatientProfileResponse,
     PatientProfileUpsert,
 )
+from app.services.access_control import ensure_patient_profile_access
 from app.services.egyptian_national_id import (
     calculate_age,
     parse_egyptian_national_id,
@@ -182,6 +185,56 @@ def get_patient(
     if profile is None:
         raise HTTPException(status_code=404, detail="Patient profile not found.")
     return PatientProfileResponse.model_validate(profile, from_attributes=True)
+
+
+@router.get(
+    "/{patient_id}/medical-history",
+    response_model=list[PatientMedicalHistoryEntryResponse],
+)
+def list_patient_medical_history(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> list[PatientMedicalHistoryEntryResponse]:
+    ensure_patient_profile_access(db, current_user, patient_id)
+    entries = (
+        db.query(PatientMedicalHistoryEntry)
+        .filter(PatientMedicalHistoryEntry.patient_id == patient_id)
+        .order_by(PatientMedicalHistoryEntry.created_at.desc())
+        .all()
+    )
+    return [
+        PatientMedicalHistoryEntryResponse.model_validate(
+            entry,
+            from_attributes=True,
+        )
+        for entry in entries
+    ]
+
+
+@router.post(
+    "/{patient_id}/medical-history",
+    response_model=PatientMedicalHistoryEntryResponse,
+    status_code=201,
+)
+def create_patient_medical_history(
+    patient_id: int,
+    payload: PatientMedicalHistoryEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> PatientMedicalHistoryEntryResponse:
+    ensure_patient_profile_access(db, current_user, patient_id)
+    entry = PatientMedicalHistoryEntry(
+        patient_id=patient_id,
+        **payload.model_dump(),
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return PatientMedicalHistoryEntryResponse.model_validate(
+        entry,
+        from_attributes=True,
+    )
 
 
 def _format_patient_search_result(patient_id: int, full_name: str | None) -> str:

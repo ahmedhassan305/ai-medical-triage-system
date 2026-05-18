@@ -48,6 +48,23 @@ class SuspectedCondition(BaseModel):
 class TriageRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     patient_id: int | None = None
+    lab_values: list[dict[str, str | None]] = Field(default_factory=list)
+
+
+class LabValue(BaseModel):
+    lab_name: str
+    value: str
+    unit: str | None = None
+    reference_range: str | None = None
+
+
+class LabPdfExtractionResponse(BaseModel):
+    filename: str
+    values: list[LabValue] = Field(default_factory=list)
+    warning: str = (
+        "Automated lab extraction may be imperfect. Confirm values before relying "
+        "on them clinically."
+    )
 
 
 class ClarificationQuestion(BaseModel):
