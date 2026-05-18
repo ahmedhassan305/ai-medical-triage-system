@@ -1450,6 +1450,25 @@ button.activity-item:hover {
   gap: 10px;
 }
 
+.pagination-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.pagination-strip__page {
+  align-self: center;
+  color: var(--bg-ink-soft);
+  font-weight: 700;
+}
+
 .badge--status-completed {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
@@ -1505,6 +1524,7 @@ button.activity-item:hover {
   .entity-card__header,
   .result-card__meta,
   .button-row,
+  .pagination-strip,
   .inline-filter,
   .doctor-suggestion-card__header,
   .doctor-suggestion-card__actions,

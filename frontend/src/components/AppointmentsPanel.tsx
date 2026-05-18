@@ -12,6 +12,8 @@ import { findPatientByNationalId } from "../api/patients";
 import type { AppointmentPrefill } from "../lib/appointmentPrefill";
 import SectionPanel from "./SectionPanel";
 
+const ADMIN_APPOINTMENTS_PAGE_SIZE = 8;
+
 type AppointmentsPanelProps = {
   role: RoleType;
   doctors: DoctorProfileResponseDto[];
@@ -100,6 +102,8 @@ export default function AppointmentsPanel({
   const [notes, setNotes] = useState(preFill?.notes ?? "");
   const [sortBy, setSortBy] = useState<"date" | "id">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [activePage, setActivePage] = useState(1);
+  const [previousPage, setPreviousPage] = useState(1);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentResponseDto | null>(null);
   const [statusNotes, setStatusNotes] = useState("");
@@ -247,6 +251,71 @@ export default function AppointmentsPanel({
   const rejectedAppointments = sortedAppointments.filter(
     (appointment) => appointment.status === "rejected",
   );
+  const activeAppointments = [...pendingAppointments, ...confirmedAppointments];
+  const previousAppointments = [...completedAppointments, ...rejectedAppointments];
+
+  useEffect(() => {
+    setActivePage(1);
+    setPreviousPage(1);
+  }, [appointments.length, sortBy, sortDirection]);
+
+  function paginateAppointments(
+    items: AppointmentResponseDto[],
+    page: number,
+  ): AppointmentResponseDto[] {
+    if (role !== "admin") {
+      return items;
+    }
+    const start = (page - 1) * ADMIN_APPOINTMENTS_PAGE_SIZE;
+    return items.slice(start, start + ADMIN_APPOINTMENTS_PAGE_SIZE);
+  }
+
+  function renderPaginationControls(
+    items: AppointmentResponseDto[],
+    page: number,
+    setPage: (page: number) => void,
+  ) {
+    if (role !== "admin" || items.length <= ADMIN_APPOINTMENTS_PAGE_SIZE) {
+      return null;
+    }
+
+    const pageCount = Math.ceil(items.length / ADMIN_APPOINTMENTS_PAGE_SIZE);
+    const safePage = Math.min(page, pageCount);
+    const startItem = (safePage - 1) * ADMIN_APPOINTMENTS_PAGE_SIZE + 1;
+    const endItem = Math.min(
+      safePage * ADMIN_APPOINTMENTS_PAGE_SIZE,
+      items.length,
+    );
+
+    return (
+      <div className="pagination-strip">
+        <span>
+          Showing {startItem}-{endItem} of {items.length}
+        </span>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === 1}
+            onClick={() => setPage(Math.max(1, safePage - 1))}
+          >
+            Previous
+          </button>
+          <span className="pagination-strip__page">
+            Page {safePage} / {pageCount}
+          </span>
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === pageCount}
+            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   function getPatientName(appointment: AppointmentResponseDto): string {
     return (
@@ -684,14 +753,22 @@ export default function AppointmentsPanel({
               <div>
                 <p className="micro-label">Active and upcoming</p>
                 <div className="stack-md">
-                  {[...pendingAppointments, ...confirmedAppointments].length === 0 ? (
+                  {activeAppointments.length === 0 ? (
                     <div className="empty-state">
                       No current appointment requests. Start with a new booking above.
                     </div>
                   ) : (
-                    [...pendingAppointments, ...confirmedAppointments].map((appointment) =>
-                      renderAppointmentCard(appointment, { showDetailsAction: true }),
+                    paginateAppointments(activeAppointments, activePage).map(
+                      (appointment) =>
+                        renderAppointmentCard(appointment, {
+                          showDetailsAction: true,
+                        }),
                     )
+                  )}
+                  {renderPaginationControls(
+                    activeAppointments,
+                    activePage,
+                    setActivePage,
                   )}
                 </div>
               </div>
@@ -699,14 +776,22 @@ export default function AppointmentsPanel({
               <div>
                 <p className="micro-label">Previous decisions</p>
                 <div className="stack-md">
-                  {[...completedAppointments, ...rejectedAppointments].length === 0 ? (
+                  {previousAppointments.length === 0 ? (
                     <div className="empty-state">
                       Completed and rejected appointments will appear here for reference.
                     </div>
                   ) : (
-                    [...completedAppointments, ...rejectedAppointments].map((appointment) =>
-                      renderAppointmentCard(appointment, { showDetailsAction: true }),
+                    paginateAppointments(previousAppointments, previousPage).map(
+                      (appointment) =>
+                        renderAppointmentCard(appointment, {
+                          showDetailsAction: true,
+                        }),
                     )
+                  )}
+                  {renderPaginationControls(
+                    previousAppointments,
+                    previousPage,
+                    setPreviousPage,
                   )}
                 </div>
               </div>
