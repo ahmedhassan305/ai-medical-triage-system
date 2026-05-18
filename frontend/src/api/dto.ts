@@ -90,10 +90,10 @@ export type ClinicDto = {
 
 export type AppointmentSlotDto = {
   id: number;
-  doctor_id: number;
-  clinic_id?: number | null;
-  starts_at: string;
-  ends_at: string;
+  doctor_clinic_id: number;
+  schedule_id?: number | null;
+  start_at: string;
+  end_at: string;
   status: string;
   clinic?: ClinicDto | null;
 };
@@ -104,6 +104,7 @@ export type AppointmentCreateDto = {
   reason: string;
   notes?: string | null;
   scheduled_for?: string | null;
+  clinic_id?: number | null;
   slot_id?: number | null;
 };
 

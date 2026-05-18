@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type {
+  AppointmentSlotDto,
   DoctorProfileResponseDto,
   DoctorProfileUpsertDto,
 } from "./dto";
@@ -36,6 +37,15 @@ export async function upsertMyDoctorProfile(
   const response = await api.post<DoctorProfileResponseDto>(
     apiPaths.doctors.me,
     payload,
+  );
+  return response.data;
+}
+
+export async function listDoctorSlots(
+  doctorId: number,
+): Promise<AppointmentSlotDto[]> {
+  const response = await api.get<AppointmentSlotDto[]>(
+    apiPaths.doctors.slots(doctorId),
   );
   return response.data;
 }

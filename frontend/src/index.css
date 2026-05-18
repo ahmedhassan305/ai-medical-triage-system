@@ -1410,6 +1410,46 @@ button.activity-item:hover {
   margin-top: 4px;
 }
 
+.detail-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(22, 51, 50, 0.38);
+}
+
+.detail-drawer__panel {
+  width: min(780px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(22, 51, 50, 0.16);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-strong);
+}
+
+.detail-list--dense {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.appointment-admin-actions,
+.patient-lookup-card {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.appointment-admin-actions {
+  display: grid;
+  gap: 10px;
+}
+
 .badge--status-completed {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
@@ -1431,6 +1471,7 @@ button.activity-item:hover {
   .care-status-grid,
   .admin-record-grid,
   .activity-columns,
+  .detail-list--dense,
   .status-grid,
   .mini-stat-grid,
   .admin-metric-grid,

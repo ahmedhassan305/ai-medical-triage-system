@@ -12,6 +12,7 @@ describe("api paths", () => {
     expect(apiPaths.auth.login).toBe("/api/v1/auth/login");
     expect(apiPaths.patients.list).toBe("/api/v1/patients/");
     expect(apiPaths.doctors.list).toBe("/api/v1/doctors/");
+    expect(apiPaths.doctors.slots(7)).toBe("/api/v1/doctors/7/slots");
     expect(apiPaths.appointments.create).toBe("/api/v1/appointments/");
     expect(apiPaths.visits.list).toBe("/api/v1/visits/");
     expect(apiPaths.records.import).toBe("/api/v1/records/import");

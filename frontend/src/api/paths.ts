@@ -21,6 +21,7 @@ export const apiPaths = {
     list: `${API_V1_PREFIX}/doctors/`,
     me: `${API_V1_PREFIX}/doctors/me`,
     byId: (doctorId: number) => `${API_V1_PREFIX}/doctors/${doctorId}`,
+    slots: (doctorId: number) => `${API_V1_PREFIX}/doctors/${doctorId}/slots`,
   },
   appointments: {
     list: `${API_V1_PREFIX}/appointments/`,

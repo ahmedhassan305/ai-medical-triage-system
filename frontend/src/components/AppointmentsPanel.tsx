@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { listDoctorSlots } from "../api/doctors";
 import type {
   AppointmentResponseDto,
+  AppointmentSlotDto,
   DoctorProfileResponseDto,
   PatientProfileResponseDto,
   RoleType,
 } from "../api/dto";
+import { findPatientByNationalId } from "../api/patients";
 import type { AppointmentPrefill } from "../lib/appointmentPrefill";
 import SectionPanel from "./SectionPanel";
 
@@ -23,6 +26,8 @@ type AppointmentsPanelProps = {
     reason: string;
     notes?: string;
     scheduled_for?: string | null;
+    clinic_id?: number | null;
+    slot_id?: number | null;
   }) => Promise<void>;
   onUpdateStatus: (
     appointmentId: number,
@@ -47,6 +52,25 @@ function renderStatusLabel(status: AppointmentResponseDto["status"]): string {
   }
 }
 
+function formatDateTime(value?: string | null): string {
+  return value ? new Date(value).toLocaleString() : "Not scheduled yet";
+}
+
+function formatClinic(appointment: AppointmentResponseDto): string {
+  const clinic = appointment.clinic ?? appointment.slot?.clinic;
+  if (!clinic) {
+    return "Clinic not assigned";
+  }
+  return [clinic.name, clinic.area, clinic.city].filter(Boolean).join(" · ");
+}
+
+function describeSlot(slot?: AppointmentSlotDto | null): string {
+  if (!slot) {
+    return "No slot selected";
+  }
+  return `${formatDateTime(slot.start_at)} - ${formatDateTime(slot.end_at)} (${slot.status})`;
+}
+
 export default function AppointmentsPanel({
   role,
   doctors,
@@ -63,39 +87,139 @@ export default function AppointmentsPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const [doctorId, setDoctorId] = useState<number | "">(preFill?.doctorId ?? "");
   const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
-  const [patientSearch, setPatientSearch] = useState("");
+  const [resolvedPatient, setResolvedPatient] = useState<PatientProfileResponseDto | null>(null);
+  const [patientNationalId, setPatientNationalId] = useState("");
+  const [patientLookupLoading, setPatientLookupLoading] = useState(false);
+  const [patientLookupError, setPatientLookupError] = useState<string | null>(null);
+  const [selectedSpecialty, setSelectedSpecialty] = useState(preFill?.specialty ?? "");
+  const [availableSlots, setAvailableSlots] = useState<AppointmentSlotDto[]>([]);
+  const [selectedSlotId, setSelectedSlotId] = useState<number | "">("");
+  const [slotLoading, setSlotLoading] = useState(false);
+  const [slotError, setSlotError] = useState<string | null>(null);
   const [reason, setReason] = useState(preFill?.reason ?? "");
   const [notes, setNotes] = useState(preFill?.notes ?? "");
-  const [scheduledFor, setScheduledFor] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "id">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<AppointmentResponseDto | null>(null);
+  const [statusNotes, setStatusNotes] = useState("");
+
+  const specialties = useMemo(
+    () => Array.from(new Set(doctors.map((doctor) => doctor.specialty).filter(Boolean))).sort(),
+    [doctors],
+  );
+  const filteredDoctors = selectedSpecialty
+    ? doctors.filter((doctor) => doctor.specialty === selectedSpecialty)
+    : doctors;
+  const selectedDoctor = doctors.find((doctor) => doctor.id === Number(doctorId));
+  const selectedSlot = availableSlots.find((slot) => slot.id === Number(selectedSlotId));
 
   useEffect(() => {
     if (!preFill) {
       return;
     }
+    setDoctorId(preFill.doctorId);
+    setSelectedSpecialty(preFill.specialty);
+    setReason(preFill.reason);
+    setNotes(preFill.notes ?? "");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [preFill]);
 
+  useEffect(() => {
+    if (!doctorId) {
+      setAvailableSlots([]);
+      setSelectedSlotId("");
+      return;
+    }
+
+    let cancelled = false;
+    setSlotLoading(true);
+    setSlotError(null);
+    setSelectedSlotId("");
+    listDoctorSlots(Number(doctorId))
+      .then((slots) => {
+        if (!cancelled) {
+          setAvailableSlots(slots.filter((slot) => slot.status === "open"));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailableSlots([]);
+          setSlotError("Could not load this doctor's available times.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSlotLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doctorId]);
+
+  async function handleLookupPatient() {
+    const nationalId = patientNationalId.trim();
+    if (!nationalId) {
+      setPatientLookupError("Enter a patient national ID first.");
+      return;
+    }
+
+    setPatientLookupLoading(true);
+    setPatientLookupError(null);
+    setResolvedPatient(null);
+    setPatientId("");
+    try {
+      const patient = await findPatientByNationalId(nationalId);
+      setResolvedPatient(patient);
+      setPatientId(patient.id);
+    } catch {
+      setPatientLookupError("No patient profile was found for this national ID.");
+    } finally {
+      setPatientLookupLoading(false);
+    }
+  }
+
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!doctorId || !(patientId || currentPatientId)) {
+    const targetPatientId = Number(patientId || currentPatientId);
+    if (!doctorId || !targetPatientId || !selectedSlotId) {
       return;
     }
 
     await onCreate({
-      patient_id: Number(patientId || currentPatientId),
+      patient_id: targetPatientId,
       doctor_id: Number(doctorId),
       reason: reason.trim(),
       notes: notes.trim() || undefined,
-      scheduled_for: scheduledFor || null,
+      scheduled_for: selectedSlot?.start_at ?? null,
+      clinic_id: selectedSlot?.clinic?.id ?? null,
+      slot_id: Number(selectedSlotId),
     });
     setReason("");
     setNotes("");
-    setScheduledFor("");
+    setSelectedSlotId("");
+    if (role !== "patient") {
+      setPatientNationalId("");
+      setResolvedPatient(null);
+      setPatientId("");
+    }
     if (onClearPreFill) {
       onClearPreFill();
     }
+  }
+
+  async function handleAdminStatusUpdate(status: "approved" | "rejected") {
+    if (!selectedAppointment) {
+      return;
+    }
+    await onUpdateStatus(selectedAppointment.id, {
+      status,
+      notes: statusNotes.trim() || undefined,
+    });
+    setSelectedAppointment(null);
+    setStatusNotes("");
   }
 
   const sortedAppointments = [...appointments].sort((left, right) => {
@@ -124,27 +248,36 @@ export default function AppointmentsPanel({
     (appointment) => appointment.status === "rejected",
   );
 
-  const filteredPatients = patients.filter((patient) => {
-    const search = patientSearch.trim();
-    if (!search) {
-      return true;
-    }
-    const nationalId = patient.national_id?.toLowerCase() ?? "";
-    return nationalId.includes(search.toLowerCase()) ||
-      patient.full_name.toLowerCase().includes(search.toLowerCase());
-  });
+  function getPatientName(appointment: AppointmentResponseDto): string {
+    return (
+      patients.find((patient) => patient.id === appointment.patient_id)?.full_name ??
+      `Patient #${appointment.patient_id}`
+    );
+  }
+
+  function getDoctorName(appointment: AppointmentResponseDto): string {
+    return (
+      doctors.find((doctor) => doctor.id === appointment.doctor_id)?.full_name ??
+      `Doctor #${appointment.doctor_id}`
+    );
+  }
+
+  function getDoctorSpecialty(appointment: AppointmentResponseDto): string {
+    return (
+      doctors.find((doctor) => doctor.id === appointment.doctor_id)?.specialty ??
+      "Specialty not recorded"
+    );
+  }
+
+  function openDetails(appointment: AppointmentResponseDto) {
+    setSelectedAppointment(appointment);
+    setStatusNotes(appointment.notes ?? "");
+  }
 
   function renderAppointmentCard(
     appointment: AppointmentResponseDto,
     options?: { showWorkflowActions?: boolean; showDetailsAction?: boolean },
   ) {
-    const patientName =
-      patients.find((patient) => patient.id === appointment.patient_id)?.full_name ??
-      `Patient #${appointment.patient_id}`;
-    const doctorName =
-      doctors.find((doctor) => doctor.id === appointment.doctor_id)?.full_name ??
-      `Doctor #${appointment.doctor_id}`;
-
     return (
       <article key={appointment.id} className="entity-card entity-card--appointment">
         <div className="entity-card__header">
@@ -160,19 +293,19 @@ export default function AppointmentsPanel({
         <div className="detail-list">
           <div>
             <strong>Patient</strong>
-            <span>{patientName}</span>
+            <span>{getPatientName(appointment)}</span>
           </div>
           <div>
             <strong>Doctor</strong>
-            <span>{doctorName}</span>
+            <span>{getDoctorName(appointment)}</span>
           </div>
           <div>
             <strong>Scheduled</strong>
-            <span>
-              {appointment.scheduled_for
-                ? new Date(appointment.scheduled_for).toLocaleString()
-                : "Awaiting clinic confirmation"}
-            </span>
+            <span>{formatDateTime(appointment.scheduled_for)}</span>
+          </div>
+          <div>
+            <strong>Clinic</strong>
+            <span>{formatClinic(appointment)}</span>
           </div>
         </div>
 
@@ -184,11 +317,15 @@ export default function AppointmentsPanel({
         {options?.showWorkflowActions || options?.showDetailsAction ? (
           <div className="button-row">
             {options.showDetailsAction ? (
-              <button type="button" className="button button--ghost button--small">
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                onClick={() => openDetails(appointment)}
+              >
                 View details
               </button>
             ) : null}
-            {options.showWorkflowActions ? (
+            {options.showWorkflowActions && appointment.status === "requested" ? (
               <>
                 <button
                   type="button"
@@ -212,11 +349,120 @@ export default function AppointmentsPanel({
     );
   }
 
+  function renderAppointmentDetails() {
+    if (!selectedAppointment) {
+      return null;
+    }
+    const patient = patients.find((item) => item.id === selectedAppointment.patient_id);
+
+    return (
+      <div className="detail-drawer" role="dialog" aria-modal="true">
+        <div className="detail-drawer__panel">
+          <div className="entity-card__header">
+            <div>
+              <p className="micro-label">Appointment details</p>
+              <h3>Appointment #{selectedAppointment.id}</h3>
+            </div>
+            <button
+              type="button"
+              className="button button--ghost button--small"
+              onClick={() => setSelectedAppointment(null)}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="detail-list detail-list--dense">
+            <div>
+              <strong>Status</strong>
+              <span>{renderStatusLabel(selectedAppointment.status)}</span>
+            </div>
+            <div>
+              <strong>Patient</strong>
+              <span>{getPatientName(selectedAppointment)}</span>
+            </div>
+            <div>
+              <strong>Patient national ID</strong>
+              <span>{patient?.national_id ?? "Not available"}</span>
+            </div>
+            <div>
+              <strong>Doctor</strong>
+              <span>{getDoctorName(selectedAppointment)}</span>
+            </div>
+            <div>
+              <strong>Specialty</strong>
+              <span>{getDoctorSpecialty(selectedAppointment)}</span>
+            </div>
+            <div>
+              <strong>Clinic</strong>
+              <span>{formatClinic(selectedAppointment)}</span>
+            </div>
+            <div>
+              <strong>Scheduled</strong>
+              <span>{formatDateTime(selectedAppointment.scheduled_for)}</span>
+            </div>
+            <div>
+              <strong>Slot</strong>
+              <span>{describeSlot(selectedAppointment.slot)}</span>
+            </div>
+            <div>
+              <strong>Reason</strong>
+              <span>{selectedAppointment.reason}</span>
+            </div>
+            <div>
+              <strong>Notes</strong>
+              <span>{selectedAppointment.notes ?? "No notes recorded"}</span>
+            </div>
+            <div>
+              <strong>Created</strong>
+              <span>{formatDateTime(selectedAppointment.requested_at)}</span>
+            </div>
+            <div>
+              <strong>Last updated</strong>
+              <span>Not separately recorded</span>
+            </div>
+          </div>
+
+          {role === "admin" ? (
+            <div className="appointment-admin-actions">
+              <label htmlFor="appointment-status-notes">Admin status notes</label>
+              <textarea
+                id="appointment-status-notes"
+                rows={3}
+                value={statusNotes}
+                onChange={(event) => setStatusNotes(event.target.value)}
+                placeholder="Optional reason for status change"
+              />
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button button--primary"
+                  disabled={loading || selectedAppointment.status === "approved"}
+                  onClick={() => handleAdminStatusUpdate("approved")}
+                >
+                  Mark confirmed
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  disabled={loading || selectedAppointment.status === "rejected"}
+                  onClick={() => handleAdminStatusUpdate("rejected")}
+                >
+                  Mark rejected
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SectionPanel
       eyebrow="Coordination"
       title="Appointments"
-      description="Patients and admins create bookings here. Doctors handle request decisions from a focused scheduling workspace."
+      description="Patients request available slots, doctors review requests, and admins can inspect or update reservation status."
     >
       {role !== "doctor" ? (
         <div className="stack-md">
@@ -240,8 +486,7 @@ export default function AppointmentsPanel({
                       <h3>Dr. {preFill.doctorName} is preselected</h3>
                       <p>
                         The appointment request was prepared from the triage result for{" "}
-                        {preFill.specialty}. Review the details below, adjust them if needed,
-                        and submit the booking request.
+                        {preFill.specialty}. Review the details below and choose an available slot.
                       </p>
                     </div>
                     {onClearPreFill ? (
@@ -258,36 +503,55 @@ export default function AppointmentsPanel({
               ) : null}
 
               {role === "admin" ? (
-                <>
-                  <div className="field">
-                    <label htmlFor="appointment-patient-search">Patient national ID</label>
+                <div className="field field--full patient-lookup-card">
+                  <label htmlFor="appointment-patient-national-id">Patient national ID</label>
+                  <div className="inline-filter">
                     <input
-                      id="appointment-patient-search"
+                      id="appointment-patient-national-id"
                       type="text"
-                      value={patientSearch}
-                      onChange={(event) => setPatientSearch(event.target.value)}
-                      placeholder="Enter patient national ID"
+                      value={patientNationalId}
+                      onChange={(event) => setPatientNationalId(event.target.value)}
+                      placeholder="Enter Egyptian national ID"
                     />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="appointment-patient">Patient</label>
-                    <select
-                      id="appointment-patient"
-                      value={patientId}
-                      onChange={(event) =>
-                        setPatientId(event.target.value ? Number(event.target.value) : "")
-                      }
+                    <button
+                      type="button"
+                      className="button button--ghost button--small"
+                      disabled={patientLookupLoading}
+                      onClick={handleLookupPatient}
                     >
-                      <option value="">Select patient</option>
-                      {filteredPatients.map((patient) => (
-                        <option key={patient.id} value={patient.id}>
-                          {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
-                        </option>
-                      ))}
-                    </select>
+                      {patientLookupLoading ? "Searching..." : "Find patient"}
+                    </button>
                   </div>
-                </>
+                  {resolvedPatient ? (
+                    <small className="field__hint">
+                      Found {resolvedPatient.full_name} · #{resolvedPatient.id} ·{" "}
+                      {resolvedPatient.sex}
+                    </small>
+                  ) : null}
+                  {patientLookupError ? (
+                    <small className="field__error">{patientLookupError}</small>
+                  ) : null}
+                </div>
               ) : null}
+
+              <div className="field">
+                <label htmlFor="appointment-specialty">Specialty</label>
+                <select
+                  id="appointment-specialty"
+                  value={selectedSpecialty}
+                  onChange={(event) => {
+                    setSelectedSpecialty(event.target.value);
+                    setDoctorId("");
+                  }}
+                >
+                  <option value="">All specialties</option>
+                  {specialties.map((specialty) => (
+                    <option key={specialty} value={specialty}>
+                      {specialty}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div className="field">
                 <label htmlFor="appointment-doctor">Doctor</label>
@@ -299,17 +563,46 @@ export default function AppointmentsPanel({
                   }
                 >
                   <option value="">Select doctor</option>
-                  {doctors.map((doctor) => (
+                  {filteredDoctors.map((doctor) => (
                     <option key={doctor.id} value={doctor.id}>
-                      {doctor.full_name} · {doctor.specialty}
+                      {doctor.full_name} · {doctor.specialty} · {doctor.area ?? doctor.city ?? doctor.clinic}
                       {preFill?.doctorId === doctor.id ? " · Recommended" : ""}
                     </option>
                   ))}
                 </select>
-                {preFill ? (
+                {selectedDoctor ? (
                   <small className="field__hint">
-                    Preselected from the triage recommendation so the patient does not
-                    need to search again.
+                    {preFill?.doctorId === selectedDoctor.id
+                      ? "Preselected from the triage recommendation so the patient does not need to search again. "
+                      : ""}
+                    {selectedDoctor.clinic} · {selectedDoctor.area ?? "Area not listed"}
+                  </small>
+                ) : null}
+              </div>
+
+              <div className="field field--full">
+                <label htmlFor="appointment-slot">Available slot</label>
+                <select
+                  id="appointment-slot"
+                  value={selectedSlotId}
+                  onChange={(event) =>
+                    setSelectedSlotId(event.target.value ? Number(event.target.value) : "")
+                  }
+                  disabled={!doctorId || slotLoading}
+                >
+                  <option value="">
+                    {slotLoading ? "Loading slots..." : "Select an available time"}
+                  </option>
+                  {availableSlots.map((slot) => (
+                    <option key={slot.id} value={slot.id}>
+                      {formatDateTime(slot.start_at)} · {slot.clinic?.name ?? "Clinic"}
+                    </option>
+                  ))}
+                </select>
+                {slotError ? <small className="field__error">{slotError}</small> : null}
+                {!slotLoading && doctorId && availableSlots.length === 0 ? (
+                  <small className="field__hint">
+                    No open slots are currently available for this doctor.
                   </small>
                 ) : null}
               </div>
@@ -325,17 +618,7 @@ export default function AppointmentsPanel({
                 />
               </div>
 
-              <div className="field">
-                <label htmlFor="appointment-date">Requested time</label>
-                <input
-                  id="appointment-date"
-                  type="datetime-local"
-                  value={scheduledFor}
-                  onChange={(event) => setScheduledFor(event.target.value)}
-                />
-              </div>
-
-              <div className="field">
+              <div className="field field--full">
                 <label htmlFor="appointment-notes">Notes</label>
                 <input
                   id="appointment-notes"
@@ -343,18 +626,18 @@ export default function AppointmentsPanel({
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Optional extra context"
                 />
-                {preFill ? (
-                  <small className="field__hint">
-                    The notes were prefilled from the triage handoff and can be edited
-                    before submission.
-                  </small>
-                ) : null}
               </div>
 
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={loading || !reason.trim() || !doctorId || !(patientId || currentPatientId)}
+                disabled={
+                  loading ||
+                  !reason.trim() ||
+                  !doctorId ||
+                  !selectedSlotId ||
+                  !(patientId || currentPatientId)
+                }
               >
                 {loading ? "Saving..." : "Request appointment"}
               </button>
@@ -392,7 +675,7 @@ export default function AppointmentsPanel({
                   className="button button--ghost button--small"
                   onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
                 >
-                  {sortDirection === "asc" ? "↑ Ascending" : "↓ Descending"}
+                  {sortDirection === "asc" ? "Ascending" : "Descending"}
                 </button>
               </div>
             ) : null}
@@ -448,7 +731,10 @@ export default function AppointmentsPanel({
                 <div className="empty-state">No pending approvals right now.</div>
               ) : (
                 pendingAppointments.map((appointment) =>
-                  renderAppointmentCard(appointment, { showWorkflowActions: true }),
+                  renderAppointmentCard(appointment, {
+                    showWorkflowActions: true,
+                    showDetailsAction: true,
+                  }),
                 )
               )}
             </div>
@@ -467,7 +753,9 @@ export default function AppointmentsPanel({
                   Confirmed appointments will appear here once requests are approved.
                 </div>
               ) : (
-                confirmedAppointments.map((appointment) => renderAppointmentCard(appointment))
+                confirmedAppointments.map((appointment) =>
+                  renderAppointmentCard(appointment, { showDetailsAction: true }),
+                )
               )}
             </div>
           </section>
@@ -486,13 +774,15 @@ export default function AppointmentsPanel({
                 </div>
               ) : (
                 [...completedAppointments, ...rejectedAppointments].map((appointment) =>
-                  renderAppointmentCard(appointment),
+                  renderAppointmentCard(appointment, { showDetailsAction: true }),
                 )
               )}
             </div>
           </section>
         </div>
       ) : null}
+
+      {renderAppointmentDetails()}
     </SectionPanel>
   );
 }

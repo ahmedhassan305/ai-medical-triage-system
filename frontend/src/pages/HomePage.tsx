@@ -471,6 +471,8 @@ export default function HomePage() {
     reason: string;
     notes?: string;
     scheduled_for?: string | null;
+    clinic_id?: number | null;
+    slot_id?: number | null;
   }) {
     setAppointmentsLoading(true);
     setAppointmentsError(null);
