@@ -7,7 +7,7 @@ import re
 import httpx
 
 from app.core.config import get_settings
-from app.schemas.triage import ClarificationQuestion
+from app.schemas.triage import ClarificationQuestion, ClinicalFeatures
 
 CONFIDENCE_THRESHOLD = 0.75
 MAX_CLARIFICATION_QUESTIONS = 4
@@ -86,7 +86,7 @@ QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
             options=[
                 "Fever",
                 "Stiff neck",
-                "Vision changes",
+                "Changes in vision",
                 "Vomiting",
                 "None of these",
             ],
@@ -199,9 +199,9 @@ QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
             question="Any other symptoms?",
             options=[
                 "Hearing loss",
-                "Ringing in ears",
+                "Ringing in the ears",
                 "Chest pain",
-                "Vision changes",
+                "Changes in vision",
                 "None",
             ],
         ),
@@ -296,14 +296,14 @@ SMART_QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
         ClarificationQuestion(
             id="pain_neurovascular",
             question=(
-                "Do you have numbness, weakness, swelling, or the area "
-                "feels cold/blue?"
+                "Do you have tingling, weakness, swelling, or skin that "
+                "feels cold or looks blue?"
             ),
             options=[
-                "Numbness/tingling",
+                "Tingling or numbness",
                 "Weakness",
                 "Swelling",
-                "Cold or blue",
+                "Cold or blue skin",
                 "None",
             ],
         ),
@@ -359,14 +359,14 @@ SMART_QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
         ClarificationQuestion(
             id="neuro_deficit",
             question=(
-                "Do you have weakness, numbness, facial droop, confusion, "
-                "or trouble speaking?"
+                "Do you have weakness, numbness, one side of the face "
+                "drooping, confusion, or trouble speaking?"
             ),
             options=[
                 "Weakness",
                 "Numbness",
-                "Facial droop",
-                "Confusion/trouble speaking",
+                "One side of the face drooping",
+                "Confusion or trouble speaking",
                 "None",
             ],
         ),
@@ -396,14 +396,14 @@ SMART_QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
         ClarificationQuestion(
             id="gi_red_flags",
             question=(
-                "Do you have vomiting blood, black stools, yellow eyes/skin, "
-                "or severe dehydration?"
+                "Do you have blood in vomit, black stool, yellow eyes or "
+                "skin, or signs of severe dehydration?"
             ),
             options=[
-                "Vomiting blood",
-                "Black stools",
-                "Yellow eyes/skin",
-                "Severe dehydration",
+                "Blood in vomit",
+                "Black stool",
+                "Yellow eyes or skin",
+                "Very dry mouth or hardly passing urine",
                 "None",
             ],
         ),
@@ -428,14 +428,14 @@ SMART_QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
         ClarificationQuestion(
             id="skin_blanching_spread",
             question=(
-                "Is the rash spreading quickly, painful, blistering, "
-                "or purple and non-fading?"
+                "Is the rash spreading quickly, painful, blistering, or "
+                "dark purple and not fading when pressed?"
             ),
             options=[
                 "Spreading quickly",
                 "Painful",
                 "Blistering",
-                "Purple/non-fading",
+                "Dark purple and not fading when pressed",
                 "None",
             ],
         ),
@@ -512,6 +512,7 @@ def _build_llm_prompt(
     summary: object | None,
     recommended_specialty: str | None,
     triage_level: str | None,
+    clinical_features: ClinicalFeatures | None,
 ) -> str:
     payload = {
         "patient_query": query,
@@ -520,6 +521,9 @@ def _build_llm_prompt(
         "clinical_summary": str(getattr(summary, "clinical_summary", "") or "")[:600],
         "possible_conditions": _summarize_conditions(summary),
         "red_flags": list(getattr(summary, "red_flags", []) or [])[:4],
+        "clinical_features": (
+            clinical_features.model_dump() if clinical_features is not None else None
+        ),
     }
     example = [
         {
@@ -552,7 +556,11 @@ def _build_llm_prompt(
         "likely condition, or specialty.\n"
         "- Ask about onset, location, severity, triggers, spread, function, "
         "associated symptoms, and red flags only when relevant.\n"
-        "- Keep wording simple and non-alarming.\n"
+        "- Keep wording simple, non-alarming, and understandable to a patient "
+        "without medical training.\n"
+        "- Prefer everyday language such as 'trouble breathing' over technical "
+        "terms such as 'dyspnea'.\n"
+        "- Avoid unexplained medical terms in both questions and options.\n"
         "- Include a neutral option like 'None', 'Not sure', or 'No' when "
         "appropriate.\n"
         "- Avoid duplicate questions.\n\n"
@@ -645,6 +653,7 @@ def _generate_llm_questions(
     summary: object | None,
     recommended_specialty: str | None,
     triage_level: str | None,
+    clinical_features: ClinicalFeatures | None,
 ) -> list[ClarificationQuestion]:
     settings = get_settings()
     if settings.reasoner_mode != "ollama":
@@ -655,6 +664,7 @@ def _generate_llm_questions(
         summary=summary,
         recommended_specialty=recommended_specialty,
         triage_level=triage_level,
+        clinical_features=clinical_features,
     )
     try:
         with httpx.Client(timeout=LLM_TIMEOUT_SECONDS) as client:
@@ -686,12 +696,25 @@ def _fallback_clarification_questions(
     summary: object | None = None,
     recommended_specialty: str | None = None,
     triage_level: str | None = None,
+    clinical_features: ClinicalFeatures | None = None,
 ) -> list[ClarificationQuestion]:
     lowered = query.lower()
     specialty = (recommended_specialty or "").lower()
     conditions = _condition_names(summary)
     combined = f"{lowered} {specialty} {conditions}"
     questions: list[ClarificationQuestion] = []
+
+    missing_details = set(
+        clinical_features.missing_critical_details if clinical_features else []
+    )
+    if "whether activity makes it worse" in missing_details:
+        _add_unique(questions, SMART_QUESTION_BANK["chest_cardiac"])
+    if "whether it started suddenly" in missing_details:
+        _add_unique(questions, QUESTION_BANK["headache"])
+    if "where the pain is strongest" in missing_details:
+        _add_unique(questions, SMART_QUESTION_BANK["gastroenterology"])
+    if "whether there is weakness or numbness" in missing_details:
+        _add_unique(questions, SMART_QUESTION_BANK["pain_red_flags"])
 
     if "chest pain" in combined or "cardiology" in combined:
         _add_unique(questions, SMART_QUESTION_BANK["chest_cardiac"])
@@ -767,12 +790,14 @@ def get_clarification_questions(
     summary: object | None = None,
     recommended_specialty: str | None = None,
     triage_level: str | None = None,
+    clinical_features: ClinicalFeatures | None = None,
 ) -> list[ClarificationQuestion]:
     llm_questions = _generate_llm_questions(
         query=query,
         summary=summary,
         recommended_specialty=recommended_specialty,
         triage_level=triage_level,
+        clinical_features=clinical_features,
     )
     if llm_questions:
         return llm_questions
@@ -782,6 +807,7 @@ def get_clarification_questions(
         summary=summary,
         recommended_specialty=recommended_specialty,
         triage_level=triage_level,
+        clinical_features=clinical_features,
     )
 
 
@@ -803,7 +829,12 @@ def build_enriched_query(original_query: str, answers: list) -> str:
     return original_query
 
 
-def needs_clarification(confidence: float, triage_level: str | None = None) -> bool:
+def needs_clarification(
+    confidence: float,
+    triage_level: str | None = None,
+    *,
+    missing_critical_details: list[str] | None = None,
+) -> bool:
     if triage_level == "high":
         return False
-    return confidence < CONFIDENCE_THRESHOLD
+    return confidence < CONFIDENCE_THRESHOLD or bool(missing_critical_details)

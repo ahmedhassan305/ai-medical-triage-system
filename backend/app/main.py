@@ -1,3 +1,6 @@
+import os
+import threading
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -38,10 +41,9 @@ def create_app() -> FastAPI:
 
     if settings.strict_reasoner:
         get_reasoner()
-    # Preload model into VRAM on startup
-    import threading as _threading
-
-    _threading.Thread(target=_preload_model, daemon=True).start()
+    if settings.reasoner_mode == "ollama" and "PYTEST_CURRENT_TEST" not in os.environ:
+        # Keep local Ollama warm without leaving noisy background threads in tests.
+        threading.Thread(target=_preload_model, daemon=True).start()
 
     return app
 

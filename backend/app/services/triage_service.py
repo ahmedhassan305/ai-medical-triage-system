@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import DoctorProfile
+from app.db.models import DoctorProfile, PatientProfile
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
 from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
 from app.rag.embedding_retriever import EmbeddingRetriever
@@ -18,6 +18,11 @@ from app.schemas.triage import DoctorSuggestion, TriageLevel, TriageResponse
 from app.services.clarification_service import (
     get_clarification_questions,
     needs_clarification,
+)
+from app.services.clinical_features import (
+    assess_urgency_from_features,
+    extract_clinical_features,
+    merge_clinical_features,
 )
 from app.services.patient_context import PatientContextProvider
 
@@ -90,6 +95,33 @@ MEDIUM_RISK_KEYWORDS: tuple[str, ...] = (
     "migraine",
 )
 
+HIGH_RISK_SUPPORT_TERMS: tuple[str, ...] = (
+    *HIGH_RISK_KEYWORDS,
+    "blue lips",
+    "face drooping",
+    "slurred speech",
+    "trouble speaking",
+    "one-sided weakness",
+    "worst headache",
+    "sudden severe headache",
+    "vision loss",
+    "throat closing",
+    "tongue swelling",
+)
+
+HIGH_RISK_FEATURE_FLAGS: frozenset[str] = frozenset(
+    {
+        "breathing distress",
+        "possible heart emergency",
+        "stroke-like symptoms",
+        "seizure or loss of consciousness",
+        "major bleeding",
+        "self-harm risk",
+        "possible serious allergy",
+        "loss of bladder or bowel control",
+    }
+)
+
 
 def _match_any(query: str, keywords: tuple[str, ...]) -> bool:
     q = query.lower()
@@ -107,6 +139,47 @@ def _classify(query: str) -> TriageLevel:
 
 def _max_triage_level(*levels: TriageLevel) -> TriageLevel:
     return max(levels, key=lambda level: TRIAGE_LEVEL_RANK[level])
+
+
+def _reasoner_high_is_supported(
+    *,
+    safety_level: TriageLevel,
+    feature_level: TriageLevel,
+    summary,
+    trusted_features,
+) -> bool:
+    if safety_level == "high" or feature_level == "high":
+        return True
+
+    if HIGH_RISK_FEATURE_FLAGS.intersection(trusted_features.red_flags_present):
+        return True
+
+    reasoner_red_flags = " ".join(getattr(summary, "red_flags", []) or []).lower()
+    return _match_any(reasoner_red_flags, HIGH_RISK_SUPPORT_TERMS)
+
+
+def _reconcile_reasoner_urgency(
+    *,
+    safety_level: TriageLevel,
+    feature_level: TriageLevel,
+    reasoner_level: TriageLevel,
+    summary,
+    trusted_features,
+) -> tuple[TriageLevel, bool]:
+    if reasoner_level != "high":
+        return _max_triage_level(safety_level, feature_level, reasoner_level), False
+
+    if _reasoner_high_is_supported(
+        safety_level=safety_level,
+        feature_level=feature_level,
+        summary=summary,
+        trusted_features=trusted_features,
+    ):
+        return "high", False
+
+    # Keep the case cautious, but do not let an unsupported LLM-only escalation
+    # become the final answer without stronger evidence.
+    return _max_triage_level(safety_level, feature_level, "medium"), True
 
 
 def _safety_floor(query: str, age: int | None = None) -> TriageLevel:
@@ -168,6 +241,9 @@ def _normalize_recommended_specialty(
     specialty: str | None,
     query: str,
     triage_level: TriageLevel,
+    *,
+    possible_conditions: list[str] | None = None,
+    body_systems: list[str] | None = None,
 ) -> str:
     if specialty:
         import re as _re
@@ -186,6 +262,14 @@ def _normalize_recommended_specialty(
                     else normalized
                 )
 
+    condition_led = _specialty_from_conditions(possible_conditions or [])
+    if condition_led:
+        return condition_led
+
+    system_led = _specialty_from_body_systems(body_systems or [])
+    if system_led:
+        return system_led
+
     lowered_query = query.lower()
     if triage_level == "high" and (
         "chest pain" in lowered_query
@@ -196,6 +280,111 @@ def _normalize_recommended_specialty(
     if any(term in lowered_query for term in ("baby", "child", "toddler", "infant")):
         return "Pediatrics"
     return "Internal Medicine"
+
+
+def _specialty_from_conditions(condition_names: list[str]) -> str | None:
+    lowered = " ".join(condition_names).lower()
+    if not lowered:
+        return None
+
+    specialty_markers: tuple[tuple[str, tuple[str, ...]], ...] = (
+        (
+            "Cardiology",
+            (
+                "myocardial infarction",
+                "acute coronary",
+                "coronary",
+                "arrhythmia",
+                "heart failure",
+                "angina",
+            ),
+        ),
+        (
+            "Neurology",
+            (
+                "migraine",
+                "stroke",
+                "seizure",
+                "meningitis",
+                "neuropathy",
+                "vertigo",
+            ),
+        ),
+        (
+            "Orthopedics",
+            (
+                "fracture",
+                "sprain",
+                "strain",
+                "arthritis",
+                "meniscal",
+                "sciatica",
+                "herniated disc",
+            ),
+        ),
+        (
+            "Gastroenterology",
+            (
+                "appendicitis",
+                "peritonitis",
+                "bowel obstruction",
+                "ibd",
+                "ulcerative colitis",
+                "crohn",
+                "hepatitis",
+                "cholecystitis",
+                "gi bleed",
+            ),
+        ),
+        (
+            "Dermatology",
+            ("eczema", "dermatitis", "urticaria", "psoriasis", "acne"),
+        ),
+        (
+            "Psychiatry",
+            ("panic disorder", "anxiety", "depression", "suicidal ideation"),
+        ),
+        (
+            "Ophthalmology",
+            ("glaucoma", "retinal", "conjunctivitis", "vision loss"),
+        ),
+        (
+            "ENT",
+            ("otitis", "sinusitis", "tonsillitis", "pharyngitis"),
+        ),
+        (
+            "Pediatrics",
+            ("croup", "bronchiolitis"),
+        ),
+    )
+    for specialty, markers in specialty_markers:
+        if any(marker in lowered for marker in markers):
+            return specialty
+
+    return None
+
+
+def _specialty_from_body_systems(body_systems: list[str]) -> str | None:
+    systems = set(body_systems)
+    if "cardiac" in systems:
+        return "Cardiology"
+    if "neurologic" in systems:
+        return "Neurology"
+    if "musculoskeletal" in systems:
+        return "Orthopedics"
+    if "skin" in systems:
+        return "Dermatology"
+    if "mental_health" in systems:
+        return "Psychiatry"
+    if "eye" in systems:
+        return "Ophthalmology"
+    if "ent" in systems:
+        return "ENT"
+    if "gastrointestinal" in systems:
+        return "Internal Medicine"
+    if "respiratory" in systems:
+        return "Internal Medicine"
+    return None
 
 
 def _build_retriever() -> Retriever:
@@ -662,43 +851,22 @@ def triage(
     age: int | None = None,
 ) -> TriageResponse:
     normalized_query = query.strip()
-    safety_level = _safety_floor(normalized_query, age)
+    if age is None and patient_id is not None and db is not None:
+        patient = (
+            db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
+        )
+        age = patient.age if patient is not None else None
+    base_features = extract_clinical_features(normalized_query, age=age)
+    safety_level = _max_triage_level(
+        _safety_floor(normalized_query, age),
+        assess_urgency_from_features(base_features, age=age),
+    )
     triage_level = safety_level
-    _spine_pain = any(
-        t in normalized_query.lower()
-        for t in (
-            "back pain",
-            "back hurts",
-            "back ache",
-            "backache",
-            "neck pain",
-            "neck hurts",
-            "spine",
-            "spinal",
-            "cervical",
-            "lumbar",
-            "disc",
-            "herniated",
-            "sciatica",
-        )
-    )
-    _limb_neuro = any(
-        t in normalized_query.lower()
-        for t in (
-            "numbness",
-            "tingling",
-            "numb",
-            "weakness",
-            "paresthesia",
-            "radiculopathy",
-        )
-    )
-    _bladder = any(
-        t in normalized_query.lower() for t in ("bladder", "bowel", "incontinence")
-    )
-    if _spine_pain and _limb_neuro:
-        _floor = "high" if _bladder else "medium"
-        triage_level = _max_triage_level(triage_level, _floor)
+    if {"back pain", "neck pain"}.intersection(base_features.symptoms) and {
+        "numbness",
+        "weakness",
+    }.intersection(base_features.symptoms):
+        triage_level = _max_triage_level(triage_level, "medium")
     settings = get_settings()
 
     age_context = _get_age_context(age)
@@ -750,7 +918,18 @@ def triage(
         triage_level,
         patient_context=patient_context,
     )
-    triage_level = _max_triage_level(safety_level, summary.urgency_level)
+    clinical_features = merge_clinical_features(
+        base_features,
+        getattr(summary, "clinical_features", None),
+    )
+    feature_level = assess_urgency_from_features(base_features, age=age)
+    triage_level, unsupported_reasoner_high = _reconcile_reasoner_urgency(
+        safety_level=safety_level,
+        feature_level=feature_level,
+        reasoner_level=summary.urgency_level,
+        summary=summary,
+        trusted_features=base_features,
+    )
     actions = _build_actions(triage_level)
 
     summary_text = (
@@ -767,6 +946,11 @@ def triage(
         ),
         normalized_query,
         triage_level,
+        possible_conditions=[
+            str(getattr(condition, "name", "") or "")
+            for condition in getattr(summary, "possible_conditions", [])
+        ],
+        body_systems=clinical_features.body_systems,
     )
     rag_context_str = " ".join(
         f"{getattr(c, 'title', '')} {getattr(c, 'text', '')[:200]}".strip()
@@ -784,14 +968,27 @@ def triage(
         if db and recommended_specialty
         else []
     )
-    confidence_score = _compute_confidence(normalized_query, chunks, summary)
-    clarification_needed = needs_clarification(confidence_score, triage_level)
+    confidence_score = _compute_confidence(
+        normalized_query,
+        chunks,
+        summary,
+        missing_critical_details=clinical_features.missing_critical_details,
+    )
+    clarification_needed = (
+        needs_clarification(
+            confidence_score,
+            triage_level,
+            missing_critical_details=clinical_features.missing_critical_details,
+        )
+        or unsupported_reasoner_high
+    )
     clarification_questions = (
         get_clarification_questions(
             normalized_query,
             summary=summary,
             recommended_specialty=recommended_specialty,
             triage_level=triage_level,
+            clinical_features=clinical_features,
         )
         if clarification_needed
         else []
@@ -802,13 +999,44 @@ def triage(
 
     logger.info(
         "triage_completed triage_level=%s query_length=%s contexts=%s "
-        "specialty=%s condition=%s confidence=%s",
+        "specialty=%s condition=%s confidence=%s unsupported_reasoner_high=%s",
         triage_level,
         len(normalized_query),
         len(contexts),
         recommended_specialty,
         suspected_condition,
         confidence_score,
+        unsupported_reasoner_high,
+    )
+
+    urgency_reason = (
+        "The current description does not show a clear emergency warning sign, "
+        "but more detail is needed before deciding how urgent this is."
+        if unsupported_reasoner_high
+        else (
+            summary.clinical_summary[:300]
+            if hasattr(summary, "clinical_summary") and summary.clinical_summary
+            else (
+                " ".join(summary.red_flags[:2])
+                if hasattr(summary, "red_flags") and summary.red_flags
+                else normalized_query
+            )
+        )
+    )
+
+    recommended_actions = (
+        actions
+        if unsupported_reasoner_high
+        else (
+            summary.recommended_actions
+            if hasattr(summary, "recommended_actions") and summary.recommended_actions
+            else actions
+        )
+    )
+    response_red_flags = (
+        []
+        if unsupported_reasoner_high
+        else summary.red_flags if hasattr(summary, "red_flags") else []
     )
 
     return TriageResponse(
@@ -821,15 +1049,7 @@ def triage(
             if triage_level == "high"
             else "Medium" if triage_level == "medium" else "Low"
         ),
-        urgency_reason=(
-            summary.clinical_summary[:300]
-            if hasattr(summary, "clinical_summary") and summary.clinical_summary
-            else (
-                " ".join(summary.red_flags[:2])
-                if hasattr(summary, "red_flags") and summary.red_flags
-                else normalized_query
-            )
-        ),
+        urgency_reason=urgency_reason,
         summary=summary_text,
         clinical_summary=summary_text,
         simple_reasoning=simple_reasoning,
@@ -843,17 +1063,9 @@ def triage(
             if hasattr(summary, "patient_friendly_explanation")
             else simple_reasoning
         ),
-        actions=(
-            summary.recommended_actions
-            if hasattr(summary, "recommended_actions") and summary.recommended_actions
-            else actions
-        ),
-        recommended_actions=(
-            summary.recommended_actions
-            if hasattr(summary, "recommended_actions")
-            else actions
-        ),
-        red_flags=summary.red_flags if hasattr(summary, "red_flags") else [],
+        actions=recommended_actions,
+        recommended_actions=recommended_actions,
+        red_flags=response_red_flags,
         recommended_specialty=recommended_specialty,
         specialty_reason=(
             f"Recommended based on the most likely condition: {recommended_specialty}."
@@ -900,6 +1112,8 @@ def _compute_confidence(
     query: str,
     chunks: list,
     summary,
+    *,
+    missing_critical_details: list[str] | None = None,
 ) -> float:
     score = 1.0
     words = query.strip().split()
@@ -925,6 +1139,12 @@ def _compute_confidence(
 
     # Catch-all specialty
     if getattr(summary, "recommended_specialty", "") == "Internal Medicine":
+        score -= 0.1
+
+    missing_count = len(missing_critical_details or [])
+    if missing_count >= 3:
+        score -= 0.2
+    elif missing_count:
         score -= 0.1
 
     return round(max(0.0, min(1.0, score)), 2)

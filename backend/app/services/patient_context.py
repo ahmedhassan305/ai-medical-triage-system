@@ -3,9 +3,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+import numpy as np
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.models import PatientProfile, Visit
+from app.rag.embedding_model import get_embedding_model
 
 
 @dataclass(frozen=True)
@@ -102,6 +105,35 @@ def _similarity(query: str, symptoms: str) -> float:
     return min(1.0, jaccard + phrase_bonus)
 
 
+def _semantic_similarity(query: str, symptoms: str) -> float | None:
+    settings = get_settings()
+    if settings.rag_retriever != "embedding":
+        return None
+    if not query or not symptoms:
+        return None
+
+    try:
+        model = get_embedding_model()
+        vectors = model.encode(
+            [query, symptoms],
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        )
+        matrix = np.asarray(vectors, dtype=np.float32)
+        return float(matrix[0] @ matrix[1])
+    except Exception:
+        return None
+
+
+def _hybrid_similarity(query: str, symptoms: str) -> float:
+    lexical = _similarity(query, symptoms)
+    semantic = _semantic_similarity(query, symptoms)
+    if semantic is None:
+        return lexical
+    semantic = max(0.0, min(1.0, semantic))
+    return round((0.35 * lexical) + (0.65 * semantic), 4)
+
+
 def _chronic_condition_relevance(
     query: str, chronic_conditions: list[str]
 ) -> list[str]:
@@ -143,7 +175,10 @@ class PatientContextProvider:
 
         # Score visits using expanded similarity
         ranked = sorted(
-            ((visit, _similarity(query, visit.symptoms or "")) for visit in visits),
+            (
+                (visit, _hybrid_similarity(query, visit.symptoms or ""))
+                for visit in visits
+            ),
             key=lambda item: item[1],
             reverse=True,
         )

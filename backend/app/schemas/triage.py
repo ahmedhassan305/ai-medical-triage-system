@@ -50,6 +50,12 @@ class TriageRequest(BaseModel):
     patient_id: int | None = None
 
 
+class ClarificationQuestion(BaseModel):
+    id: str
+    question: str
+    options: list[str] | None = None
+
+
 class TriageResponse(BaseModel):
     triage_level: TriageLevel
     urgency_level: TriageLevel
@@ -73,13 +79,7 @@ class TriageResponse(BaseModel):
     suggested_doctors: list[DoctorSuggestion] = Field(default_factory=list)
     history_used: bool = False
     disclaimer: str = ""
-    questions: list["ClarificationQuestion"] = []
-
-
-class ClarificationQuestion(BaseModel):
-    id: str
-    question: str
-    options: list[str] | None = None
+    questions: list[ClarificationQuestion] = Field(default_factory=list)
 
 
 class ClarificationResponse(BaseModel):
@@ -117,6 +117,20 @@ class ReasonerCondition(BaseModel):
     likelihood: ConditionLikelihood = "possible"
 
 
+class ClinicalFeatures(BaseModel):
+    chief_complaint: str | None = None
+    symptoms: list[str] = Field(default_factory=list)
+    body_systems: list[str] = Field(default_factory=list)
+    onset: Literal["sudden", "recent", "longstanding", "unknown"] = "unknown"
+    duration: str | None = None
+    severity: Literal["mild", "moderate", "severe", "unknown"] = "unknown"
+    progression: Literal["worsening", "improving", "unknown"] = "unknown"
+    red_flags_present: list[str] = Field(default_factory=list)
+    red_flags_denied: list[str] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+    missing_critical_details: list[str] = Field(default_factory=list)
+
+
 class StructuredReasoningOutput(BaseModel):
     urgency_level: TriageLevel = "low"
     clinical_summary: str = ""
@@ -125,3 +139,4 @@ class StructuredReasoningOutput(BaseModel):
     recommended_specialty: str | None = None
     recommended_actions: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)
+    clinical_features: ClinicalFeatures | None = None
