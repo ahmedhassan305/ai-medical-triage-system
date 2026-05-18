@@ -6,13 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
-from app.db.models import AppointmentSlot, Clinic, DoctorProfile, User
+from app.db.models import AppointmentSlot, Clinic, DoctorProfile, DoctorSchedule, User
 from app.db.session import get_db
 from app.schemas.doctor import (
     AppointmentSlotResponse,
     ClinicResponse,
     DoctorProfileResponse,
     DoctorProfileUpsert,
+    DoctorScheduleCreate,
+    DoctorScheduleResponse,
 )
 from app.services.clinical_records import assign_department_to_doctor
 from app.services.slot_booking import (
@@ -118,6 +120,92 @@ def get_doctor(
     if profile is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
     return _serialize_doctor(profile)
+
+
+@router.patch("/{doctor_id}", response_model=DoctorProfileResponse)
+def update_doctor(
+    doctor_id: int,
+    payload: DoctorProfileUpsert,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("admin")),
+) -> DoctorProfileResponse:
+    profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    for key, value in payload.model_dump().items():
+        setattr(profile, key, value)
+    assign_department_to_doctor(db, profile)
+    db.commit()
+    db.refresh(profile)
+    return _serialize_doctor(profile)
+
+
+@router.get("/{doctor_id}/schedules", response_model=list[DoctorScheduleResponse])
+def list_doctor_schedules(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("doctor", "admin")),
+) -> list[DoctorScheduleResponse]:
+    if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    schedules = (
+        db.query(DoctorSchedule)
+        .filter(DoctorSchedule.doctor_id == doctor_id)
+        .order_by(DoctorSchedule.day_of_week.asc(), DoctorSchedule.start_time.asc())
+        .all()
+    )
+    return [
+        DoctorScheduleResponse.model_validate(schedule, from_attributes=True)
+        for schedule in schedules
+    ]
+
+
+@router.post(
+    "/{doctor_id}/schedules",
+    response_model=DoctorScheduleResponse,
+    status_code=201,
+)
+def create_doctor_schedule(
+    doctor_id: int,
+    payload: DoctorScheduleCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("admin")),
+) -> DoctorScheduleResponse:
+    if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    schedule = DoctorSchedule(doctor_id=doctor_id, **payload.model_dump())
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+    return DoctorScheduleResponse.model_validate(schedule, from_attributes=True)
+
+
+@router.patch(
+    "/{doctor_id}/schedules/{schedule_id}",
+    response_model=DoctorScheduleResponse,
+)
+def update_doctor_schedule(
+    doctor_id: int,
+    schedule_id: int,
+    payload: DoctorScheduleCreate,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("admin")),
+) -> DoctorScheduleResponse:
+    schedule = (
+        db.query(DoctorSchedule)
+        .filter(
+            DoctorSchedule.id == schedule_id,
+            DoctorSchedule.doctor_id == doctor_id,
+        )
+        .first()
+    )
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="Schedule not found.")
+    for key, value in payload.model_dump().items():
+        setattr(schedule, key, value)
+    db.commit()
+    db.refresh(schedule)
+    return DoctorScheduleResponse.model_validate(schedule, from_attributes=True)
 
 
 @router.get("/{doctor_id}/slots", response_model=list[AppointmentSlotResponse])
