@@ -21,12 +21,13 @@ import {
   upsertMyPatientProfile,
 } from "../api/patients";
 import { importRecords } from "../api/records";
-import { triage, type TriageResponse } from "../api/triage";
+import { extractLabPdf, triage, type TriageResponse } from "../api/triage";
 import { createVisit, listPatientVisits, listWorkspaceVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
   DoctorSuggestionDto,
   DoctorProfileResponseDto,
+  LabValueDto,
   ManagedPatientProfileCreateDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
@@ -88,6 +89,9 @@ export default function HomePage() {
 
   const [triageQuery, setTriageQuery] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResponse | null>(null);
+  const [triageLabValues, setTriageLabValues] = useState<LabValueDto[]>([]);
+  const [triageLabLoading, setTriageLabLoading] = useState(false);
+  const [triageLabError, setTriageLabError] = useState<string | null>(null);
   const [appointmentPrefill, setAppointmentPrefill] =
     useState<AppointmentPrefill | null>(null);
   const [triagePatientNationalId, setTriagePatientNationalId] = useState("");
@@ -389,12 +393,33 @@ export default function HomePage() {
     setTriageError(null);
     setTriageResult(null);
     try {
-      const result = await triage(triageQuery.trim(), selectedPatientId ?? undefined);
+      const result = await triage(
+        triageQuery.trim(),
+        selectedPatientId ?? undefined,
+        triageLabValues,
+      );
       setTriageResult(result);
     } catch (error) {
       setTriageError(getErrorMessage(error, "Failed to run triage."));
     } finally {
       setTriageLoading(false);
+    }
+  }
+
+  async function handleLabFileChange(file: File | null) {
+    setTriageLabError(null);
+    setTriageLabValues([]);
+    if (!file) {
+      return;
+    }
+    setTriageLabLoading(true);
+    try {
+      const extracted = await extractLabPdf(file, selectedPatientId ?? undefined);
+      setTriageLabValues(extracted.values);
+    } catch (error) {
+      setTriageLabError(getErrorMessage(error, "Failed to extract lab PDF."));
+    } finally {
+      setTriageLabLoading(false);
     }
   }
 
@@ -664,7 +689,11 @@ export default function HomePage() {
             patientCreateLoading={triagePatientCreateLoading}
             patientCreateError={triagePatientCreateError}
             query={triageQuery}
+            labValues={triageLabValues}
+            labLoading={triageLabLoading}
+            labError={triageLabError}
             onQueryChange={setTriageQuery}
+            onLabFileChange={handleLabFileChange}
             onLookupNationalIdChange={setTriagePatientNationalId}
             onLookupPatient={handleLookupPatientByNationalId}
             onClearLinkedPatient={handleClearLinkedTriagePatient}

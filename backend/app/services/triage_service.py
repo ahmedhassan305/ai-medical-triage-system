@@ -849,6 +849,7 @@ def triage(
     patient_id: int | None = None,
     db: Session | None = None,
     age: int | None = None,
+    lab_values: list[dict[str, str | None]] | None = None,
 ) -> TriageResponse:
     normalized_query = query.strip()
     if age is None and patient_id is not None and db is not None:
@@ -911,6 +912,28 @@ def triage(
     elif patient_id is not None:
         patient_context = f"Patient ID {patient_id} was provided."
         history_used = True
+
+    if lab_values:
+        lab_lines = [
+            (
+                f"- {value.get('lab_name')}: {value.get('value')}"
+                f" {value.get('unit') or ''}".strip()
+            )
+            for value in lab_values
+            if value.get("lab_name") and value.get("value")
+        ]
+        if lab_lines:
+            lab_context = (
+                "=== UPLOADED BLOODWORK / LAB VALUES ===\n"
+                "Use these confirmed extracted lab values as supporting context. "
+                "Do not diagnose from labs alone.\n" + "\n".join(lab_lines)
+            )
+            patient_context = (
+                f"{patient_context}\n\n{lab_context}"
+                if patient_context
+                else lab_context
+            )
+            history_used = True
 
     summary = get_reasoner().reason(
         normalized_query,
