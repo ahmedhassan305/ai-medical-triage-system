@@ -53,6 +53,8 @@ class TriageRequest(BaseModel):
 class TriageResponse(BaseModel):
     triage_level: TriageLevel
     urgency_level: TriageLevel
+    confidence_score: float = 1.0
+    needs_clarification: bool = False
     urgency_label: str = ""
     urgency_reason: str = ""
     summary: str = ""
@@ -71,6 +73,32 @@ class TriageResponse(BaseModel):
     suggested_doctors: list[DoctorSuggestion] = Field(default_factory=list)
     history_used: bool = False
     disclaimer: str = ""
+    questions: list["ClarificationQuestion"] = []
+
+
+class ClarificationQuestion(BaseModel):
+    id: str
+    question: str
+    options: list[str] | None = None
+
+
+class ClarificationResponse(BaseModel):
+    needs_clarification: bool
+    original_query: str
+    confidence_score: float
+    questions: list[ClarificationQuestion]
+    triage_result: TriageResponse | None = None
+
+
+class ClarificationAnswer(BaseModel):
+    question_id: str
+    answer: str
+
+
+class ClarificationRequest(BaseModel):
+    original_query: str
+    answers: list[ClarificationAnswer]
+    patient_id: int | None = None
 
 
 class TriageAssessmentResponse(TriageResponse):

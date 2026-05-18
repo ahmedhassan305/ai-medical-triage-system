@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Protocol
 
@@ -12,6 +13,8 @@ from app.schemas.triage import (
     StructuredReasoningOutput,
     TriageLevel,
 )
+
+logger = logging.getLogger(__name__)
 
 HIGH_RISK_TERMS: tuple[str, ...] = (
     "chest pain",
@@ -125,17 +128,20 @@ class OllamaReasoner:
             "prompt": prompt,
             "stream": False,
             "format": "json",
+            "options": {"temperature": 0.0},
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(f"{self.host}/api/generate", json=payload)
                 response.raise_for_status()
             generated = str(response.json().get("response", "")).strip()
+            logger.info("reasoner_raw_json=%s", generated)
             parsed = _parse_reasoner_payload(generated)
             if parsed is not None:
                 return parsed
+            logger.warning("reasoner_parse_failed raw=%s", generated[:1000])
         except Exception:
-            pass
+            logger.exception("reasoner_generation_failed fallback=stub")
 
         return self._fallback.reason(
             query,
@@ -181,7 +187,7 @@ class OllamaReasoner:
                     ),
                 },
             ],
-            "recommended_specialty": "Pulmonology",
+            "recommended_specialty": "Internal Medicine",
             "recommended_actions": [
                 "Arrange a same-day medical review if symptoms are worsening.",
                 "Seek urgent help if breathing becomes difficult.",
@@ -217,6 +223,15 @@ class OllamaReasoner:
             '  "red_flags": ["warning sign 1", "warning sign 2"]\n'
             "}\n\n"
             "Rules:\n"
+            "- Treat retrieved evidence as supporting material, not as truth.\n"
+            "- Use retrieved evidence ONLY when it clearly matches the "
+            "patient's symptoms and context.\n"
+            "- If a retrieved article is weakly related, irrelevant, or "
+            "conflicts with the symptoms, ignore it.\n"
+            "- Do not list a condition only because it appears in retrieved "
+            "evidence; the patient's symptoms must fit.\n"
+            "- If evidence is insufficient, say what is uncertain and keep "
+            "the differential broad.\n"
             "- Gastroenterology is ONLY for: vomiting blood, blood in stool, "
             "jaundice/yellow skin, liver disease, severe abdominal pain, "
             "colonoscopy-related, bowel disease. Weight loss, fatigue, "

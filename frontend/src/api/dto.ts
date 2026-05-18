@@ -166,6 +166,24 @@ export type DoctorSuggestionDto = {
   specialty_match_reason?: string | null;
 };
 
+export type ClarificationQuestionDto = {
+  id: string;
+  question: string;
+  options: string[] | null;
+};
+
+export type ClarificationAnswerDto = {
+  question_id: string;
+  answer: string;
+};
+
+export type SupportingReferenceDto = {
+  title: string;
+  source: string;
+  url?: string | null;
+  snippet: string;
+};
+
 export type SuspectedConditionDto = {
   name: string;
   likelihood:
@@ -177,28 +195,24 @@ export type SuspectedConditionDto = {
   explanation: string;
 };
 
-export type SupportingReferenceDto = {
-  title: string;
-  source: string;
-  url?: string | null;
-  snippet: string;
-};
-
 export type TriageResponseDto = {
   triage_level: TriageLevel;
   urgency_level: TriageLevel;
-  urgency_label?: string;
-  urgency_reason?: string;
+  confidence_score: number;
+  needs_clarification: boolean;
+  questions: ClarificationQuestionDto[];
+  urgency_label: string;
+  urgency_reason: string;
   summary: string;
-  clinical_summary?: string;
+  clinical_summary: string;
   simple_reasoning?: string;
   plain_language_explanation?: string;
-  patient_friendly_explanation?: string;
+  patient_friendly_explanation: string;
   actions: string[];
   recommended_actions: string[];
   red_flags: string[];
   recommended_specialty?: string | null;
-  specialty_reason?: string | null;
+  specialty_reason: string;
   suspected_condition?: string | null;
   suspected_conditions: SuspectedConditionDto[];
   supporting_references: SupportingReferenceDto[];

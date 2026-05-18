@@ -9,6 +9,7 @@ import type {
   VisitResponseDto,
 } from "../api/dto";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import ClarificationPanel from "./ClarificationPanel";
 import DoctorCard from "./DoctorCard";
 import SectionPanel from "./SectionPanel";
 import TriageForm from "./TriageForm";
@@ -35,6 +36,7 @@ type TriagePanelProps = {
     payload: ManagedPatientProfileCreateDto,
   ) => Promise<void>;
   onSubmit: () => void;
+  onClarificationComplete: (result: TriageResponseDto) => void;
   onReserveAppointment?: (
     doctor: DoctorSuggestionDto,
     specialty: string,
@@ -464,6 +466,7 @@ export default function TriagePanel({
   onClearLinkedPatient,
   onCreatePatientProfile,
   onSubmit,
+  onClarificationComplete,
   onReserveAppointment,
 }: TriagePanelProps) {
   return (
@@ -529,7 +532,14 @@ export default function TriagePanel({
 
       {error ? <div className="notice notice--error">{error}</div> : null}
 
-      {result ? (
+      {result && result.needs_clarification ? (
+        <ClarificationPanel
+          originalQuery={query}
+          questions={result.questions}
+          patientId={patientProfile?.id ?? linkedPatient?.id ?? null}
+          onComplete={onClarificationComplete}
+        />
+      ) : result ? (
         <div className="result-layout">
           <section className="result-card result-card--hero">
             <div className="result-card__meta">
