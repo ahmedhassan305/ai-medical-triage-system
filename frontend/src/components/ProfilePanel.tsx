@@ -48,6 +48,9 @@ const EMPTY_PATIENT_FORM: PatientProfileFormState = {
   chronic_conditions: [],
 };
 
+const ADMIN_PROFILE_PAGE_SIZE = 8;
+const ADMIN_RELATED_RECORD_LIMIT = 5;
+
 function formatDateTime(dateValue?: string | null): string {
   if (!dateValue) {
     return "Not scheduled";
@@ -93,6 +96,8 @@ function AdminOperationsPanel({
   const [doctorSearch, setDoctorSearch] = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null);
+  const [patientPage, setPatientPage] = useState(1);
+  const [doctorPage, setDoctorPage] = useState(1);
 
   const completedAppointments = appointments.filter(
     (appointment) =>
@@ -138,6 +143,54 @@ function AdminOperationsPanel({
   const doctorAppointments = selectedDoctor
     ? appointments.filter((a) => a.doctor_id === selectedDoctor.id)
     : [];
+
+  function paginate<T>(items: T[], page: number): T[] {
+    const start = (page - 1) * ADMIN_PROFILE_PAGE_SIZE;
+    return items.slice(start, start + ADMIN_PROFILE_PAGE_SIZE);
+  }
+
+  function renderPagination(
+    items: unknown[],
+    page: number,
+    setPage: (page: number) => void,
+  ) {
+    if (items.length <= ADMIN_PROFILE_PAGE_SIZE) {
+      return null;
+    }
+    const pageCount = Math.ceil(items.length / ADMIN_PROFILE_PAGE_SIZE);
+    const safePage = Math.min(page, pageCount);
+    const startItem = (safePage - 1) * ADMIN_PROFILE_PAGE_SIZE + 1;
+    const endItem = Math.min(safePage * ADMIN_PROFILE_PAGE_SIZE, items.length);
+
+    return (
+      <div className="pagination-strip">
+        <span>
+          Showing {startItem}-{endItem} of {items.length}
+        </span>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === 1}
+            onClick={() => setPage(Math.max(1, safePage - 1))}
+          >
+            Previous
+          </button>
+          <span className="pagination-strip__page">
+            Page {safePage} / {pageCount}
+          </span>
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === pageCount}
+            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="stack-lg">
@@ -249,7 +302,10 @@ function AdminOperationsPanel({
               <input
                 id="patient-search"
                 value={patientSearch}
-                onChange={(event) => setPatientSearch(event.target.value)}
+                onChange={(event) => {
+                  setPatientSearch(event.target.value);
+                  setPatientPage(1);
+                }}
                 placeholder="Enter patient national ID"
               />
             </div>
@@ -320,7 +376,9 @@ function AdminOperationsPanel({
                       {patientAppointments.length === 0 ? (
                         <div className="empty-state">No appointments recorded.</div>
                       ) : (
-                        patientAppointments.map((appointment) => (
+                        patientAppointments
+                          .slice(0, ADMIN_RELATED_RECORD_LIMIT)
+                          .map((appointment) => (
                           <article key={appointment.id} className="activity-item">
                             <div>
                               <strong>Appointment #{appointment.id}</strong>
@@ -343,6 +401,15 @@ function AdminOperationsPanel({
                         ))
                       )}
                     </div>
+                    {patientAppointments.length > ADMIN_RELATED_RECORD_LIMIT ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => onNavigate("appointments")}
+                      >
+                        View all {patientAppointments.length} appointments
+                      </button>
+                    ) : null}
                   </div>
 
                   <div>
@@ -351,7 +418,7 @@ function AdminOperationsPanel({
                       {patientVisits.length === 0 ? (
                         <div className="empty-state">No visits recorded.</div>
                       ) : (
-                        patientVisits.map((visit) => (
+                        patientVisits.slice(0, ADMIN_RELATED_RECORD_LIMIT).map((visit) => (
                           <article key={visit.id} className="activity-item">
                             <div>
                               <strong>{visit.diagnosis || "Visit record"}</strong>
@@ -365,6 +432,15 @@ function AdminOperationsPanel({
                         ))
                       )}
                     </div>
+                    {patientVisits.length > ADMIN_RELATED_RECORD_LIMIT ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => onNavigate("visits")}
+                      >
+                        View all {patientVisits.length} visits
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -377,33 +453,38 @@ function AdminOperationsPanel({
                       : "Enter a national ID to search for patients."}
                   </div>
                 ) : (
-                  <div className="activity-list">
-                    {filteredPatients.map((patient) => (
-                      <button
-                        key={patient.id}
-                        type="button"
-                        className="activity-item"
-                        onClick={() => setSelectedPatientId(patient.id)}
-                      >
-                        <div>
+                  <>
+                    <div className="profile-record-table">
+                      <div className="profile-record-table__header">
+                        <span>Patient</span>
+                        <span>National ID</span>
+                        <span>Governorate</span>
+                        <span>Updated</span>
+                        <span>Action</span>
+                      </div>
+                      {paginate(filteredPatients, patientPage).map((patient) => (
+                        <button
+                          key={patient.id}
+                          type="button"
+                          className="profile-record-table__row"
+                          onClick={() => setSelectedPatientId(patient.id)}
+                        >
                           <strong>{patient.full_name}</strong>
-                          <p>
-                            {patient.national_id
-                              ? `National ID: ${patient.national_id}`
-                              : "No national ID"}
-                          </p>
-                          <p>
+                          <span>{patient.national_id || "Not recorded"}</span>
+                          <span>
                             {patient.current_governorate ||
                               patient.inferred_governorate ||
-                              "Governorate pending"}
-                          </p>
-                        </div>
-                        <div className="activity-meta">
-                          <small>{formatDateTime(patient.updated_at)}</small>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                              "Pending"}
+                          </span>
+                          <span>{formatDateTime(patient.updated_at)}</span>
+                          <span className="button button--ghost button--small">
+                            View
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {renderPagination(filteredPatients, patientPage, setPatientPage)}
+                  </>
                 )}
               </div>
             )}
@@ -415,7 +496,10 @@ function AdminOperationsPanel({
               <input
                 id="doctor-search"
                 value={doctorSearch}
-                onChange={(event) => setDoctorSearch(event.target.value)}
+                onChange={(event) => {
+                  setDoctorSearch(event.target.value);
+                  setDoctorPage(1);
+                }}
                 placeholder="Enter doctor name or specialty"
               />
             </div>
@@ -466,7 +550,9 @@ function AdminOperationsPanel({
                       {doctorAppointments.length === 0 ? (
                         <div className="empty-state">No appointments recorded.</div>
                       ) : (
-                        doctorAppointments.map((appointment) => (
+                        doctorAppointments
+                          .slice(0, ADMIN_RELATED_RECORD_LIMIT)
+                          .map((appointment) => (
                           <article key={appointment.id} className="activity-item">
                             <div>
                               <strong>Appointment #{appointment.id}</strong>
@@ -489,6 +575,15 @@ function AdminOperationsPanel({
                         ))
                       )}
                     </div>
+                    {doctorAppointments.length > ADMIN_RELATED_RECORD_LIMIT ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => onNavigate("appointments")}
+                      >
+                        View all {doctorAppointments.length} appointments
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -501,28 +596,37 @@ function AdminOperationsPanel({
                       : "Enter a name or specialty to search for doctors."}
                   </div>
                 ) : (
-                  <div className="activity-list">
-                    {filteredDoctors.map((doctor) => (
-                      <button
-                        key={doctor.id}
-                        type="button"
-                        className="activity-item"
-                        onClick={() => setSelectedDoctorId(doctor.id)}
-                      >
-                        <div>
+                  <>
+                    <div className="profile-record-table profile-record-table--doctors">
+                      <div className="profile-record-table__header">
+                        <span>Doctor</span>
+                        <span>Specialty</span>
+                        <span>Location</span>
+                        <span>Updated</span>
+                        <span>Action</span>
+                      </div>
+                      {paginate(filteredDoctors, doctorPage).map((doctor) => (
+                        <button
+                          key={doctor.id}
+                          type="button"
+                          className="profile-record-table__row"
+                          onClick={() => setSelectedDoctorId(doctor.id)}
+                        >
                           <strong>{doctor.full_name}</strong>
-                          <p>{doctor.specialty}</p>
-                          <p>
+                          <span>{doctor.specialty}</span>
+                          <span>
                             {[doctor.area, doctor.city].filter(Boolean).join(", ") ||
                               doctor.clinic}
-                          </p>
-                        </div>
-                        <div className="activity-meta">
-                          <small>{formatDateTime(doctor.updated_at)}</small>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                          </span>
+                          <span>{formatDateTime(doctor.updated_at)}</span>
+                          <span className="button button--ghost button--small">
+                            View
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {renderPagination(filteredDoctors, doctorPage, setDoctorPage)}
+                  </>
                 )}
               </div>
             )}

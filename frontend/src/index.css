@@ -1524,6 +1524,49 @@ button.activity-item:hover {
   justify-self: start;
 }
 
+.profile-record-table {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-record-table__header,
+.profile-record-table__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(130px, 1fr) minmax(130px, 1fr) 120px 90px;
+  gap: 12px;
+  align-items: center;
+}
+
+.profile-record-table__header {
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-record-table__row {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-record-table__row:hover {
+  border-color: rgba(15, 118, 110, 0.24);
+  box-shadow: 0 10px 24px rgba(22, 51, 50, 0.08);
+}
+
+.profile-record-table__row .button {
+  justify-self: start;
+}
+
 .pagination-strip__page {
   align-self: center;
   color: var(--bg-ink-soft);
@@ -1610,7 +1653,9 @@ button.activity-item:hover {
   .ops-table__row,
   .appointment-page-block__header,
   .appointment-table__header,
-  .appointment-table__row {
+  .appointment-table__row,
+  .profile-record-table__header,
+  .profile-record-table__row {
     grid-template-columns: 1fr;
   }
 }
