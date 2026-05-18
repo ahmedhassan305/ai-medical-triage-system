@@ -98,12 +98,9 @@ export default function AuthPanel({
             {t("languageArabic")}
           </button>
         </div>
-        <p className="hero__eyebrow">Clinical operations cockpit</p>
+        <p className="hero__eyebrow">{t("operationsControlCenter")}</p>
         <h1 className="hero__title">AI Medical Triage System</h1>
-        <p className="hero__copy">
-          Authenticate, manage patient and doctor profiles, run history-aware
-          triage, coordinate appointments, and import records from one screen.
-        </p>
+        <p className="hero__copy">{t("profileAdminDescription")}</p>
         <div className="hero__stats">
           <div className="hero__stat">
             <span>FastAPI</span>
@@ -121,9 +118,9 @@ export default function AuthPanel({
       </div>
 
       <SectionPanel
-        eyebrow="Access"
-        title={mode === "login" ? "Sign in" : "Create account"}
-        description="Use a patient, doctor, or admin account to unlock the relevant workspace."
+        eyebrow={t("access")}
+        title={mode === "login" ? t("signIn") : t("createAccount")}
+        description={t("profileDescription")}
       >
         <div className="segmented-control">
           <button
@@ -144,7 +141,7 @@ export default function AuthPanel({
 
         <form className="stack-lg" onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="auth-email">Email</label>
+            <label htmlFor="auth-email">{t("email")}</label>
             <input
               id="auth-email"
               type="email"
@@ -155,7 +152,7 @@ export default function AuthPanel({
           </div>
 
           <div className="field">
-            <label htmlFor="auth-password">Password</label>
+            <label htmlFor="auth-password">{t("password")}</label>
             <input
               id="auth-password"
               type="password"
@@ -168,7 +165,7 @@ export default function AuthPanel({
           {mode === "register" ? (
             <>
               <div className="field">
-                <label htmlFor="auth-role">Account type</label>
+                <label htmlFor="auth-role">{t("accountType")}</label>
                 <select
                   id="auth-role"
                   value={role}
@@ -182,8 +179,8 @@ export default function AuthPanel({
                     }
                   }}
                 >
-                  <option value="patient">Patient</option>
-                  <option value="doctor">Doctor</option>
+                  <option value="patient">{t("patient")}</option>
+                  <option value="doctor">{t("doctor")}</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
@@ -191,7 +188,7 @@ export default function AuthPanel({
               {isPatientMode ? (
                 <>
                   <div className="field">
-                    <label htmlFor="auth-full-name">Full name</label>
+                    <label htmlFor="auth-full-name">{t("fullName")}</label>
                     <input
                       id="auth-full-name"
                       type="text"
@@ -227,7 +224,7 @@ export default function AuthPanel({
                   </div>
 
                   <div className="field">
-                    <label htmlFor="auth-sex">Gender</label>
+                    <label htmlFor="auth-sex">{t("gender")}</label>
                     <select
                       id="auth-sex"
                       value={sex}
@@ -236,9 +233,9 @@ export default function AuthPanel({
                       }
                       required
                     >
-                      <option value="">Select gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
+                      <option value="">{t("selectGender")}</option>
+                      <option value="Male">{t("male")}</option>
+                      <option value="Female">{t("female")}</option>
                     </select>
                   </div>
                 </>
@@ -254,10 +251,10 @@ export default function AuthPanel({
             disabled={!canSubmit}
           >
             {loading
-              ? "Working..."
+              ? t("working")
               : mode === "login"
-                ? "Login"
-                : "Create account"}
+                ? t("login")
+                : t("createAccount")}
           </button>
         </form>
       </SectionPanel>
