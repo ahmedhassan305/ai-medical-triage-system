@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { RoleType } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
 
 type PatientSexOption = "" | "Male" | "Female";
@@ -25,6 +26,7 @@ export default function AuthPanel({
   onLogin,
   onRegister,
 }: AuthPanelProps) {
+  const { language, setLanguage, t } = useLanguage();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,6 +82,22 @@ export default function AuthPanel({
   return (
     <div className="auth-shell">
       <div className="auth-shell__hero">
+        <div className="language-toggle">
+          <button
+            type="button"
+            className={language === "en" ? "is-active" : ""}
+            onClick={() => setLanguage("en")}
+          >
+            {t("languageEnglish")}
+          </button>
+          <button
+            type="button"
+            className={language === "ar" ? "is-active" : ""}
+            onClick={() => setLanguage("ar")}
+          >
+            {t("languageArabic")}
+          </button>
+        </div>
         <p className="hero__eyebrow">Clinical operations cockpit</p>
         <h1 className="hero__title">AI Medical Triage System</h1>
         <p className="hero__copy">

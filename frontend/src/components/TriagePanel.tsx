@@ -2,6 +2,7 @@
 
 import type {
   DoctorSuggestionDto,
+  LabValueDto,
   ManagedPatientProfileCreateDto,
   PatientProfileResponseDto,
   RoleType,
@@ -28,7 +29,11 @@ type TriagePanelProps = {
   patientCreateLoading: boolean;
   patientCreateError: string | null;
   query: string;
+  labValues?: LabValueDto[];
+  labLoading?: boolean;
+  labError?: string | null;
   onQueryChange: (value: string) => void;
+  onLabFileChange?: (file: File | null) => void;
   onLookupNationalIdChange: (value: string) => void;
   onLookupPatient: (nationalId: string) => Promise<void>;
   onClearLinkedPatient: () => void;
@@ -460,7 +465,11 @@ export default function TriagePanel({
   patientCreateLoading,
   patientCreateError,
   query,
+  labValues = [],
+  labLoading = false,
+  labError = null,
   onQueryChange,
+  onLabFileChange = () => undefined,
   onLookupNationalIdChange,
   onLookupPatient,
   onClearLinkedPatient,
@@ -526,7 +535,11 @@ export default function TriagePanel({
       <TriageForm
         query={query}
         loading={loading}
+        labValues={labValues}
+        labLoading={labLoading}
+        labError={labError}
         onQueryChange={onQueryChange}
+        onLabFileChange={onLabFileChange}
         onSubmit={onSubmit}
       />
 
