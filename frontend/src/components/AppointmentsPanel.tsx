@@ -63,9 +63,12 @@ export default function AppointmentsPanel({
   const formRef = useRef<HTMLFormElement | null>(null);
   const [doctorId, setDoctorId] = useState<number | "">(preFill?.doctorId ?? "");
   const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
+  const [patientSearch, setPatientSearch] = useState("");
   const [reason, setReason] = useState(preFill?.reason ?? "");
   const [notes, setNotes] = useState(preFill?.notes ?? "");
   const [scheduledFor, setScheduledFor] = useState("");
+  const [sortBy, setSortBy] = useState<"date" | "id">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
     if (!preFill) {
@@ -95,11 +98,19 @@ export default function AppointmentsPanel({
     }
   }
 
-  const sortedAppointments = [...appointments].sort(
-    (left, right) =>
-      new Date(right.scheduled_for || right.requested_at).getTime() -
-      new Date(left.scheduled_for || left.requested_at).getTime(),
-  );
+  const sortedAppointments = [...appointments].sort((left, right) => {
+    let comparison = 0;
+
+    if (sortBy === "date") {
+      const leftDate = new Date(left.scheduled_for || left.requested_at).getTime();
+      const rightDate = new Date(right.scheduled_for || right.requested_at).getTime();
+      comparison = leftDate - rightDate;
+    } else if (sortBy === "id") {
+      comparison = left.id - right.id;
+    }
+
+    return sortDirection === "desc" ? -comparison : comparison;
+  });
   const pendingAppointments = sortedAppointments.filter(
     (appointment) => appointment.status === "requested",
   );
@@ -112,6 +123,16 @@ export default function AppointmentsPanel({
   const rejectedAppointments = sortedAppointments.filter(
     (appointment) => appointment.status === "rejected",
   );
+
+  const filteredPatients = patients.filter((patient) => {
+    const search = patientSearch.trim();
+    if (!search) {
+      return true;
+    }
+    const nationalId = patient.national_id?.toLowerCase() ?? "";
+    return nationalId.includes(search.toLowerCase()) ||
+      patient.full_name.toLowerCase().includes(search.toLowerCase());
+  });
 
   function renderAppointmentCard(
     appointment: AppointmentResponseDto,
@@ -237,23 +258,35 @@ export default function AppointmentsPanel({
               ) : null}
 
               {role === "admin" ? (
-                <div className="field">
-                  <label htmlFor="appointment-patient">Patient</label>
-                  <select
-                    id="appointment-patient"
-                    value={patientId}
-                    onChange={(event) =>
-                      setPatientId(event.target.value ? Number(event.target.value) : "")
-                    }
-                  >
-                    <option value="">Select patient</option>
-                    {patients.map((patient) => (
-                      <option key={patient.id} value={patient.id}>
-                        {patient.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <>
+                  <div className="field">
+                    <label htmlFor="appointment-patient-search">Patient national ID</label>
+                    <input
+                      id="appointment-patient-search"
+                      type="text"
+                      value={patientSearch}
+                      onChange={(event) => setPatientSearch(event.target.value)}
+                      placeholder="Enter patient national ID"
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="appointment-patient">Patient</label>
+                    <select
+                      id="appointment-patient"
+                      value={patientId}
+                      onChange={(event) =>
+                        setPatientId(event.target.value ? Number(event.target.value) : "")
+                      }
+                    >
+                      <option value="">Select patient</option>
+                      {filteredPatients.map((patient) => (
+                        <option key={patient.id} value={patient.id}>
+                          {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               ) : null}
 
               <div className="field">
@@ -335,6 +368,34 @@ export default function AppointmentsPanel({
                 <h3>{appointments.length} tracked bookings</h3>
               </div>
             </div>
+
+            {role === "admin" ? (
+              <div className="inline-filter">
+                <div className="segmented-control">
+                  <button
+                    type="button"
+                    className={sortBy === "date" ? "is-active" : ""}
+                    onClick={() => setSortBy("date")}
+                  >
+                    Sort by date
+                  </button>
+                  <button
+                    type="button"
+                    className={sortBy === "id" ? "is-active" : ""}
+                    onClick={() => setSortBy("id")}
+                  >
+                    Sort by number
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="button button--ghost button--small"
+                  onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                >
+                  {sortDirection === "asc" ? "↑ Ascending" : "↓ Descending"}
+                </button>
+              </div>
+            ) : null}
 
             <div className="stack-md">
               <div>

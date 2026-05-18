@@ -71,6 +71,7 @@ export type DoctorProfileUpsertDto = {
 export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   id: number;
   user_id: number | null;
+  department_id?: number | null;
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;
@@ -78,12 +79,32 @@ export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   updated_at: string;
 };
 
+export type ClinicDto = {
+  id: number;
+  name: string;
+  area?: string | null;
+  city?: string | null;
+  address?: string | null;
+  is_active?: boolean;
+};
+
+export type AppointmentSlotDto = {
+  id: number;
+  doctor_id: number;
+  clinic_id?: number | null;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  clinic?: ClinicDto | null;
+};
+
 export type AppointmentCreateDto = {
   patient_id: number;
-  doctor_id: number;
+  doctor_id?: number | null;
   reason: string;
   notes?: string | null;
   scheduled_for?: string | null;
+  slot_id?: number | null;
 };
 
 export type AppointmentStatusUpdateDto = {
@@ -93,8 +114,12 @@ export type AppointmentStatusUpdateDto = {
 
 export type AppointmentResponseDto = AppointmentCreateDto & {
   id: number;
+  doctor_id: number;
+  clinic_id?: number | null;
   status: string;
   requested_at: string;
+  slot?: AppointmentSlotDto | null;
+  clinic?: ClinicDto | null;
 };
 
 export type VisitCreateDto = {
@@ -128,17 +153,28 @@ export type DoctorSuggestionDto = {
   full_name: string;
   specialty: string;
   clinic: string;
+  clinic_id?: number | null;
   area?: string | null;
   city?: string | null;
+  earliest_available_slot?: string | null;
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;
+  rating?: number | null;
+  recommendation_reason?: string | null;
+  distance_km?: number | null;
+  specialty_match_reason?: string | null;
 };
 
-export type SuspectedConditionDto = {
-  name: string;
-  likelihood: "more_likely" | "possible" | "less_likely";
-  explanation: string;
+export type ClarificationQuestionDto = {
+  id: string;
+  question: string;
+  options: string[] | null;
+};
+
+export type ClarificationAnswerDto = {
+  question_id: string;
+  answer: string;
 };
 
 export type SupportingReferenceDto = {
@@ -148,25 +184,39 @@ export type SupportingReferenceDto = {
   snippet: string;
 };
 
+export type SuspectedConditionDto = {
+  name: string;
+  likelihood:
+    | "more_likely"
+    | "more likely"
+    | "possible"
+    | "less_likely"
+    | "less likely";
+  explanation: string;
+};
+
 export type TriageResponseDto = {
   triage_level: TriageLevel;
   urgency_level: TriageLevel;
+  confidence_score: number;
+  needs_clarification: boolean;
+  questions: ClarificationQuestionDto[];
   urgency_label: string;
-  urgency_reason?: string | null;
+  urgency_reason: string;
   summary: string;
   clinical_summary: string;
+  simple_reasoning?: string;
+  plain_language_explanation?: string;
   patient_friendly_explanation: string;
   actions: string[];
   recommended_actions: string[];
   red_flags: string[];
-  disclaimer: string;
-  history_used: boolean;
-  simple_reasoning: string;
-  plain_language_explanation: string;
   recommended_specialty?: string | null;
-  specialty_reason?: string | null;
+  specialty_reason: string;
   suspected_condition?: string | null;
   suspected_conditions: SuspectedConditionDto[];
-  suggested_doctors: DoctorSuggestionDto[];
   supporting_references: SupportingReferenceDto[];
+  suggested_doctors: DoctorSuggestionDto[];
+  disclaimer: string;
+  history_used: boolean;
 };

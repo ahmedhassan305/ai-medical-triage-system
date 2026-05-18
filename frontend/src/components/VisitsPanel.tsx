@@ -38,6 +38,7 @@ export default function VisitsPanel({
   onCreateVisit,
 }: VisitsPanelProps) {
   const [patientId, setPatientId] = useState<number | "">(selectedPatientId ?? "");
+  const [patientSearch, setPatientSearch] = useState("");
   const [symptoms, setSymptoms] = useState("");
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
@@ -64,6 +65,16 @@ export default function VisitsPanel({
     setPrescriptions("");
   }
 
+  const filteredPatientOptions = patientOptions.filter((patient) => {
+    const search = patientSearch.trim();
+    if (!search) {
+      return true;
+    }
+    const nationalId = patient.national_id?.toLowerCase() ?? "";
+    return nationalId.includes(search.toLowerCase()) ||
+      patient.full_name.toLowerCase().includes(search.toLowerCase());
+  });
+
   return (
     <SectionPanel
       eyebrow="Clinical records"
@@ -81,6 +92,16 @@ export default function VisitsPanel({
             </div>
             <form className="form-grid" onSubmit={handleCreate}>
               <div className="field">
+                <label htmlFor="visit-patient-search">Patient national ID</label>
+                <input
+                  id="visit-patient-search"
+                  type="text"
+                  value={patientSearch}
+                  onChange={(event) => setPatientSearch(event.target.value)}
+                  placeholder="Enter patient national ID"
+                />
+              </div>
+              <div className="field">
                 <label htmlFor="visit-patient">Patient</label>
                 <select
                   id="visit-patient"
@@ -92,9 +113,9 @@ export default function VisitsPanel({
                   }}
                 >
                   <option value="">Select patient</option>
-                  {patientOptions.map((patient) => (
+                  {filteredPatientOptions.map((patient) => (
                     <option key={patient.id} value={patient.id}>
-                      {patient.full_name}
+                      {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
                     </option>
                   ))}
                 </select>

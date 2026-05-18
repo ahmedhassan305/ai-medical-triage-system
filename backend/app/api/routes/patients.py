@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -181,3 +182,41 @@ def get_patient(
     if profile is None:
         raise HTTPException(status_code=404, detail="Patient profile not found.")
     return PatientProfileResponse.model_validate(profile, from_attributes=True)
+
+
+def _format_patient_search_result(patient_id: int, full_name: str | None) -> str:
+    if full_name is None:
+        return (
+            "----------------------------\n"
+            "🔍 Patient Search Result\n"
+            "----------------------------\n\n"
+            "🆔 Patient ID:\n"
+            f"{patient_id}\n\n"
+            "❌ Status:\n"
+            "No patient found with this ID.\n\n"
+            "----------------------------"
+        )
+
+    return (
+        "----------------------------\n"
+        "🔍 Patient Search Result\n"
+        "----------------------------\n\n"
+        "🆔 Patient ID:\n"
+        f"{patient_id}\n\n"
+        "👤 Patient Name:\n"
+        f"{full_name}\n\n"
+        "✅ Status:\n"
+        "Patient found successfully.\n\n"
+        "----------------------------"
+    )
+
+
+@router.get("/{patient_id}/search-result", response_class=PlainTextResponse)
+def get_patient_search_result(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("doctor", "admin")),
+) -> str:
+    profile = db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
+    full_name = profile.full_name if profile is not None else None
+    return _format_patient_search_result(patient_id, full_name)

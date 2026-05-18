@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class VisitCreate(BaseModel):
     patient_id: int
     doctor_id: int | None = None
+    appointment_id: int | None = None
     symptoms: str = Field(min_length=1)
     vitals: dict[str, str] | None = None
     diagnosis: str | None = None
@@ -18,4 +19,5 @@ class VisitCreate(BaseModel):
 
 class VisitResponse(VisitCreate):
     id: int
+    appointment_id: int | None = None
     created_at: datetime

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 
 import type {
   DoctorSuggestionDto,
@@ -9,6 +9,8 @@ import type {
   VisitResponseDto,
 } from "../api/dto";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import ClarificationPanel from "./ClarificationPanel";
+import DoctorCard from "./DoctorCard";
 import SectionPanel from "./SectionPanel";
 import TriageForm from "./TriageForm";
 
@@ -34,6 +36,7 @@ type TriagePanelProps = {
     payload: ManagedPatientProfileCreateDto,
   ) => Promise<void>;
   onSubmit: () => void;
+  onClarificationComplete: (result: TriageResponseDto) => void;
   onReserveAppointment?: (
     doctor: DoctorSuggestionDto,
     specialty: string,
@@ -66,8 +69,10 @@ const LIKELIHOOD_LABELS: Record<
   string
 > = {
   more_likely: "More likely",
+  "more likely": "More likely",
   possible: "Possible",
   less_likely: "Less likely",
+  "less likely": "Less likely",
 };
 
 function summarize(text?: string | null, fallback = "No summary available."): string {
@@ -199,7 +204,7 @@ function StaffPatientLookup({
                   event.target.value.replace(/\D/g, "").slice(0, 14),
                 )
               }
-              placeholder="14-digit الرقم القومي"
+              placeholder="14-digit Ø§Ù„Ø±Ù‚Ù… Ø§Ù„Ù‚ÙˆÙ…ÙŠ"
             />
           </div>
 
@@ -461,6 +466,7 @@ export default function TriagePanel({
   onClearLinkedPatient,
   onCreatePatientProfile,
   onSubmit,
+  onClarificationComplete,
   onReserveAppointment,
 }: TriagePanelProps) {
   return (
@@ -526,12 +532,19 @@ export default function TriagePanel({
 
       {error ? <div className="notice notice--error">{error}</div> : null}
 
-      {result ? (
+      {result && result.needs_clarification ? (
+        <ClarificationPanel
+          originalQuery={query}
+          questions={result.questions}
+          patientId={patientProfile?.id ?? linkedPatient?.id ?? null}
+          onComplete={onClarificationComplete}
+        />
+      ) : result ? (
         <div className="result-layout">
           <section className="result-card result-card--hero">
             <div className="result-card__meta">
-              <span className={`badge badge--${result.urgency_level}`}>
-                {result.urgency_level.toUpperCase()}
+              <span className={`badge badge--${result.triage_level}`}>
+                {result.triage_level.toUpperCase()}
               </span>
               <span className="muted-copy">
                 {result.history_used
@@ -628,56 +641,33 @@ export default function TriagePanel({
                 </p>
               ) : (
                 <div className="stack-md">
-                  {result.suggested_doctors.map((doctor) => (
-                    <article key={doctor.id} className="doctor-suggestion-card">
-                      <div className="doctor-suggestion-card__header">
-                        <div>
-                          <strong>{doctor.full_name}</strong>
-                          <p className="muted-copy">
-                            {doctor.specialty} · {doctor.clinic}
-                          </p>
-                          {doctor.area && (
-                            <p className="muted-copy">
-                              {doctor.area}
-                              {doctor.city && `, ${doctor.city}`}
-                            </p>
-                          )}
-                          {doctor.source_name ? (
-                            <p className="muted-copy">
-                              Public listing: {doctor.source_name}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="doctor-suggestion-card__actions">
-                        {(doctor.booking_url || doctor.source_url) && (
-                          <a
-                            className="button button--ghost button--small"
-                            href={doctor.booking_url || doctor.source_url || "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Open public listing
-                          </a>
-                        )}
-                        {onReserveAppointment ? (
-                          <button
-                            type="button"
-                            className="button button--primary button--small"
-                            onClick={() =>
-                              onReserveAppointment(
-                                doctor,
-                                result.recommended_specialty || "General Practice",
-                                query,
-                              )
-                            }
-                          >
-                            Reserve Appointment
-                          </button>
-                        ) : null}
-                      </div>
-                    </article>
-                  ))}
+                  {result.suggested_doctors.map((doctor) => {
+                    const patientLoc =
+                      role === "patient"
+                        ? patientProfile?.current_governorate ||
+                          patientProfile?.inferred_governorate
+                        : linkedPatient?.current_governorate ||
+                          linkedPatient?.inferred_governorate;
+
+                    return (
+                      <DoctorCard
+                        key={doctor.id}
+                        doctor={doctor}
+                        specialty={result.recommended_specialty || "General Practice"}
+                        patientLocation={patientLoc || null}
+                        onReserveAppointment={
+                          onReserveAppointment
+                            ? () =>
+                                onReserveAppointment(
+                                  doctor,
+                                  result.recommended_specialty || "General Practice",
+                                  query,
+                                )
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -731,3 +721,5 @@ export default function TriagePanel({
     </SectionPanel>
   );
 }
+
+

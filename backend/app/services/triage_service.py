@@ -1,53 +1,88 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import HTTPException, status
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import DoctorProfile, User
+from app.db.models import DoctorProfile, PatientProfile
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
 from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
 from app.rag.embedding_retriever import EmbeddingRetriever
-from app.rag.retriever import RetrievedChunk, Retriever, StubRetriever
+from app.rag.reranker import rerank_retrieved_chunks
+from app.rag.retriever import Retriever, StubRetriever
 from app.rag.tfidf_retriever import TfidfRetriever
-from app.schemas.triage import (
-    DoctorSuggestion,
-    StructuredReasoningOutput,
-    SupportingReference,
-    SuspectedCondition,
-    TriageLevel,
-    TriageResponse,
+from app.schemas.triage import DoctorSuggestion, TriageLevel, TriageResponse
+from app.services.clarification_service import (
+    get_clarification_questions,
+    needs_clarification,
 )
-from app.services.access_control import ensure_patient_profile_access
+from app.services.clinical_features import (
+    assess_urgency_from_features,
+    extract_clinical_features,
+    merge_clinical_features,
+)
 from app.services.patient_context import PatientContextProvider
 
 logger = logging.getLogger(__name__)
 
-LEVEL_PRIORITY: dict[TriageLevel, int] = {
-    "low": 0,
-    "medium": 1,
-    "high": 2,
+TRIAGE_LEVEL_RANK: dict[TriageLevel, int] = {"low": 0, "medium": 1, "high": 2}
+MIN_REASONER_RAG_SCORE = 0.48
+MIN_SUPPORTING_REFERENCE_SCORE = 0.5
+RAG_CANDIDATE_MULTIPLIER = 6
+REASONER_RAG_LIMIT = 5
+VALID_SPECIALTIES = (
+    "Cardiology",
+    "Neurology",
+    "Neurosurgery",
+    "Internal Medicine",
+    "Gastroenterology",
+    "Dermatology",
+    "Psychiatry",
+    "Ophthalmology",
+    "Orthopedics",
+    "ENT",
+    "Pediatrics",
+    "Family Medicine",
+)
+SPECIALTY_ALIASES = {
+    "pulmonology": "Internal Medicine",
+    "pulmonary": "Internal Medicine",
+    "respiratory": "Internal Medicine",
+    "general practice": "Family Medicine",
+    "primary care": "Family Medicine",
+    "otolaryngology": "ENT",
+    "ear nose throat": "ENT",
+    "orthopedic": "Orthopedics",
+    "orthopaedic": "Orthopedics",
+    "cardiac": "Cardiology",
 }
 
 HIGH_RISK_KEYWORDS: tuple[str, ...] = (
     "chest pain",
     "shortness of breath",
     "difficulty breathing",
+    "can't breathe",
+    "cannot breathe",
+    "suffocating",
+    "suffocation",
+    "choking",
+    "pass out",
+    "passing out",
+    "blacked out",
+    "fainted",
+    "fainting",
     "stroke",
     "seizure",
     "unconscious",
+    "unresponsive",
     "severe bleeding",
     "overdose",
     "suicidal",
-    "throat closing",
-    "blue lips",
+    "heart attack",
+    "not breathing",
 )
 
 MEDIUM_RISK_KEYWORDS: tuple[str, ...] = (
@@ -58,551 +93,298 @@ MEDIUM_RISK_KEYWORDS: tuple[str, ...] = (
     "burn",
     "infection",
     "migraine",
-    "dizziness",
 )
 
-HEAD_TRAUMA_TERMS: tuple[str, ...] = (
-    "hit my head",
-    "hit my head hard",
-    "head injury",
-    "head trauma",
-    "banged my head",
-    "injured my head",
-    "fell and hit my head",
-    "after hitting my head",
-    "concussion",
-)
-SEVERE_HEADACHE_TERMS: tuple[str, ...] = (
-    "very painful headache",
-    "severe headache",
-    "worst headache",
-    "worst of my life",
-    "sudden bad headache",
-    "bad headache",
-    "head is killing me",
-    "pounding headache",
-    "throbbing headache",
-)
-NAUSEA_VOMITING_TERMS: tuple[str, ...] = (
-    "nausea",
-    "nauseous",
-    "vomit",
-    "vomiting",
-    "throwing up",
-    "gonna throw up",
-)
-ALTERED_MENTAL_STATUS_TERMS: tuple[str, ...] = (
-    "confusion",
-    "confused",
-    "drowsy",
-    "drowsiness",
-    "hard to wake",
-    "loss of consciousness",
-    "passed out",
-    "blackout",
-    "black out",
-    "fainting",
-    "fainted",
-)
-BREATHING_DISTRESS_TERMS: tuple[str, ...] = (
-    "shortness of breath",
-    "difficulty breathing",
-    "can't breathe",
-    "cannot breathe",
-    "trouble breathing",
+HIGH_RISK_SUPPORT_TERMS: tuple[str, ...] = (
+    *HIGH_RISK_KEYWORDS,
     "blue lips",
-    "wheezing badly",
-)
-STROKE_TERMS: tuple[str, ...] = (
-    "slurred speech",
     "face drooping",
+    "slurred speech",
+    "trouble speaking",
     "one-sided weakness",
-    "one sided weakness",
-    "can not move one side",
-    "can't move one side",
-    "sudden weakness",
-    "sudden numbness",
-    "sudden trouble speaking",
-)
-BLEEDING_TERMS: tuple[str, ...] = (
-    "severe bleeding",
-    "heavy bleeding",
-    "won't stop bleeding",
-    "bleeding a lot",
-)
-SEVERE_ALLERGY_TERMS: tuple[str, ...] = (
+    "worst headache",
+    "sudden severe headache",
+    "vision loss",
     "throat closing",
     "tongue swelling",
-    "swelling face",
-    "anaphylaxis",
-    "can't swallow",
-)
-SEVERE_ABDOMINAL_TERMS: tuple[str, ...] = (
-    "severe abdominal pain",
-    "severe stomach pain",
-    "worst stomach pain",
-    "rigid abdomen",
-    "abdomen is hard",
-)
-GI_MISLEADING_KEYWORDS_DURING_HEAD_TRAUMA: set[str] = {
-    "feel nauseous",
-    "feeling sick",
-    "gonna throw up",
-    "throwing up",
-    "vomiting",
-    "stomach upset",
-    "upset stomach",
-}
-
-NEURO_EMERGENCY_EVIDENCE_TERMS: tuple[str, ...] = (
-    "concussion",
-    "intracranial hematoma",
-    "subarachnoid hemorrhage",
-    "brain aneurysm",
-    "traumatic brain injury",
-    "high intracranial pressure",
-)
-CARDIO_EMERGENCY_EVIDENCE_TERMS: tuple[str, ...] = (
-    "myocardial infarction",
-    "acute coronary syndrome",
-    "pulmonary embolism",
-    "heart attack",
-)
-RESPIRATORY_EMERGENCY_EVIDENCE_TERMS: tuple[str, ...] = (
-    "pneumonia",
-    "asthma",
-    "anaphylaxis",
-    "airway",
 )
 
-SPECIALTY_RULES: dict[str, tuple[str, ...]] = {
-    "Cardiology": (
-        "heart",
-        "cardiac",
-        "coronary",
-        "myocardial",
-        "palpitations",
-        "arrhythmia",
-        "hypertension",
-        "chest pain",
-    ),
-    "Pulmonology": (
-        "asthma",
-        "copd",
-        "bronchitis",
-        "pneumonia",
-        "lung",
-        "breath",
-        "breathing",
-        "cough",
-        "respiratory",
-        "allergy",
-    ),
-    "Gastroenterology": (
-        "stomach",
-        "gastritis",
-        "gerd",
-        "appendicitis",
-        "bowel",
-        "diarrhea",
-        "abdominal",
-        "hepatology",
-        "gastroenterology",
-    ),
-    "Neurology": (
-        "migraine",
-        "stroke",
-        "meningitis",
-        "vertigo",
-        "neuropathy",
-        "seizure",
-        "headache",
-        "concussion",
-        "intracranial",
-        "brain injury",
-        "brain aneurysm",
-        "hematoma",
-        "head trauma",
-    ),
-    "Orthopedics": (
-        "fracture",
-        "sprain",
-        "strain",
-        "arthritis",
-        "joint",
-        "back pain",
-        "knee",
-        "bone",
-        "trauma",
-    ),
-    "Dermatology": (
-        "rash",
-        "eczema",
-        "psoriasis",
-        "skin",
-        "itching",
-        "acne",
-    ),
-    "Psychiatry": (
-        "panic",
-        "anxiety",
-        "depression",
-        "suicidal",
-        "mental",
-        "overwhelmed",
-    ),
-    "Internal Medicine": (
-        "fever",
-        "infection",
-        "flu",
-        "viral",
-        "fatigue",
-        "weight loss",
-        "dizziness",
-    ),
-}
-
-SPECIALTY_FALLBACKS: dict[str, tuple[str, ...]] = {
-    "Neurology": ("Neurology", "Internal Medicine"),
-    "Pulmonology": ("Pulmonology", "Internal Medicine"),
-    "Cardiology": ("Cardiology", "Internal Medicine"),
-    "Gastroenterology": ("Gastroenterology", "Internal Medicine"),
-    "Orthopedics": ("Orthopedics",),
-    "Psychiatry": ("Psychiatry",),
-    "Dermatology": ("Dermatology",),
-    "Internal Medicine": ("Internal Medicine",),
-}
+HIGH_RISK_FEATURE_FLAGS: frozenset[str] = frozenset(
+    {
+        "breathing distress",
+        "possible heart emergency",
+        "stroke-like symptoms",
+        "seizure or loss of consciousness",
+        "major bleeding",
+        "self-harm risk",
+        "possible serious allergy",
+        "loss of bladder or bowel control",
+    }
+)
 
 
-@dataclass
-class RankedCondition:
-    name: str
-    score: float = 0.0
-    reasons: list[str] = field(default_factory=list)
+def _match_any(query: str, keywords: tuple[str, ...]) -> bool:
+    q = query.lower()
+    return any(k in q for k in keywords)
 
 
-@dataclass(frozen=True)
-class RedFlagAssessment:
-    urgency_floor: TriageLevel
-    warning_labels: tuple[str, ...] = ()
-    priority_conditions: tuple[str, ...] = ()
-    specialty_override: str | None = None
-    patient_message: str | None = None
-    clinical_note: str | None = None
-    recommended_actions: tuple[str, ...] = ()
-    evidence_keywords: tuple[str, ...] = ()
+def _classify(query: str) -> TriageLevel:
+    level: TriageLevel = "low"
+    if _match_any(query, HIGH_RISK_KEYWORDS):
+        level = "high"
+    elif _match_any(query, MEDIUM_RISK_KEYWORDS):
+        level = "medium"
+    return level
 
 
-def _match_any(query: str, keywords: tuple[str, ...]) -> list[str]:
-    lowered = query.lower()
-    return [keyword for keyword in keywords if keyword in lowered]
+def _max_triage_level(*levels: TriageLevel) -> TriageLevel:
+    return max(levels, key=lambda level: TRIAGE_LEVEL_RANK[level])
 
 
-def _chunk_contains_terms(chunk: RetrievedChunk, terms: tuple[str, ...]) -> bool:
-    searchable = f"{chunk.title} {chunk.text}".lower()
-    return any(term in searchable for term in terms)
+def _reasoner_high_is_supported(
+    *,
+    safety_level: TriageLevel,
+    feature_level: TriageLevel,
+    summary,
+    trusted_features,
+) -> bool:
+    if safety_level == "high" or feature_level == "high":
+        return True
+
+    if HIGH_RISK_FEATURE_FLAGS.intersection(trusted_features.red_flags_present):
+        return True
+
+    reasoner_red_flags = " ".join(getattr(summary, "red_flags", []) or []).lower()
+    return _match_any(reasoner_red_flags, HIGH_RISK_SUPPORT_TERMS)
 
 
-def _heuristic_urgency(query: str) -> tuple[TriageLevel, list[str]]:
-    red_flags = _match_any(query, HIGH_RISK_KEYWORDS)
-    if red_flags:
-        return "high", red_flags
+def _reconcile_reasoner_urgency(
+    *,
+    safety_level: TriageLevel,
+    feature_level: TriageLevel,
+    reasoner_level: TriageLevel,
+    summary,
+    trusted_features,
+) -> tuple[TriageLevel, bool]:
+    if reasoner_level != "high":
+        return _max_triage_level(safety_level, feature_level, reasoner_level), False
 
-    caution_flags = _match_any(query, MEDIUM_RISK_KEYWORDS)
-    if caution_flags:
-        return "medium", caution_flags
-
-    return "low", []
-
-
-def _assess_red_flags(
-    query: str,
-    patient_context: str | None,
-    chunks: list[RetrievedChunk],
-) -> RedFlagAssessment:
-    combined_text = f"{query}\n{patient_context or ''}".lower()
-    warnings: list[str] = []
-    conditions: list[str] = []
-    actions: list[str] = []
-    evidence_keywords: list[str] = []
-    patient_message: str | None = None
-    clinical_note: str | None = None
-    specialty_override: str | None = None
-    urgency_floor: TriageLevel = "low"
-
-    head_trauma = any(term in combined_text for term in HEAD_TRAUMA_TERMS)
-    severe_headache = any(term in combined_text for term in SEVERE_HEADACHE_TERMS)
-    nausea_or_vomiting = any(term in combined_text for term in NAUSEA_VOMITING_TERMS)
-    altered_mental_status = any(
-        term in combined_text for term in ALTERED_MENTAL_STATUS_TERMS
-    )
-    chest_pain = "chest pain" in combined_text or "chest tightness" in combined_text
-    breathing_distress = any(term in combined_text for term in BREATHING_DISTRESS_TERMS)
-    stroke_symptoms = any(term in combined_text for term in STROKE_TERMS)
-    severe_bleeding = any(term in combined_text for term in BLEEDING_TERMS)
-    seizure_like = "seizure" in combined_text or "convulsion" in combined_text
-    suicidal = "suicidal" in combined_text or "hurt myself" in combined_text
-    severe_allergy = any(term in combined_text for term in SEVERE_ALLERGY_TERMS)
-    severe_abdominal = any(term in combined_text for term in SEVERE_ABDOMINAL_TERMS)
-
-    if head_trauma and (severe_headache or nausea_or_vomiting or altered_mental_status):
-        urgency_floor = "high"
-        specialty_override = "Neurology"
-        warnings.append(
-            "Recent head injury with severe headache, vomiting, or drowsiness"
-        )
-        conditions.extend(
-            [
-                "Intracranial hematoma",
-                "Concussion",
-                "Traumatic brain injury",
-            ]
-        )
-        evidence_keywords.extend(NEURO_EMERGENCY_EVIDENCE_TERMS)
-        actions.extend(
-            [
-                (
-                    "Go to the emergency department now for urgent brain injury "
-                    "assessment."
-                ),
-                (
-                    "Do not drive yourself if you feel drowsy, confused, or are "
-                    "vomiting."
-                ),
-            ]
-        )
-        patient_message = (
-            "Because you recently injured your head and now have severe headache "
-            "with nausea or vomiting, this could be a serious head injury rather "
-            "than a stomach problem. You should get urgent medical assessment now."
-        )
-        clinical_note = (
-            "Recent head trauma followed by severe headache and nausea or vomiting "
-            "raises concern for concussion or intracranial bleeding."
-        )
-
-    if chest_pain and breathing_distress:
-        urgency_floor = "high"
-        specialty_override = specialty_override or "Cardiology"
-        warnings.append("Chest pain with shortness of breath")
-        conditions.extend(["Acute coronary syndrome", "Pulmonary embolism"])
-        evidence_keywords.extend(CARDIO_EMERGENCY_EVIDENCE_TERMS)
-        actions.extend(
-            [
-                (
-                    "Seek urgent or emergency care now for chest pain with breathing "
-                    "trouble."
-                ),
-                (
-                    "Call emergency services if the pain is severe, crushing, or "
-                    "worsening."
-                ),
-            ]
-        )
-        patient_message = patient_message or (
-            "Chest pain together with shortness of breath can signal a serious heart "
-            "or lung emergency. Please seek urgent medical care now."
-        )
-        clinical_note = clinical_note or (
-            "Chest pain with dyspnea requires urgent exclusion of cardiac or "
-            "pulmonary emergencies."
-        )
-
-    if stroke_symptoms:
-        urgency_floor = "high"
-        specialty_override = specialty_override or "Neurology"
-        warnings.append("Stroke-like symptoms")
-        conditions.extend(["Acute ischemic stroke", "Transient ischemic attack"])
-        actions.extend(
-            [
-                "Seek emergency care immediately for possible stroke symptoms.",
-                (
-                    "Do not wait to see if weakness or speech problems improve on "
-                    "their own."
-                ),
-            ]
-        )
-        patient_message = patient_message or (
-            "Sudden weakness, numbness, facial drooping, or speech trouble can point "
-            "to a stroke and need emergency medical attention now."
-        )
-        clinical_note = clinical_note or (
-            "Stroke-like symptoms require immediate neurological assessment."
-        )
-
-    if breathing_distress and not chest_pain:
-        urgency_floor = "high"
-        specialty_override = specialty_override or "Pulmonology"
-        warnings.append("Severe breathing difficulty")
-        conditions.extend(["Asthma exacerbation", "Severe respiratory distress"])
-        evidence_keywords.extend(RESPIRATORY_EMERGENCY_EVIDENCE_TERMS)
-        actions.extend(
-            [
-                (
-                    "Seek urgent care immediately if breathing is difficult or "
-                    "getting worse."
-                ),
-                "Call emergency services if lips turn blue or speaking becomes hard.",
-            ]
-        )
-
-    if severe_bleeding:
-        urgency_floor = "high"
-        warnings.append("Heavy bleeding")
-        actions.extend(
-            [
-                "Apply pressure if possible and seek emergency care immediately.",
-                "Call emergency services if bleeding is heavy or will not stop.",
-            ]
-        )
-        patient_message = patient_message or (
-            "Heavy bleeding is an emergency and should be treated immediately."
-        )
-        clinical_note = (
-            clinical_note or "Uncontrolled bleeding requires emergency assessment."
-        )
-
-    if seizure_like:
-        urgency_floor = "high"
-        specialty_override = specialty_override or "Neurology"
-        warnings.append("Seizure or convulsion")
-        conditions.append("Seizure disorder")
-        actions.extend(
-            [
-                (
-                    "Seek emergency care if a seizure has occurred or if recovery is "
-                    "incomplete."
-                ),
-                "Urgent review is needed, especially if this is the first seizure.",
-            ]
-        )
-
-    if suicidal:
-        urgency_floor = "high"
-        specialty_override = specialty_override or "Psychiatry"
-        warnings.append("Thoughts of self-harm")
-        actions.extend(
-            [
-                (
-                    "Seek emergency psychiatric help now or contact a crisis line "
-                    "immediately."
-                ),
-                (
-                    "Stay with a trusted person and avoid being alone until help is "
-                    "in place."
-                ),
-            ]
-        )
-        patient_message = patient_message or (
-            "Thoughts of self-harm need urgent support right away. Please contact "
-            "emergency or crisis services now."
-        )
-
-    if severe_allergy:
-        urgency_floor = "high"
-        specialty_override = specialty_override or "Pulmonology"
-        warnings.append("Possible severe allergic reaction")
-        conditions.append("Anaphylaxis")
-        actions.extend(
-            [
-                (
-                    "Use emergency allergy treatment if prescribed and seek emergency "
-                    "care now."
-                ),
-                (
-                    "Call emergency services if throat swelling or breathing "
-                    "difficulty is present."
-                ),
-            ]
-        )
-
-    if severe_abdominal and nausea_or_vomiting:
-        urgency_floor = max(
-            urgency_floor,
-            "medium",
-            key=lambda level: LEVEL_PRIORITY[level],
-        )
-        specialty_override = specialty_override or "Gastroenterology"
-        warnings.append("Severe abdominal pain with vomiting")
-        conditions.extend(["Appendicitis", "Bowel obstruction", "Peritonitis"])
-        actions.extend(
-            [
-                (
-                    "Seek urgent same-day assessment for severe abdominal pain with "
-                    "vomiting."
-                ),
-                "Go sooner if fever, fainting, or worsening pain develops.",
-            ]
-        )
-        patient_message = patient_message or (
-            "Severe abdominal pain together with vomiting needs prompt medical "
-            "review today."
-        )
-
-    if (
-        any(
-            _chunk_contains_terms(chunk, NEURO_EMERGENCY_EVIDENCE_TERMS)
-            for chunk in chunks[:3]
-        )
-        and head_trauma
+    if _reasoner_high_is_supported(
+        safety_level=safety_level,
+        feature_level=feature_level,
+        summary=summary,
+        trusted_features=trusted_features,
     ):
-        urgency_floor = "high"
-        if specialty_override is None:
-            specialty_override = "Neurology"
-        if (
-            "Dangerous head-injury references matched the symptom description"
-            not in warnings
-        ):
-            warnings.append(
-                "Dangerous head-injury references matched the symptom description"
-            )
+        return "high", False
 
-    if not warnings:
-        return RedFlagAssessment(urgency_floor=urgency_floor)
-
-    return RedFlagAssessment(
-        urgency_floor=urgency_floor,
-        warning_labels=tuple(dict.fromkeys(warnings)),
-        priority_conditions=tuple(dict.fromkeys(conditions)),
-        specialty_override=specialty_override,
-        patient_message=patient_message,
-        clinical_note=clinical_note,
-        recommended_actions=tuple(dict.fromkeys(actions)),
-        evidence_keywords=tuple(dict.fromkeys(evidence_keywords)),
-    )
+    # Keep the case cautious, but do not let an unsupported LLM-only escalation
+    # become the final answer without stronger evidence.
+    return _max_triage_level(safety_level, feature_level, "medium"), True
 
 
-def _build_actions(
-    triage_level: TriageLevel,
-    specialty: str,
-    reasoner_actions: list[str],
-    red_flag_actions: tuple[str, ...] = (),
-) -> list[str]:
+def _safety_floor(query: str, age: int | None = None) -> TriageLevel:
+    return _classify_with_age(query, age)
+
+
+def _build_actions(triage_level: TriageLevel) -> list[str]:
     if triage_level == "high":
         actions = [
-            "Seek urgent or emergency medical care now.",
+            "Seek emergency care now.",
             "Call local emergency services if symptoms are severe or worsening.",
         ]
     elif triage_level == "medium":
         actions = [
-            "Arrange medical review soon, ideally today or within 24 hours.",
-            "Seek faster care if symptoms worsen or new warning signs appear.",
+            "Consider urgent care or a same-day clinic visit.",
+            "Seek care sooner if symptoms worsen or new symptoms appear.",
         ]
     else:
         actions = [
-            "Monitor your symptoms, rest, and stay hydrated if appropriate.",
-            "Book a medical review if symptoms persist, worsen, or worry you.",
+            "Consider rest, hydration, and over-the-counter options if appropriate.",
+            "Seek care if symptoms persist, worsen, or you are concerned.",
         ]
 
-    if specialty and specialty != "General Practice":
-        actions.append(f"Consider booking a {specialty} appointment.")
+    return actions
 
-    for action in [*red_flag_actions, *reasoner_actions]:
-        cleaned = action.strip()
-        if cleaned and cleaned not in actions:
-            actions.append(cleaned)
 
-    return actions[:5]
+def _filter_chunks_for_reasoner(chunks: list, min_score: float) -> list:
+    if not chunks:
+        return []
+
+    filtered = [chunk for chunk in chunks if getattr(chunk, "score", 0.0) >= min_score]
+    if filtered:
+        return filtered
+
+    best_chunk = max(chunks, key=lambda chunk: getattr(chunk, "score", 0.0))
+    best_score = getattr(best_chunk, "score", 0.0)
+    if best_score >= 0.38:
+        return [best_chunk]
+    return []
+
+
+def _filter_supporting_reference_chunks(chunks: list) -> list:
+    filtered = [
+        chunk
+        for chunk in chunks
+        if getattr(chunk, "score", 0.0) >= MIN_SUPPORTING_REFERENCE_SCORE
+    ]
+    return filtered or chunks
+
+
+def _format_reasoner_context(chunk) -> str:
+    header = f"({chunk.source}) {chunk.title}"
+    if chunk.url:
+        header = f"{header} - {chunk.url}"
+    return f"{header}\n[score: {chunk.score:.4f}]\n{chunk.text}"
+
+
+def _normalize_recommended_specialty(
+    specialty: str | None,
+    query: str,
+    triage_level: TriageLevel,
+    *,
+    possible_conditions: list[str] | None = None,
+    body_systems: list[str] | None = None,
+) -> str:
+    if specialty:
+        import re as _re
+
+        candidate = _re.split(r" or |and/or|/|,|;", specialty, maxsplit=1)[0].strip()
+        candidate = candidate.split("(")[0].strip()
+        if candidate in VALID_SPECIALTIES:
+            return "Internal Medicine" if candidate == "Family Medicine" else candidate
+
+        lower_candidate = candidate.lower()
+        for alias, normalized in SPECIALTY_ALIASES.items():
+            if alias in lower_candidate:
+                return (
+                    "Internal Medicine"
+                    if normalized == "Family Medicine"
+                    else normalized
+                )
+
+    condition_led = _specialty_from_conditions(possible_conditions or [])
+    if condition_led:
+        return condition_led
+
+    system_led = _specialty_from_body_systems(body_systems or [])
+    if system_led:
+        return system_led
+
+    lowered_query = query.lower()
+    if triage_level == "high" and (
+        "chest pain" in lowered_query
+        or "heart attack" in lowered_query
+        or "shortness of breath" in lowered_query
+    ):
+        return "Cardiology"
+    if any(term in lowered_query for term in ("baby", "child", "toddler", "infant")):
+        return "Pediatrics"
+    return "Internal Medicine"
+
+
+def _specialty_from_conditions(condition_names: list[str]) -> str | None:
+    lowered = " ".join(condition_names).lower()
+    if not lowered:
+        return None
+
+    specialty_markers: tuple[tuple[str, tuple[str, ...]], ...] = (
+        (
+            "Cardiology",
+            (
+                "myocardial infarction",
+                "acute coronary",
+                "coronary",
+                "arrhythmia",
+                "heart failure",
+                "angina",
+            ),
+        ),
+        (
+            "Neurology",
+            (
+                "migraine",
+                "stroke",
+                "seizure",
+                "meningitis",
+                "neuropathy",
+                "vertigo",
+            ),
+        ),
+        (
+            "Orthopedics",
+            (
+                "fracture",
+                "sprain",
+                "strain",
+                "arthritis",
+                "meniscal",
+                "sciatica",
+                "herniated disc",
+            ),
+        ),
+        (
+            "Gastroenterology",
+            (
+                "appendicitis",
+                "peritonitis",
+                "bowel obstruction",
+                "ibd",
+                "ulcerative colitis",
+                "crohn",
+                "hepatitis",
+                "cholecystitis",
+                "gi bleed",
+            ),
+        ),
+        (
+            "Dermatology",
+            ("eczema", "dermatitis", "urticaria", "psoriasis", "acne"),
+        ),
+        (
+            "Psychiatry",
+            ("panic disorder", "anxiety", "depression", "suicidal ideation"),
+        ),
+        (
+            "Ophthalmology",
+            ("glaucoma", "retinal", "conjunctivitis", "vision loss"),
+        ),
+        (
+            "ENT",
+            ("otitis", "sinusitis", "tonsillitis", "pharyngitis"),
+        ),
+        (
+            "Pediatrics",
+            ("croup", "bronchiolitis"),
+        ),
+    )
+    for specialty, markers in specialty_markers:
+        if any(marker in lowered for marker in markers):
+            return specialty
+
+    return None
+
+
+def _specialty_from_body_systems(body_systems: list[str]) -> str | None:
+    systems = set(body_systems)
+    if "cardiac" in systems:
+        return "Cardiology"
+    if "neurologic" in systems:
+        return "Neurology"
+    if "musculoskeletal" in systems:
+        return "Orthopedics"
+    if "skin" in systems:
+        return "Dermatology"
+    if "mental_health" in systems:
+        return "Psychiatry"
+    if "eye" in systems:
+        return "Ophthalmology"
+    if "ent" in systems:
+        return "ENT"
+    if "gastrointestinal" in systems:
+        return "Internal Medicine"
+    if "respiratory" in systems:
+        return "Internal Medicine"
+    return None
 
 
 def _build_retriever() -> Retriever:
@@ -692,563 +474,428 @@ def get_reasoner() -> Reasoner:
     return _build_reasoner()
 
 
+def _preload_model() -> None:
+    """Preload the LLM model into VRAM on startup."""
+    import os as _os
+
+    import httpx as _httpx
+
+    host = _os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    model = _os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    try:
+        logger.info("preloading_model model=%s", model)
+        with _httpx.Client(timeout=60.0) as client:
+            client.post(
+                f"{host}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": "hi",
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                },
+            )
+        logger.info("model_preloaded model=%s", model)
+    except Exception as e:
+        logger.warning("model_preload_failed error=%s", e)
+
+
 def clear_runtime_state() -> None:
     get_retriever.cache_clear()
     get_reasoner.cache_clear()
 
 
 def simplify_reasoning(text: str) -> str:
+    """Convert medical jargon to simple language for patients."""
     replacements = {
         "cardiac": "heart",
         "cardiovascular": "heart and blood vessel",
         "respiratory": "breathing",
         "pulmonary": "lung",
-        "gastrointestinal": "digestive",
+        "gastrointestinal": "stomach and digestive",
+        "gi": "digestive",
         "neurological": "brain and nerve",
         "dermatological": "skin",
         "musculoskeletal": "bone and muscle",
-        "infectious": "infection-related",
-        "diagnosis": "possible condition",
-        "acute": "sudden",
+        "infectious": "infection",
+        "endocrine": "hormone",
+        "renal": "kidney",
+        "hepatic": "liver",
+        "hematologic": "blood",
+        "immunological": "immune system",
+        "psychiatric": "mental health",
+        "etiology": "cause",
+        "symptomatology": "symptoms",
+        "contraindication": "caution or risk",
+        "diagnosis": "condition",
+        "prognosis": "expected outcome",
+        "pathophysiology": "how the disease works",
+        "differential diagnosis": "possible conditions",
+        "clinical presentation": "signs and symptoms",
+        "acute": "sudden start",
         "chronic": "long-term",
-        "exacerbation": "flare-up",
-        "contraindication": "risk",
+        "exacerbation": "getting worse",
+        "remission": "improvement",
+        "comorbidity": "related health condition",
+        "intervention": "treatment",
+        "pharmacological": "medication-based",
+        "therapeutic": "treatment-related",
+        "manifestation": "sign or symptom",
+        "sequelae": "complications",
+        "prophylactic": "preventive",
     }
+
     result = text
-    for source, target in replacements.items():
-        result = result.replace(source, target)
-        result = result.replace(source.capitalize(), target.capitalize())
+    for medical, simple in replacements.items():
+        result = result.replace(medical, simple)
+        result = result.replace(medical.capitalize(), simple.capitalize())
+
     return result
 
 
-def _format_chunk_for_reasoner(chunk: RetrievedChunk) -> str:
-    header = f"{chunk.title} ({chunk.source})"
-    if chunk.url:
-        header = f"{header} - {chunk.url}"
-    snippet = chunk.text.strip()
-    if len(snippet) > 420:
-        snippet = f"{snippet[:420].rstrip()}..."
-    return f"{header}\n{snippet}"
+def get_recommended_specialty(query: str, summary: str) -> str:
+    """Extract recommended medical specialty from query and summary."""
+    specialty_keywords = {
+        # Emergency
+        "suffocating": "Emergency Medicine",
+        "pass out": "Emergency Medicine",
+        "passing out": "Emergency Medicine",
+        "fainting": "Emergency Medicine",
+        "can't breathe": "Emergency Medicine",
+        "cannot breathe": "Emergency Medicine",
+        "heart attack": "Emergency Medicine",
+        # Cardiology
+        "cardio": "Cardiology",
+        "heart": "Cardiology",
+        "chest pain": "Cardiology",
+        "blood pressure": "Cardiology",
+        "arrhythmia": "Cardiology",
+        "palpitations": "Cardiology",
+        # Pulmonology
+        "respir": "Pulmonology",
+        "lung": "Pulmonology",
+        "breathing": "Pulmonology",
+        "asthma": "Pulmonology",
+        "cough": "Pulmonology",
+        "pneumonia": "Pulmonology",
+        "bronch": "Pulmonology",
+        # Gastroenterology
+        "stomach": "Gastroenterology",
+        "digestive": "Gastroenterology",
+        "abdominal": "Gastroenterology",
+        "nausea": "Gastroenterology",
+        "vomit": "Gastroenterology",
+        "diarrhea": "Gastroenterology",
+        "constipation": "Gastroenterology",
+        "bowel": "Gastroenterology",
+        "gastritis": "Gastroenterology",
+        # Neurology
+        "neurolog": "Neurology",
+        "brain": "Neurology",
+        "migraine": "Neurology",
+        "headache": "Neurology",
+        "seizure": "Neurology",
+        "stroke": "Neurology",
+        "parkinson": "Neurology",
+        # Dermatology
+        "dermat": "Dermatology",
+        "skin": "Dermatology",
+        "rash": "Dermatology",
+        "acne": "Dermatology",
+        "eczema": "Dermatology",
+        # Orthopedics
+        "bone": "Orthopedics",
+        "fracture": "Orthopedics",
+        "broke": "Orthopedics",
+        "break": "Orthopedics",
+        "joint": "Orthopedics",
+        "sprain": "Orthopedics",
+        "strain": "Orthopedics",
+        "arthritis": "Orthopedics",
+        "tendon": "Orthopedics",
+        "ligament": "Orthopedics",
+        "dislocation": "Orthopedics",
+        "knee pain": "Orthopedics",
+        "back pain": "Orthopedics",
+        "neck pain": "Orthopedics",
+        # Internal Medicine
+        "infection": "Internal Medicine",
+        "fever": "Internal Medicine",
+        "flu": "Internal Medicine",
+        "diabetes": "Internal Medicine",
+        "hypertension": "Internal Medicine",
+        # Other specialties
+        "kidney": "Nephrology",
+        "liver": "Hepatology",
+        "eye": "Ophthalmology",
+        "vision": "Ophthalmology",
+        "ear": "Otolaryngology",
+        "throat": "Otolaryngology",
+        "psychiatric": "Psychiatry",
+        "mental": "Psychiatry",
+        "depression": "Psychiatry",
+        "anxiety": "Psychiatry",
+        "panic": "Psychiatry",
+        "women": "Gynecology",
+        "pregnancy": "Gynecology",
+        "child": "Pediatrics",
+    }
+
+    combined_text = (query + " " + summary).lower()
+    for keyword, specialty in specialty_keywords.items():
+        if keyword in combined_text:
+            return specialty
+
+    return "General Practice"
 
 
-def _build_supporting_references(
-    chunks: list[RetrievedChunk],
-) -> list[SupportingReference]:
-    references: list[SupportingReference] = []
-    seen: set[tuple[str, str]] = set()
-    for chunk in chunks[:4]:
-        key = (chunk.title.lower(), chunk.url)
-        if key in seen:
-            continue
-        seen.add(key)
-        snippet = chunk.text.strip()
-        if len(snippet) > 220:
-            snippet = f"{snippet[:220].rstrip()}..."
-        references.append(
-            SupportingReference(
-                title=chunk.title,
-                source=chunk.source,
-                url=chunk.url or None,
-                snippet=snippet,
-            )
-        )
-    return references
+def get_suspected_condition(
+    query: str,
+    summary: str,
+    rag_context: str = "",
+    reasoner_output: object | None = None,
+) -> str:
+    """
+    Detect the underlying medical condition from query and summary.
+    Uses RAG context (medical articles) and reasoner output when available.
+    Falls back to keyword matching for robustness.
+    """
+    if reasoner_output is not None and hasattr(reasoner_output, "possible_conditions"):
+        possible_conditions = reasoner_output.possible_conditions
+        if possible_conditions:
+            first = possible_conditions[0]
+            if isinstance(first, dict):
+                return first.get("name", "Unknown condition")
+            return getattr(first, "name", "Unknown condition")
 
+    combined_text = (query + " " + summary + " " + rag_context).lower()
 
-def _normalize_condition_name(raw_name: str) -> str:
-    return " ".join(raw_name.split()).strip(" .,-")
-
-
-def _split_condition_names(raw_name: str) -> list[str]:
-    return [
-        _normalize_condition_name(part)
-        for part in raw_name.replace(" or ", "/").split("/")
-        if _normalize_condition_name(part)
+    conditions_to_check = [
+        ("myocardial infarction", "Myocardial infarction/Coronary artery disease"),
+        ("acute coronary syndrome", "Myocardial infarction/Coronary artery disease"),
+        ("coronary artery disease", "Myocardial infarction/Coronary artery disease"),
+        ("heart attack", "Myocardial infarction/Coronary artery disease"),
+        ("meningitis", "Meningitis"),
+        ("pneumonia", "Pneumonia"),
+        ("tuberculosis", "Tuberculosis"),
+        ("asthma", "Asthma"),
+        ("copd", "COPD"),
+        ("stroke", "Stroke"),
+        ("gastritis", "Gastritis/GERD/IBS"),
+        ("gerd", "Gastritis/GERD/IBS"),
+        ("ibs", "Gastritis/GERD/IBS"),
+        ("appendicitis", "Appendicitis"),
+        ("panic disorder", "Panic disorder"),
+        ("anxiety", "Anxiety disorder"),
+        ("depression", "Major depressive disorder"),
+        ("migraine", "Migraine"),
+        ("vertigo", "Vertigo"),
+        ("neuropathy", "Neuropathy"),
+        ("sepsis", "Sepsis"),
+        ("malaria", "Malaria"),
+        ("dengue", "Dengue fever"),
+        ("influenza", "Influenza"),
+        ("covid", "COVID-19"),
+        ("coronavirus", "COVID-19"),
+        ("cholecystitis", "Cholecystitis"),
     ]
 
-
-def _add_condition_score(
-    scores: dict[str, RankedCondition],
-    condition_name: str,
-    score: float,
-    reason: str,
-) -> None:
-    normalized = _normalize_condition_name(condition_name)
-    if not normalized or normalized.lower() == "unknown condition":
-        return
-
-    key = normalized.lower()
-    entry = scores.get(key)
-    if entry is None:
-        entry = RankedCondition(name=normalized)
-        scores[key] = entry
-
-    entry.score += score
-    if reason not in entry.reasons:
-        entry.reasons.append(reason)
-
-
-def _context_penalty(
-    condition_name: str,
-    red_flag_assessment: RedFlagAssessment,
-) -> float:
-    """Apply context-aware penalties to condition scores.
-
-    Strongly penalizes conditions that don't match the clinical context
-    raised by red flags. This prevents shallow keyword matching from
-    incorrectly dominating the final ranking.
-    """
-    lowered = condition_name.lower()
-    penalty = 0.0
-
-    # Neurology red flags: penalize GI and non-neurological conditions
-    if red_flag_assessment.specialty_override == "Neurology":
-        if any(
-            token in lowered
-            for token in (
-                "gerd",
-                "gastritis",
-                "gastroenteritis",
-                "ibs",
-                "reflux",
-                "peptic ulcer",
-                "appendicitis",
-                "cholecystitis",
-                "pancreatitis",
-                "hepatitis",
-            )
-        ):
-            penalty = -4.2  # Strongly demote GI in head trauma context
-        elif any(
-            token in lowered
-            for token in (
-                "anxiety",
-                "panic",
-                "depression",
-            )
-        ):
-            penalty = -2.8  # Demote psychiatric conditions
-
-    # Cardiology red flags: penalize GI and psychiatric conditions
-    if red_flag_assessment.specialty_override == "Cardiology":
-        if any(
-            token in lowered
-            for token in (
-                "gerd",
-                "gastritis",
-                "anxiety",
-                "panic disorder",
-            )
-        ):
-            penalty = -2.4
-
-    # Pulmonology red flags: penalize cardiac and GI conditions
-    if red_flag_assessment.specialty_override == "Pulmonology":
-        if any(
-            token in lowered
-            for token in (
-                "gerd",
-                "myocardial infarction",
-                "heart attack",
-            )
-        ):
-            penalty = -2.0
-
-    return penalty
-
-
-def _collect_condition_scores(
-    query: str,
-    patient_context: str | None,
-    chunks: list[RetrievedChunk],
-    reasoning: StructuredReasoningOutput,
-    red_flag_assessment: RedFlagAssessment,
-) -> dict[str, RankedCondition]:
-    """Collect and score suspected conditions.
-
-    Scoring combines:
-    1. Red flag priority conditions (highest weight)
-    2. Retrieved medical evidence (weighted by rank and relevance)
-    3. Symptom keyword matching (with context penalties)
-    4. LLM reasoning suggestions
-    5. Context-aware penalties for mismatched conditions
-    """
-    combined_text = query.lower()
-    if patient_context:
-        combined_text = f"{combined_text}\n{patient_context.lower()}"
-
-    scores: dict[str, RankedCondition] = {}
-
-    # Priority 1: Red flag conditions are critical to surface
-    # These are conditions identified as dangerous in the symptom pattern
-    for condition_name in red_flag_assessment.priority_conditions:
-        _add_condition_score(
-            scores,
-            condition_name,
-            6.8,  # Increased from 5.2 - red flags are non-negotiable
-            "Red-flag symptom combination makes this condition important to exclude.",
-        )
-
-    # Priority 2: Retrieved evidence - medical literature matches this presentation
-    # Weight by retrieval rank and relevance
-    for index, chunk in enumerate(chunks[:6]):
-        # Base weight decreases slightly with rank, but evidence is still valuable
-        base_weight = max(1.0, 4.2 - (index * 0.35)) + max(chunk.score, 0.0)
-
-        # Boost if evidence explicitly mentions red flag keywords
-        if red_flag_assessment.evidence_keywords and _chunk_contains_terms(
-            chunk,
-            red_flag_assessment.evidence_keywords,
-        ):
-            base_weight += 3.2  # Increased from 2.5
-
-        _add_condition_score(
-            scores,
-            chunk.title,
-            base_weight,
-            "Retrieved medical evidence matched this presentation.",
-        )
-
-    # Priority 3: Symptom keyword matching
-    # But skip GI keywords during head trauma to avoid misleading matches
-    for keyword, condition_text in PATIENT_SYMPTOM_KEYWORDS:
-        if keyword not in combined_text:
-            continue
-
-        # Skip misleading keyword matches in high-context scenarios
-        if (
-            red_flag_assessment.specialty_override == "Neurology"
-            and keyword in GI_MISLEADING_KEYWORDS_DURING_HEAD_TRAUMA
-        ):
-            continue
-
-        for condition_name in _split_condition_names(condition_text):
-            _add_condition_score(
-                scores,
+    summary_lower = summary.lower()
+    for condition_keyword, condition_name in conditions_to_check:
+        if condition_keyword in summary_lower:
+            logger.info(
+                "condition_detected from_summary condition=%s",
                 condition_name,
-                2.3,  # Slightly increased from 2.2
-                f"Matches the symptom pattern '{keyword}'.",
             )
+            return condition_name
 
-    # Priority 4: LLM reasoning suggestions
-    # Weight by reasoning confidence (earlier suggestions weighted higher)
-    for index, condition in enumerate(reasoning.possible_conditions[:3]):
-        weight = 4.0 - (index * 1.0)  # Increased base from 3.7
-        _add_condition_score(
-            scores,
-            condition.name,
-            weight,
-            condition.explanation,
-        )
+    priority_combinations = [
+        (["chest pain", "left arm"], "Myocardial infarction/Coronary artery disease"),
+        (["chest pain", "jaw pain"], "Myocardial infarction/Coronary artery disease"),
+        (["chest pain", "radiates"], "Myocardial infarction/Coronary artery disease"),
+        (["severe headache", "stiff neck"], "Meningitis"),
+        (["high fever", "stiff neck"], "Meningitis"),
+        (["stiff neck", "fever"], "Meningitis"),
+        (["panic", "anxiety"], "Panic disorder"),
+        (["panic attack"], "Panic disorder"),
+        (["severe panic"], "Panic disorder"),
+    ]
 
-    # Priority 5: Apply context-aware penalties
-    # Demote conditions that don't fit the clinical red flag context
-    for condition in list(scores.values()):
-        penalty = _context_penalty(condition.name, red_flag_assessment)
-        if penalty:
-            condition.score += penalty
-            if penalty < 0:
-                reason = (
-                    "This became less likely after applying the higher-risk symptom "
-                    "context."
-                )
-                if reason not in condition.reasons:
-                    condition.reasons.append(reason)
-
-    return scores
-
-
-def _build_suspected_conditions(
-    condition_scores: dict[str, RankedCondition],
-) -> list[SuspectedCondition]:
-    ordered = sorted(
-        condition_scores.values(),
-        key=lambda item: item.score,
-        reverse=True,
-    )[:3]
-
-    suspected: list[SuspectedCondition] = []
-    for index, condition in enumerate(ordered):
-        likelihood = (
-            "more_likely" if index == 0 else "possible" if index == 1 else "less_likely"
-        )
-        suspected.append(
-            SuspectedCondition(
-                name=condition.name,
-                likelihood=likelihood,
-                explanation=(
-                    condition.reasons[0]
-                    if condition.reasons
-                    else "This may fit the pattern of symptoms described."
-                ),
+    for symptoms, condition in priority_combinations:
+        if all(symptom in combined_text for symptom in symptoms):
+            logger.info(
+                "condition_detected combination=%s condition=%s",
+                symptoms,
+                condition,
             )
-        )
-    return suspected
+            return condition
 
+    disease_keywords = PATIENT_SYMPTOM_KEYWORDS
+    sorted_keywords = sorted(disease_keywords, key=lambda x: len(x[0]), reverse=True)
 
-def _determine_specialty(
-    query: str,
-    suspected_conditions: list[SuspectedCondition],
-    reasoning: StructuredReasoningOutput,
-    red_flag_assessment: RedFlagAssessment,
-    chunks: list[RetrievedChunk],
-) -> tuple[str, str | None]:
-    """Determine recommended specialty based on clinical context.
-
-    Priority order:
-    1. Red flag assessment specialty override (highest priority - safety-critical)
-    2. Suspected condition specialty rules
-    3. Retrieved evidence specialty hints
-    4. LLM reasoning specialty
-    5. Default to General Practice
-    """
-    # Red flag overrides are safety-critical and must not be overridden
-    if red_flag_assessment.specialty_override:
-        reason = red_flag_assessment.clinical_note or (
-            "The symptom combination contains warning signs that are safest under "
-            f"{red_flag_assessment.specialty_override.lower()} review."
-        )
-        return red_flag_assessment.specialty_override, reason
-
-    specialty_scores: defaultdict[str, float] = defaultdict(float)
-    combined_text = " ".join(
-        [query, *[condition.name for condition in suspected_conditions]]
-    ).lower()
-
-    # Score based on suspected conditions keywords
-    for specialty, keywords in SPECIALTY_RULES.items():
-        specialty_scores[specialty] += sum(
-            1.0 for keyword in keywords if keyword in combined_text
-        )
-
-    # Score based on retrieved evidence
-    for chunk in chunks[:4]:
-        searchable = f"{chunk.title} {chunk.text}".lower()
-        for specialty, keywords in SPECIALTY_RULES.items():
-            specialty_scores[specialty] += sum(
-                0.4 for keyword in keywords if keyword in searchable
+    for keyword, condition in sorted_keywords:
+        if keyword in combined_text:
+            logger.info(
+                "condition_detected keyword=%s condition=%s",
+                keyword,
+                condition,
             )
+            return condition
 
-    # Incorporate LLM reasoning specialty suggestion
-    if reasoning.recommended_specialty and reasoning.recommended_specialty.strip():
-        specialty_scores[
-            reasoning.recommended_specialty.strip()
-        ] += 1.5  # Increased from 1.2
+    return "Unknown condition"
 
-    # If no meaningful scores, fall back to LLM or general practice
-    if not specialty_scores or max(specialty_scores.values()) < 0.1:
-        if reasoning.recommended_specialty and reasoning.recommended_specialty.strip():
-            return reasoning.recommended_specialty.strip(), None
-        return "General Practice", None
 
-    best_specialty = max(specialty_scores.items(), key=lambda item: item[1])[0]
-    reason = None
-    if suspected_conditions:
-        reason = (
-            f"The leading possibilities and retrieved references fit best with "
-            f"{best_specialty.lower()} care."
+def _get_age_context(age: int | None) -> str:
+    """Get age-appropriate clinical context for triage."""
+    if age is None:
+        return ""
+
+    if age < 1:
+        return (
+            "NEONATE/INFANT - Critical: Monitor vital signs closely, "
+            "fever in infants <3 months is emergency."
         )
-    return best_specialty, reason
+    elif age < 5:
+        return (
+            "TODDLER/PRESCHOOL - High risk: Dehydration, airway compromise, "
+            "fever. Watch for lethargy."
+        )
+    elif age < 13:
+        return (
+            "CHILD - Consider pediatric norms: Heart rate, respiratory rate, "
+            "blood pressure vary by age."
+        )
+    elif age < 18:
+        return (
+            "ADOLESCENT - Consider psychosocial factors, contraception "
+            "counseling if relevant."
+        )
+    elif age < 65:
+        return "ADULT - Standard adult presentation."
+    else:
+        return (
+            "GERIATRIC - Higher risk: Polypharmacy, atypical presentations, "
+            "falls, cognitive changes."
+        )
+
+
+def _classify_with_age(query: str, age: int | None = None) -> TriageLevel:
+    """Classify urgency considering age factors."""
+    level: TriageLevel = "low"
+
+    if age is not None and age < 5:
+        pedi_high_risk = (
+            "fever",
+            "stridor",
+            "drooling",
+            "retracting",
+            "cyanosis",
+            "lethargy",
+            "unresponsive",
+            "seizure",
+            "dehydration",
+            "not eating",
+            "vomiting",
+            "diarrhea for hours",
+        )
+        if _match_any(query, pedi_high_risk):
+            level = "high"
+
+    if age is not None and age >= 65:
+        if _match_any(query, HIGH_RISK_KEYWORDS):
+            level = "high"
+        elif _match_any(query, ("fall", "confusion", "weakness", "dizziness")):
+            level = "medium"
+
+    if level == "low":
+        if _match_any(query, HIGH_RISK_KEYWORDS):
+            level = "high"
+        elif _match_any(query, MEDIUM_RISK_KEYWORDS):
+            level = "medium"
+
+    return level
 
 
 def get_suggested_doctors(
-    db: Session | None,
-    specialty: str,
-    limit: int = 3,
+    db: Session, specialty: str, limit: int = 3
 ) -> list[DoctorSuggestion]:
-    if db is None or not specialty:
+    """Get doctors matching the recommended specialty."""
+    if not db:
         return []
 
-    search_terms = SPECIALTY_FALLBACKS.get(
-        specialty,
-        (specialty, specialty.split()[0]),
-    )
-    doctors: list[DoctorProfile] = []
-    seen_ids: set[int] = set()
-
-    for term in search_terms:
-        matches = (
+    try:
+        doctors = (
             db.query(DoctorProfile)
-            .filter(
-                or_(
-                    DoctorProfile.specialty.ilike(f"%{term}%"),
-                    DoctorProfile.clinic.ilike(f"%{term}%"),
-                )
-            )
-            .order_by(DoctorProfile.full_name.asc())
+            .filter(DoctorProfile.specialty.ilike(f"%{specialty.split()[0]}%"))
             .limit(limit)
             .all()
         )
-        for doctor in matches:
-            if doctor.id in seen_ids:
-                continue
-            doctors.append(doctor)
-            seen_ids.add(doctor.id)
-            if len(doctors) >= limit:
-                break
-        if len(doctors) >= limit:
-            break
 
-    return [
-        DoctorSuggestion(
-            id=doctor.id,
-            full_name=doctor.full_name,
-            specialty=doctor.specialty,
-            clinic=doctor.clinic,
-            area=doctor.area,
-            city=doctor.city,
-            source_name=doctor.source_name,
-            source_url=doctor.source_url,
-            booking_url=doctor.booking_url,
-        )
-        for doctor in doctors
-    ]
-
-
-def _combine_urgency(
-    heuristic_level: TriageLevel,
-    model_level: TriageLevel,
-    red_flags: list[str],
-    red_flag_assessment: RedFlagAssessment,
-    chunks: list[RetrievedChunk],
-) -> TriageLevel:
-    """Determine final urgency level, prioritizing safety.
-
-    The final urgency must reflect:
-    1. Red flag urgency floor (highest priority)
-    2. Retrieved evidence supporting dangerous conditions
-    3. Heuristic and LLM reasoning
-
-    Safety rules ensure serious cases aren't downgraded.
-    """
-    # Start with the red flag urgency floor as the baseline
-    final_level: TriageLevel = red_flag_assessment.urgency_floor
-
-    # Never downgrade from high urgency due to conflicting signals
-    if red_flag_assessment.urgency_floor == "high":
-        return "high"
-
-    # Incorporate heuristic and model signals
-    signals = [heuristic_level, model_level]
-    for signal in signals:
-        if LEVEL_PRIORITY[signal] > LEVEL_PRIORITY[final_level]:
-            final_level = signal
-
-    # If dangerous evidence keywords were found, ensure at least MEDIUM
-    if red_flag_assessment.evidence_keywords and any(
-        _chunk_contains_terms(chunk, red_flag_assessment.evidence_keywords)
-        for chunk in chunks[:3]
-    ):
-        if LEVEL_PRIORITY.get("medium", 0) > LEVEL_PRIORITY.get(final_level, -1):
-            final_level = "medium"
-
-    # Red flags present but not yet elevated? Bump to medium
-    if red_flags and final_level == "low":
-        final_level = "medium"
-
-    return final_level
-
-
-def _urgency_label(level: TriageLevel, red_flag_assessment: RedFlagAssessment) -> str:
-    if level == "high":
-        if red_flag_assessment.urgency_floor == "high":
-            return "Emergency assessment needed now"
-        return "Urgent or emergency assessment advised"
-    if level == "medium":
-        return "Prompt medical review advised"
-    return "Monitor and arrange routine review if needed"
-
-
-def _merge_red_flags(
-    heuristic_flags: list[str],
-    reasoning_flags: list[str],
-    red_flag_assessment: RedFlagAssessment,
-) -> list[str]:
-    merged: list[str] = []
-    for flag in [
-        *red_flag_assessment.warning_labels,
-        *heuristic_flags,
-        *reasoning_flags,
-    ]:
-        cleaned = flag.strip()
-        if cleaned and cleaned not in merged:
-            merged.append(cleaned)
-    return merged[:5]
-
-
-def _build_disclaimer(level: TriageLevel) -> str:
-    if level == "high":
-        return (
-            "This is not a diagnosis. Because your symptoms may be urgent, seek "
-            "emergency care now or contact local emergency services."
-        )
-    return (
-        "This triage result lists possible conditions, not a confirmed diagnosis. "
-        "Please contact a licensed clinician for medical advice, especially if "
-        "symptoms worsen or new warning signs appear."
-    )
-
-
-def _compose_explanations(
-    reasoning: StructuredReasoningOutput,
-    red_flag_assessment: RedFlagAssessment,
-    suspected_conditions: list[SuspectedCondition],
-) -> tuple[str, str, str | None]:
-    clinical_summary = reasoning.clinical_summary.strip()
-    patient_explanation = reasoning.patient_friendly_explanation.strip()
-    urgency_reason = None
-
-    if red_flag_assessment.clinical_note:
-        urgency_reason = red_flag_assessment.clinical_note
-        if red_flag_assessment.patient_message:
-            patient_explanation = red_flag_assessment.patient_message
-        if (
-            not clinical_summary
-            or clinical_summary == reasoning.patient_friendly_explanation.strip()
-        ):
-            clinical_summary = red_flag_assessment.clinical_note
-
-    if not patient_explanation and suspected_conditions:
-        patient_explanation = (
-            f"Your symptoms may be related to {suspected_conditions[0].name}. "
-            "Please use the urgency level and next steps below to decide how quickly "
-            "to get help."
-        )
-
-    return clinical_summary, patient_explanation, urgency_reason
+        return [
+            DoctorSuggestion(
+                id=doc.id,
+                full_name=doc.full_name,
+                specialty=doc.specialty,
+                clinic=doc.clinic,
+            )
+            for doc in doctors
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to get doctors for specialty {specialty}: {e}")
+        return []
 
 
 def triage(
     query: str,
     patient_id: int | None = None,
     db: Session | None = None,
-    current_user: User | None = None,
+    age: int | None = None,
 ) -> TriageResponse:
     normalized_query = query.strip()
-    settings = get_settings()
-    heuristic_level, heuristic_flags = _heuristic_urgency(normalized_query)
-
-    retrieved_chunks = get_retriever().retrieve_chunks(
-        normalized_query,
-        top_k=settings.rag_top_k,
+    if age is None and patient_id is not None and db is not None:
+        patient = (
+            db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
+        )
+        age = patient.age if patient is not None else None
+    base_features = extract_clinical_features(normalized_query, age=age)
+    safety_level = _max_triage_level(
+        _safety_floor(normalized_query, age),
+        assess_urgency_from_features(base_features, age=age),
     )
-    contexts = [_format_chunk_for_reasoner(chunk) for chunk in retrieved_chunks]
+    triage_level = safety_level
+    if {"back pain", "neck pain"}.intersection(base_features.symptoms) and {
+        "numbness",
+        "weakness",
+    }.intersection(base_features.symptoms):
+        triage_level = _max_triage_level(triage_level, "medium")
+    settings = get_settings()
+
+    age_context = _get_age_context(age)
+    retrieval_query = (
+        f"{normalized_query} {age_context}" if age_context else normalized_query
+    )
+
+    candidate_top_k = max(
+        settings.rag_top_k * RAG_CANDIDATE_MULTIPLIER, settings.rag_top_k
+    )
+    candidate_chunks = get_retriever().retrieve_chunks(
+        retrieval_query,
+        top_k=candidate_top_k,
+    )
+    reranked_chunks = rerank_retrieved_chunks(
+        retrieval_query,
+        candidate_chunks,
+        limit=max(REASONER_RAG_LIMIT, settings.rag_top_k),
+    )
+    reasoner_chunks = _filter_chunks_for_reasoner(
+        reranked_chunks,
+        MIN_REASONER_RAG_SCORE,
+    )
+    chunks = reranked_chunks[: settings.rag_top_k]
+    contexts = [_format_reasoner_context(chunk) for chunk in reasoner_chunks]
 
     patient_context: str | None = None
     history_used = False
-    if patient_id is not None:
-        if db is None:
-            raise RuntimeError("Database session is required for patient-aware triage.")
-        if current_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=(
-                    "Authentication is required to run triage with linked patient "
-                    "history."
-                ),
-            )
-
-        ensure_patient_profile_access(db, current_user, patient_id)
+    if patient_id is not None and db is not None:
         provider = PatientContextProvider(
             visit_limit=settings.patient_history_visit_limit,
             top_matches=settings.patient_history_top_matches,
@@ -1261,96 +908,243 @@ def triage(
             patient_id,
             len(patient_result.matched_visit_ids),
         )
+    elif patient_id is not None:
+        patient_context = f"Patient ID {patient_id} was provided."
+        history_used = True
 
-    red_flag_assessment = _assess_red_flags(
-        normalized_query,
-        patient_context,
-        retrieved_chunks,
-    )
-
-    baseline_level = max(
-        heuristic_level,
-        red_flag_assessment.urgency_floor,
-        key=lambda level: LEVEL_PRIORITY[level],
-    )
-    reasoning = get_reasoner().reason(
+    summary = get_reasoner().reason(
         normalized_query,
         contexts,
-        baseline_level,
+        triage_level,
         patient_context=patient_context,
     )
-    merged_red_flags = _merge_red_flags(
-        heuristic_flags,
-        reasoning.red_flags,
-        red_flag_assessment,
+    clinical_features = merge_clinical_features(
+        base_features,
+        getattr(summary, "clinical_features", None),
     )
-    urgency_level = _combine_urgency(
-        heuristic_level,
-        reasoning.urgency_level,
-        merged_red_flags,
-        red_flag_assessment,
-        retrieved_chunks,
+    feature_level = assess_urgency_from_features(base_features, age=age)
+    triage_level, unsupported_reasoner_high = _reconcile_reasoner_urgency(
+        safety_level=safety_level,
+        feature_level=feature_level,
+        reasoner_level=summary.urgency_level,
+        summary=summary,
+        trusted_features=base_features,
+    )
+    actions = _build_actions(triage_level)
+
+    summary_text = (
+        summary.clinical_summary
+        if hasattr(summary, "clinical_summary")
+        else str(summary)
+    )
+    simple_reasoning = simplify_reasoning(summary_text)
+    recommended_specialty = _normalize_recommended_specialty(
+        (
+            summary.recommended_specialty
+            if hasattr(summary, "recommended_specialty")
+            else None
+        ),
+        normalized_query,
+        triage_level,
+        possible_conditions=[
+            str(getattr(condition, "name", "") or "")
+            for condition in getattr(summary, "possible_conditions", [])
+        ],
+        body_systems=clinical_features.body_systems,
+    )
+    rag_context_str = " ".join(
+        f"{getattr(c, 'title', '')} {getattr(c, 'text', '')[:200]}".strip()
+        for c in reasoner_chunks
+    )
+    suspected_condition = get_suspected_condition(
+        normalized_query,
+        summary_text,
+        rag_context_str,
+        reasoner_output=summary,
     )
 
-    condition_scores = _collect_condition_scores(
+    suggested_doctors = (
+        get_suggested_doctors(db, recommended_specialty)
+        if db and recommended_specialty
+        else []
+    )
+    confidence_score = _compute_confidence(
         normalized_query,
-        patient_context,
-        retrieved_chunks,
-        reasoning,
-        red_flag_assessment,
+        chunks,
+        summary,
+        missing_critical_details=clinical_features.missing_critical_details,
     )
-    suspected_conditions = _build_suspected_conditions(condition_scores)
-    recommended_specialty, specialty_reason = _determine_specialty(
-        normalized_query,
-        suspected_conditions,
-        reasoning,
-        red_flag_assessment,
-        retrieved_chunks,
+    clarification_needed = (
+        needs_clarification(
+            confidence_score,
+            triage_level,
+            missing_critical_details=clinical_features.missing_critical_details,
+        )
+        or unsupported_reasoner_high
     )
-    suggested_doctors = get_suggested_doctors(db, recommended_specialty)
-    recommended_actions = _build_actions(
-        urgency_level,
-        recommended_specialty,
-        reasoning.recommended_actions,
-        red_flag_actions=red_flag_assessment.recommended_actions,
+    clarification_questions = (
+        get_clarification_questions(
+            normalized_query,
+            summary=summary,
+            recommended_specialty=recommended_specialty,
+            triage_level=triage_level,
+            clinical_features=clinical_features,
+        )
+        if clarification_needed
+        else []
     )
-    supporting_references = _build_supporting_references(retrieved_chunks)
-
-    clinical_summary, patient_explanation, urgency_reason = _compose_explanations(
-        reasoning,
-        red_flag_assessment,
-        suspected_conditions,
-    )
-    simple_reasoning = simplify_reasoning(clinical_summary)
-    top_condition = suspected_conditions[0].name if suspected_conditions else None
+    supporting_reference_chunks = _filter_supporting_reference_chunks(reasoner_chunks)
+    if not supporting_reference_chunks:
+        supporting_reference_chunks = chunks
 
     logger.info(
-        "triage_completed urgency=%s query_length=%s evidence=%s specialty=%s",
-        urgency_level,
+        "triage_completed triage_level=%s query_length=%s contexts=%s "
+        "specialty=%s condition=%s confidence=%s unsupported_reasoner_high=%s",
+        triage_level,
         len(normalized_query),
-        len(retrieved_chunks),
+        len(contexts),
         recommended_specialty,
+        suspected_condition,
+        confidence_score,
+        unsupported_reasoner_high,
+    )
+
+    urgency_reason = (
+        "The current description does not show a clear emergency warning sign, "
+        "but more detail is needed before deciding how urgent this is."
+        if unsupported_reasoner_high
+        else (
+            summary.clinical_summary[:300]
+            if hasattr(summary, "clinical_summary") and summary.clinical_summary
+            else (
+                " ".join(summary.red_flags[:2])
+                if hasattr(summary, "red_flags") and summary.red_flags
+                else normalized_query
+            )
+        )
+    )
+
+    recommended_actions = (
+        actions
+        if unsupported_reasoner_high
+        else (
+            summary.recommended_actions
+            if hasattr(summary, "recommended_actions") and summary.recommended_actions
+            else actions
+        )
+    )
+    response_red_flags = (
+        []
+        if unsupported_reasoner_high
+        else summary.red_flags if hasattr(summary, "red_flags") else []
     )
 
     return TriageResponse(
-        triage_level=urgency_level,
-        urgency_level=urgency_level,
-        urgency_label=_urgency_label(urgency_level, red_flag_assessment),
+        triage_level=triage_level,
+        urgency_level=triage_level,
+        confidence_score=confidence_score,
+        needs_clarification=clarification_needed,
+        urgency_label=(
+            "High"
+            if triage_level == "high"
+            else "Medium" if triage_level == "medium" else "Low"
+        ),
         urgency_reason=urgency_reason,
-        summary=patient_explanation,
-        clinical_summary=clinical_summary,
+        summary=summary_text,
+        clinical_summary=summary_text,
         simple_reasoning=simple_reasoning,
-        plain_language_explanation=patient_explanation,
-        patient_friendly_explanation=patient_explanation,
+        plain_language_explanation=(
+            summary.patient_friendly_explanation
+            if hasattr(summary, "patient_friendly_explanation")
+            else simple_reasoning
+        ),
+        patient_friendly_explanation=(
+            summary.patient_friendly_explanation
+            if hasattr(summary, "patient_friendly_explanation")
+            else simple_reasoning
+        ),
         actions=recommended_actions,
         recommended_actions=recommended_actions,
-        red_flags=merged_red_flags,
+        red_flags=response_red_flags,
         recommended_specialty=recommended_specialty,
-        specialty_reason=specialty_reason,
-        suspected_condition=top_condition,
-        suspected_conditions=suspected_conditions,
+        specialty_reason=(
+            f"Recommended based on the most likely condition: {recommended_specialty}."
+            if recommended_specialty
+            else "Recommended based on your symptoms and clinical assessment"
+        ),
+        suspected_condition=suspected_condition,
+        suspected_conditions=[
+            {
+                "name": getattr(c, "name", ""),
+                "likelihood": getattr(c, "likelihood", "possible"),
+                "explanation": getattr(c, "explanation", ""),
+            }
+            for c in (
+                summary.possible_conditions
+                if hasattr(summary, "possible_conditions")
+                else []
+            )
+        ],
+        supporting_references=(
+            [
+                {
+                    "title": c.title,
+                    "source": c.source,
+                    "url": c.url,
+                    "snippet": c.text[:400] if c.text else "",
+                }
+                for c in supporting_reference_chunks[: settings.rag_top_k]
+            ]
+            if supporting_reference_chunks
+            else []
+        ),
         suggested_doctors=suggested_doctors,
-        supporting_references=supporting_references,
         history_used=history_used,
-        disclaimer=_build_disclaimer(urgency_level),
+        questions=clarification_questions,
+        disclaimer=(
+            "This is not medical advice. If you think you may have a medical "
+            "emergency, seek immediate care."
+        ),
     )
+
+
+def _compute_confidence(
+    query: str,
+    chunks: list,
+    summary,
+    *,
+    missing_critical_details: list[str] | None = None,
+) -> float:
+    score = 1.0
+    words = query.strip().split()
+
+    # Short vague query
+    if len(words) < 4:
+        score -= 0.3
+    elif len(words) < 6:
+        score -= 0.1
+
+    # Low RAG similarity
+    if chunks:
+        top_score = max((getattr(c, "score", 0) for c in chunks), default=0)
+        if top_score < 0.45:
+            score -= 0.25
+        elif top_score < 0.55:
+            score -= 0.1
+
+    # Few conditions identified
+    conditions = getattr(summary, "possible_conditions", [])
+    if len(conditions) < 2:
+        score -= 0.2
+
+    # Catch-all specialty
+    if getattr(summary, "recommended_specialty", "") == "Internal Medicine":
+        score -= 0.1
+
+    missing_count = len(missing_critical_details or [])
+    if missing_count >= 3:
+        score -= 0.2
+    elif missing_count:
+        score -= 0.1
+
+    return round(max(0.0, min(1.0, score)), 2)

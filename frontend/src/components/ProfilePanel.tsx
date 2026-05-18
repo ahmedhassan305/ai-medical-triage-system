@@ -88,7 +88,12 @@ function AdminOperationsPanel({
   recentVisits: VisitResponseDto[];
   onNavigate: (tab: DashboardTab) => void;
 }) {
-  const [profileSearch, setProfileSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"patients" | "doctors">("patients");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [doctorSearch, setDoctorSearch] = useState("");
+  const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null);
+
   const completedAppointments = appointments.filter(
     (appointment) =>
       appointment.status === "approved" &&
@@ -101,48 +106,38 @@ function AdminOperationsPanel({
       (!appointment.scheduled_for ||
         new Date(appointment.scheduled_for) >= new Date()),
   );
-  const recentPatients = [...patients]
-    .sort(
-      (left, right) =>
-        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
-    )
-    .slice(0, 8);
-  const recentDoctors = [...doctors]
-    .sort(
-      (left, right) =>
-        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
-    )
-    .slice(0, 8);
-  const normalizedSearch = profileSearch.trim().toLowerCase();
-  const filteredPatients = recentPatients.filter((patient) =>
-    [patient.full_name, patient.national_id, patient.current_governorate]
-      .filter(Boolean)
-      .some((value) => value!.toLowerCase().includes(normalizedSearch)),
+
+  // Patient filtering
+  const normalizedPatientSearch = patientSearch.trim().toLowerCase();
+  const filteredPatients = patients.filter((patient) =>
+    patient.national_id?.toLowerCase().includes(normalizedPatientSearch),
   );
-  const filteredDoctors = recentDoctors.filter((doctor) =>
-    [doctor.full_name, doctor.specialty, doctor.clinic, doctor.area, doctor.city]
+
+  // Doctor filtering
+  const normalizedDoctorSearch = doctorSearch.trim().toLowerCase();
+  const filteredDoctors = doctors.filter((doctor) =>
+    [doctor.full_name, doctor.specialty]
       .filter(Boolean)
-      .some((value) => value!.toLowerCase().includes(normalizedSearch)),
+      .some((value) => value!.toLowerCase().includes(normalizedDoctorSearch)),
   );
-  const filteredAppointments = [...appointments]
-    .filter((appointment) =>
-      [appointment.reason, appointment.status, appointment.notes]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(normalizedSearch)),
-    )
-    .sort(
-      (left, right) =>
-        new Date(right.scheduled_for || right.requested_at).getTime() -
-        new Date(left.scheduled_for || left.requested_at).getTime(),
-    )
-    .slice(0, 6);
-  const filteredVisits = recentVisits
-    .filter((visit) =>
-      [visit.diagnosis, visit.symptoms, visit.notes]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(normalizedSearch)),
-    )
-    .slice(0, 6);
+
+  // Selected entities with their related data
+  const selectedPatient = selectedPatientId
+    ? patients.find((p) => p.id === selectedPatientId)
+    : null;
+  const selectedDoctor = selectedDoctorId
+    ? doctors.find((d) => d.id === selectedDoctorId)
+    : null;
+
+  const patientAppointments = selectedPatient
+    ? appointments.filter((a) => a.patient_id === selectedPatient.id)
+    : [];
+  const patientVisits = selectedPatient
+    ? recentVisits.filter((v) => v.patient_id === selectedPatient.id)
+    : [];
+  const doctorAppointments = selectedDoctor
+    ? appointments.filter((a) => a.doctor_id === selectedDoctor.id)
+    : [];
 
   return (
     <div className="stack-lg">
@@ -222,157 +217,317 @@ function AdminOperationsPanel({
       <SectionPanel
         eyebrow="Management"
         title="Profiles and records"
-        description="Search patients, doctors, appointments, and recent visits from one compact admin workspace."
+        description="Search and view detailed patient and doctor profiles with their appointments and medical history."
       >
-        <div className="field">
-          <label htmlFor="admin-profile-search">Search records</label>
-          <input
-            id="admin-profile-search"
-            value={profileSearch}
-            onChange={(event) => setProfileSearch(event.target.value)}
-            placeholder="Search by patient, doctor, specialty, SSN, or visit note"
-          />
+        <div className="segmented-control">
+          <button
+            type="button"
+            className={activeTab === "patients" ? "is-active" : ""}
+            onClick={() => {
+              setActiveTab("patients");
+              setSelectedPatientId(null);
+            }}
+          >
+            Patient Profiles
+          </button>
+          <button
+            type="button"
+            className={activeTab === "doctors" ? "is-active" : ""}
+            onClick={() => {
+              setActiveTab("doctors");
+              setSelectedDoctorId(null);
+            }}
+          >
+            Doctor Profiles
+          </button>
         </div>
 
-        <div className="admin-record-grid">
-          <section className="workspace-card workspace-card--compact">
-            <div className="workspace-card__header">
-              <div>
-                <p className="micro-label">Patients</p>
-                <h3>Recent patient profiles</h3>
-              </div>
-              <button
-                type="button"
-                className="button button--ghost button--small"
-                onClick={() => onNavigate("visits")}
-              >
-                View all visits
-              </button>
+        {activeTab === "patients" ? (
+          <div className="stack-md">
+            <div className="field">
+              <label htmlFor="patient-search">Search by national ID</label>
+              <input
+                id="patient-search"
+                value={patientSearch}
+                onChange={(event) => setPatientSearch(event.target.value)}
+                placeholder="Enter patient national ID"
+              />
             </div>
-            <div className="activity-list compact">
-              {(normalizedSearch ? filteredPatients : recentPatients).slice(0, 6).map((patient) => (
-                <article key={patient.id} className="activity-item">
-                  <div>
-                    <strong>{patient.full_name}</strong>
-                    <p>
-                      {patient.national_id
-                        ? `National ID: ${patient.national_id}`
-                        : "National ID not recorded"}
-                    </p>
-                    <p>
-                      {patient.current_governorate ||
-                        patient.inferred_governorate ||
-                        "Governorate pending"}
-                    </p>
-                  </div>
-                  <div className="activity-meta">
-                    <small>{formatDateTime(patient.updated_at)}</small>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
 
-          <section className="workspace-card workspace-card--compact">
-            <div className="workspace-card__header">
-              <div>
-                <p className="micro-label">Doctors</p>
-                <h3>Operational doctor profiles</h3>
-              </div>
-              <button
-                type="button"
-                className="button button--ghost button--small"
-                onClick={() => onNavigate("triage")}
-              >
-                Open staff triage
-              </button>
-            </div>
-            <div className="activity-list compact">
-              {(normalizedSearch ? filteredDoctors : recentDoctors).slice(0, 6).map((doctor) => (
-                <article key={doctor.id} className="activity-item">
+            {selectedPatient ? (
+              <section className="workspace-card workspace-card--compact">
+                <div className="workspace-card__header">
                   <div>
-                    <strong>{doctor.full_name}</strong>
-                    <p>{doctor.specialty}</p>
-                    <p>
-                      {doctor.area || doctor.city
-                        ? [doctor.area, doctor.city].filter(Boolean).join(", ")
-                        : doctor.clinic}
-                    </p>
+                    <p className="micro-label">Patient details</p>
+                    <h3>{selectedPatient.full_name}</h3>
                   </div>
-                  <div className="activity-meta">
-                    <small>{formatDateTime(doctor.updated_at)}</small>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
+                  <button
+                    type="button"
+                    className="button button--ghost button--small"
+                    onClick={() => setSelectedPatientId(null)}
+                  >
+                    Close
+                  </button>
+                </div>
 
-          <section className="workspace-card workspace-card--compact">
-            <div className="workspace-card__header">
-              <div>
-                <p className="micro-label">Appointments</p>
-                <h3>Future and previous bookings</h3>
-              </div>
-              <button
-                type="button"
-                className="button button--ghost button--small"
-                onClick={() => onNavigate("appointments")}
-              >
-                Manage appointments
-              </button>
-            </div>
-            <div className="activity-list compact">
-              {filteredAppointments.map((appointment) => (
-                <article key={appointment.id} className="activity-item">
+                <div className="detail-list">
                   <div>
-                    <strong>{summarize(appointment.reason)}</strong>
-                    <p>
-                      Patient #{appointment.patient_id} · Doctor #{appointment.doctor_id}
-                    </p>
+                    <strong>Full name</strong>
+                    <span>{selectedPatient.full_name}</span>
                   </div>
-                  <div className="activity-meta">
-                    <span className={`badge badge--status-${appointment.status}`}>
-                      {appointment.status}
+                  <div>
+                    <strong>Age</strong>
+                    <span>{selectedPatient.age}</span>
+                  </div>
+                  <div>
+                    <strong>Sex</strong>
+                    <span>{selectedPatient.sex}</span>
+                  </div>
+                  <div>
+                    <strong>National ID</strong>
+                    <span>{selectedPatient.national_id || "Not recorded"}</span>
+                  </div>
+                  <div>
+                    <strong>Governorate</strong>
+                    <span>
+                      {selectedPatient.current_governorate ||
+                        selectedPatient.inferred_governorate ||
+                        "Pending"}
                     </span>
-                    <small>
-                      {formatDateTime(appointment.scheduled_for || appointment.requested_at)}
-                    </small>
                   </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="workspace-card workspace-card--compact">
-            <div className="workspace-card__header">
-              <div>
-                <p className="micro-label">Medical history</p>
-                <h3>Recent patient visit records</h3>
-              </div>
-              <button
-                type="button"
-                className="button button--ghost button--small"
-                onClick={() => onNavigate("records")}
-              >
-                Import records
-              </button>
-            </div>
-            <div className="activity-list compact">
-              {filteredVisits.map((visit) => (
-                <article key={visit.id} className="activity-item">
                   <div>
-                    <strong>{visit.diagnosis || "Visit note"}</strong>
-                    <p>{summarize(visit.symptoms)}</p>
-                    <p>{summarize(visit.notes, "No additional notes recorded.")}</p>
+                    <strong>Chronic conditions</strong>
+                    <span>
+                      {selectedPatient.chronic_conditions.length > 0
+                        ? selectedPatient.chronic_conditions.join(", ")
+                        : "None recorded"}
+                    </span>
                   </div>
-                  <div className="activity-meta">
-                    <small>{formatDateTime(visit.created_at)}</small>
+                  <div>
+                    <strong>Smoker</strong>
+                    <span>{selectedPatient.smoker ? "Yes" : "No"}</span>
                   </div>
-                </article>
-              ))}
+                  <div>
+                    <strong>Alcoholic</strong>
+                    <span>{selectedPatient.alcoholic ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+
+                <div className="stack-md">
+                  <div>
+                    <p className="micro-label">Appointments ({patientAppointments.length})</p>
+                    <div className="activity-list">
+                      {patientAppointments.length === 0 ? (
+                        <div className="empty-state">No appointments recorded.</div>
+                      ) : (
+                        patientAppointments.map((appointment) => (
+                          <article key={appointment.id} className="activity-item">
+                            <div>
+                              <strong>Appointment #{appointment.id}</strong>
+                              <p>{appointment.reason}</p>
+                              <p>
+                                Doctor #
+                                {
+                                  doctors.find((d) => d.id === appointment.doctor_id)
+                                    ?.full_name
+                                }
+                              </p>
+                            </div>
+                            <div className="activity-meta">
+                              <span className={`badge badge--status-${appointment.status}`}>
+                                {appointment.status}
+                              </span>
+                              <small>{formatDateTime(appointment.scheduled_for || appointment.requested_at)}</small>
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="micro-label">Visits ({patientVisits.length})</p>
+                    <div className="activity-list">
+                      {patientVisits.length === 0 ? (
+                        <div className="empty-state">No visits recorded.</div>
+                      ) : (
+                        patientVisits.map((visit) => (
+                          <article key={visit.id} className="activity-item">
+                            <div>
+                              <strong>{visit.diagnosis || "Visit record"}</strong>
+                              <p>{summarize(visit.symptoms)}</p>
+                              <p>{summarize(visit.notes, "No notes")}</p>
+                            </div>
+                            <div className="activity-meta">
+                              <small>{formatDateTime(visit.created_at)}</small>
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <div className="stack-md">
+                {filteredPatients.length === 0 ? (
+                  <div className="empty-state">
+                    {patientSearch
+                      ? "No patients match your search. Try a different national ID."
+                      : "Enter a national ID to search for patients."}
+                  </div>
+                ) : (
+                  <div className="activity-list">
+                    {filteredPatients.map((patient) => (
+                      <button
+                        key={patient.id}
+                        type="button"
+                        className="activity-item"
+                        onClick={() => setSelectedPatientId(patient.id)}
+                      >
+                        <div>
+                          <strong>{patient.full_name}</strong>
+                          <p>
+                            {patient.national_id
+                              ? `National ID: ${patient.national_id}`
+                              : "No national ID"}
+                          </p>
+                          <p>
+                            {patient.current_governorate ||
+                              patient.inferred_governorate ||
+                              "Governorate pending"}
+                          </p>
+                        </div>
+                        <div className="activity-meta">
+                          <small>{formatDateTime(patient.updated_at)}</small>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="stack-md">
+            <div className="field">
+              <label htmlFor="doctor-search">Search by name or specialty</label>
+              <input
+                id="doctor-search"
+                value={doctorSearch}
+                onChange={(event) => setDoctorSearch(event.target.value)}
+                placeholder="Enter doctor name or specialty"
+              />
             </div>
-          </section>
-        </div>
+
+            {selectedDoctor ? (
+              <section className="workspace-card workspace-card--compact">
+                <div className="workspace-card__header">
+                  <div>
+                    <p className="micro-label">Doctor details</p>
+                    <h3>{selectedDoctor.full_name}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--ghost button--small"
+                    onClick={() => setSelectedDoctorId(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="detail-list">
+                  <div>
+                    <strong>Full name</strong>
+                    <span>{selectedDoctor.full_name}</span>
+                  </div>
+                  <div>
+                    <strong>Specialty</strong>
+                    <span>{selectedDoctor.specialty}</span>
+                  </div>
+                  <div>
+                    <strong>Clinic</strong>
+                    <span>{selectedDoctor.clinic || "Not specified"}</span>
+                  </div>
+                  <div>
+                    <strong>Area</strong>
+                    <span>{selectedDoctor.area || "Not specified"}</span>
+                  </div>
+                  <div>
+                    <strong>City</strong>
+                    <span>{selectedDoctor.city || "Not specified"}</span>
+                  </div>
+                </div>
+
+                <div className="stack-md">
+                  <div>
+                    <p className="micro-label">Appointments ({doctorAppointments.length})</p>
+                    <div className="activity-list">
+                      {doctorAppointments.length === 0 ? (
+                        <div className="empty-state">No appointments recorded.</div>
+                      ) : (
+                        doctorAppointments.map((appointment) => (
+                          <article key={appointment.id} className="activity-item">
+                            <div>
+                              <strong>Appointment #{appointment.id}</strong>
+                              <p>{appointment.reason}</p>
+                              <p>
+                                Patient #
+                                {
+                                  patients.find((p) => p.id === appointment.patient_id)
+                                    ?.full_name
+                                }
+                              </p>
+                            </div>
+                            <div className="activity-meta">
+                              <span className={`badge badge--status-${appointment.status}`}>
+                                {appointment.status}
+                              </span>
+                              <small>{formatDateTime(appointment.scheduled_for || appointment.requested_at)}</small>
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <div className="stack-md">
+                {filteredDoctors.length === 0 ? (
+                  <div className="empty-state">
+                    {doctorSearch
+                      ? "No doctors match your search. Try a different name or specialty."
+                      : "Enter a name or specialty to search for doctors."}
+                  </div>
+                ) : (
+                  <div className="activity-list">
+                    {filteredDoctors.map((doctor) => (
+                      <button
+                        key={doctor.id}
+                        type="button"
+                        className="activity-item"
+                        onClick={() => setSelectedDoctorId(doctor.id)}
+                      >
+                        <div>
+                          <strong>{doctor.full_name}</strong>
+                          <p>{doctor.specialty}</p>
+                          <p>
+                            {[doctor.area, doctor.city].filter(Boolean).join(", ") ||
+                              doctor.clinic}
+                          </p>
+                        </div>
+                        <div className="activity-meta">
+                          <small>{formatDateTime(doctor.updated_at)}</small>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </SectionPanel>
 
       {/* Keep a short operational summary below the management grid. */}
@@ -383,7 +538,7 @@ function AdminOperationsPanel({
           description="A short operational snapshot of the latest profile changes."
         >
           <div className="activity-list compact">
-            {recentPatients.slice(0, 4).map((patient) => (
+            {patients.slice(0, 4).map((patient) => (
               <article key={patient.id} className="activity-item">
                 <div>
                   <strong>{patient.full_name}</strong>
@@ -412,7 +567,7 @@ function AdminOperationsPanel({
           description="Recently updated clinicians and public directory entries."
         >
           <div className="activity-list compact">
-            {recentDoctors.slice(0, 4).map((doctor) => (
+            {doctors.slice(0, 4).map((doctor) => (
               <article key={doctor.id} className="activity-item">
                 <div>
                   <strong>{doctor.full_name}</strong>
@@ -431,7 +586,6 @@ function AdminOperationsPanel({
           </div>
         </SectionPanel>
       </div>
-
     </div>
   );
 }

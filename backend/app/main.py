@@ -1,3 +1,6 @@
+import os
+import threading
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +10,7 @@ from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import add_request_logging_middleware
 from app.db.session import create_all
-from app.services.triage_service import get_reasoner
+from app.services.triage_service import _preload_model, get_reasoner
 
 
 def create_app() -> FastAPI:
@@ -18,7 +21,10 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -26,6 +32,7 @@ def create_app() -> FastAPI:
 
     add_request_logging_middleware(app)
     register_exception_handlers(app)
+
     app.include_router(api_v1_router)
     app.include_router(legacy_router, include_in_schema=False)
 
@@ -34,6 +41,9 @@ def create_app() -> FastAPI:
 
     if settings.strict_reasoner:
         get_reasoner()
+    if settings.reasoner_mode == "ollama" and "PYTEST_CURRENT_TEST" not in os.environ:
+        # Keep local Ollama warm without leaving noisy background threads in tests.
+        threading.Thread(target=_preload_model, daemon=True).start()
 
     return app
 

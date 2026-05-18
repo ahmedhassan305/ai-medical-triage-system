@@ -160,6 +160,18 @@ export default function HomePage() {
     ): Promise<boolean> => {
       try {
         const currentUser = await fetchCurrentUser();
+        const patientProfileRequest =
+          currentUser.role === "patient" || currentUser.role === "admin"
+            ? fetchMyPatientProfile().catch((error) =>
+                isStatus(error, 404) ? null : Promise.reject(error),
+              )
+            : Promise.resolve(null);
+        const doctorProfileRequest =
+          currentUser.role === "doctor" || currentUser.role === "admin"
+            ? fetchMyDoctorProfile().catch((error) =>
+                isStatus(error, 404) ? null : Promise.reject(error),
+              )
+            : Promise.resolve(null);
         const [
           nextPatientProfile,
           nextDoctorProfile,
@@ -168,16 +180,8 @@ export default function HomePage() {
           nextAppointments,
           nextWorkspaceVisits,
         ] = await Promise.all([
-          currentUser.role === "patient"
-            ? fetchMyPatientProfile().catch((error) =>
-                isStatus(error, 404) ? null : Promise.reject(error),
-              )
-            : Promise.resolve(null),
-          currentUser.role === "doctor"
-            ? fetchMyDoctorProfile().catch((error) =>
-                isStatus(error, 404) ? null : Promise.reject(error),
-              )
-            : Promise.resolve(null),
+          patientProfileRequest,
+          doctorProfileRequest,
           listDoctors().catch(() => []),
           currentUser.role === "patient"
             ? Promise.resolve([])
@@ -666,6 +670,7 @@ export default function HomePage() {
             onClearLinkedPatient={handleClearLinkedTriagePatient}
             onCreatePatientProfile={handleCreateManagedPatientProfile}
             onSubmit={handleRunTriage}
+            onClarificationComplete={setTriageResult}
             onReserveAppointment={
               currentUser.role === "doctor" ? undefined : handleReserveAppointment
             }
