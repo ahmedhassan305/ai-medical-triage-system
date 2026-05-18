@@ -12,7 +12,7 @@ import { findPatientByNationalId } from "../api/patients";
 import type { AppointmentPrefill } from "../lib/appointmentPrefill";
 import SectionPanel from "./SectionPanel";
 
-const ADMIN_APPOINTMENTS_PAGE_SIZE = 8;
+const ADMIN_APPOINTMENTS_PAGE_SIZE = 6;
 
 type AppointmentsPanelProps = {
   role: RoleType;
@@ -418,6 +418,61 @@ export default function AppointmentsPanel({
     );
   }
 
+  function renderAdminAppointmentTable(
+    label: string,
+    items: AppointmentResponseDto[],
+    page: number,
+    setPage: (page: number) => void,
+    emptyMessage: string,
+  ) {
+    const pageItems = paginateAppointments(items, page);
+
+    return (
+      <div className="appointment-page-block">
+        <div className="appointment-page-block__header">
+          <div>
+            <p className="micro-label">{label}</p>
+            <h4>{items.length} appointments</h4>
+          </div>
+          {renderPaginationControls(items, page, setPage)}
+        </div>
+
+        {items.length === 0 ? (
+          <div className="empty-state">{emptyMessage}</div>
+        ) : (
+          <div className="appointment-table">
+            <div className="appointment-table__header">
+              <span>ID</span>
+              <span>Patient</span>
+              <span>Doctor</span>
+              <span>Date</span>
+              <span>Status</span>
+              <span>Action</span>
+            </div>
+            {pageItems.map((appointment) => (
+              <div key={appointment.id} className="appointment-table__row">
+                <strong>#{appointment.id}</strong>
+                <span>{getPatientName(appointment)}</span>
+                <span>{getDoctorName(appointment)}</span>
+                <span>{formatDateTime(appointment.scheduled_for)}</span>
+                <span className={`badge badge--status-${appointment.status}`}>
+                  {renderStatusLabel(appointment.status)}
+                </span>
+                <button
+                  type="button"
+                  className="button button--ghost button--small"
+                  onClick={() => openDetails(appointment)}
+                >
+                  View details
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderAppointmentDetails() {
     if (!selectedAppointment) {
       return null;
@@ -749,53 +804,60 @@ export default function AppointmentsPanel({
               </div>
             ) : null}
 
-            <div className="stack-md">
-              <div>
-                <p className="micro-label">Active and upcoming</p>
-                <div className="stack-md">
-                  {activeAppointments.length === 0 ? (
-                    <div className="empty-state">
-                      No current appointment requests. Start with a new booking above.
-                    </div>
-                  ) : (
-                    paginateAppointments(activeAppointments, activePage).map(
-                      (appointment) =>
+            {role === "admin" ? (
+              <div className="appointment-page-grid">
+                {renderAdminAppointmentTable(
+                  "Active and upcoming",
+                  activeAppointments,
+                  activePage,
+                  setActivePage,
+                  "No current appointment requests.",
+                )}
+                {renderAdminAppointmentTable(
+                  "Previous decisions",
+                  previousAppointments,
+                  previousPage,
+                  setPreviousPage,
+                  "Completed and rejected appointments will appear here.",
+                )}
+              </div>
+            ) : (
+              <div className="stack-md">
+                <div>
+                  <p className="micro-label">Active and upcoming</p>
+                  <div className="stack-md">
+                    {activeAppointments.length === 0 ? (
+                      <div className="empty-state">
+                        No current appointment requests. Start with a new booking above.
+                      </div>
+                    ) : (
+                      activeAppointments.map((appointment) =>
                         renderAppointmentCard(appointment, {
                           showDetailsAction: true,
                         }),
-                    )
-                  )}
-                  {renderPaginationControls(
-                    activeAppointments,
-                    activePage,
-                    setActivePage,
-                  )}
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <p className="micro-label">Previous decisions</p>
-                <div className="stack-md">
-                  {previousAppointments.length === 0 ? (
-                    <div className="empty-state">
-                      Completed and rejected appointments will appear here for reference.
-                    </div>
-                  ) : (
-                    paginateAppointments(previousAppointments, previousPage).map(
-                      (appointment) =>
+                <div>
+                  <p className="micro-label">Previous decisions</p>
+                  <div className="stack-md">
+                    {previousAppointments.length === 0 ? (
+                      <div className="empty-state">
+                        Completed and rejected appointments will appear here for reference.
+                      </div>
+                    ) : (
+                      previousAppointments.map((appointment) =>
                         renderAppointmentCard(appointment, {
                           showDetailsAction: true,
                         }),
-                    )
-                  )}
-                  {renderPaginationControls(
-                    previousAppointments,
-                    previousPage,
-                    setPreviousPage,
-                  )}
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </section>
         </div>
       ) : null}

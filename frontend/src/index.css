@@ -1463,6 +1463,67 @@ button.activity-item:hover {
   font-size: 0.9rem;
 }
 
+.appointment-page-grid,
+.appointment-page-block {
+  display: grid;
+  gap: 14px;
+}
+
+.appointment-page-block {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.appointment-page-block__header,
+.appointment-table__header,
+.appointment-table__row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+
+.appointment-page-block__header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.appointment-page-block__header h4 {
+  margin: 2px 0 0;
+  color: var(--bg-ink);
+}
+
+.appointment-table {
+  display: grid;
+  gap: 8px;
+}
+
+.appointment-table__header,
+.appointment-table__row {
+  grid-template-columns: 70px minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr) 140px 120px;
+}
+
+.appointment-table__header {
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.appointment-table__row {
+  min-height: 54px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.appointment-table__row .badge {
+  justify-self: start;
+}
+
 .pagination-strip__page {
   align-self: center;
   color: var(--bg-ink-soft);
@@ -1546,7 +1607,10 @@ button.activity-item:hover {
   }
 
   .ops-table__header,
-  .ops-table__row {
+  .ops-table__row,
+  .appointment-page-block__header,
+  .appointment-table__header,
+  .appointment-table__row {
     grid-template-columns: 1fr;
   }
 }
