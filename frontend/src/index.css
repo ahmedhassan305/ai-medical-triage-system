@@ -1628,6 +1628,21 @@ button.activity-item:hover {
   font-weight: 700;
 }
 
+.admin-management-panel,
+.schedule-management-panel,
+.medical-history-list {
+  margin-top: 18px;
+}
+
+.schedule-management-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .badge--status-completed {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;

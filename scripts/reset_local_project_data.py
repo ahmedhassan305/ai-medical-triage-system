@@ -19,10 +19,15 @@ sys.path.insert(0, str(backend_dir))
 from app.core.security import get_password_hash  # noqa: E402
 from app.db.models import (  # noqa: E402
     Appointment,
+    AppointmentSlot,
+    Clinic,
     Department,
+    DoctorClinic,
     DoctorProfile,
     DoctorSchedule,
     MedicalHistory,
+    PatientLabResult,
+    PatientMedicalHistoryEntry,
     PatientProfile,
     PatientSymptom,
     Symptom,
@@ -46,6 +51,10 @@ from app.services.doctor_seed_importer import (  # noqa: E402
 from app.services.egyptian_national_id import (  # noqa: E402
     calculate_age,
     parse_egyptian_national_id,
+)
+from app.services.slot_booking import (  # noqa: E402
+    ensure_primary_doctor_clinic,
+    generate_slots_for_doctor,
 )
 
 SEED_PATH = backend_dir / "data" / "doctors" / "alexandria_public_directory_seed.json"
@@ -352,11 +361,16 @@ def build_patient_records() -> list[dict[str, object]]:
 def delete_existing_data(db: Session) -> None:
     db.query(TriageAssessment).delete(synchronize_session=False)
     db.query(MedicalHistory).delete(synchronize_session=False)
+    db.query(PatientMedicalHistoryEntry).delete(synchronize_session=False)
+    db.query(PatientLabResult).delete(synchronize_session=False)
     db.query(PatientSymptom).delete(synchronize_session=False)
+    db.query(Appointment).delete(synchronize_session=False)
+    db.query(AppointmentSlot).delete(synchronize_session=False)
     db.query(DoctorSchedule).delete(synchronize_session=False)
     db.query(Symptom).delete(synchronize_session=False)
-    db.query(Appointment).delete(synchronize_session=False)
     db.query(Visit).delete(synchronize_session=False)
+    db.query(DoctorClinic).delete(synchronize_session=False)
+    db.query(Clinic).delete(synchronize_session=False)
     db.query(DoctorProfile).delete(synchronize_session=False)
     db.query(PatientProfile).delete(synchronize_session=False)
     db.query(User).delete(synchronize_session=False)
@@ -496,13 +510,16 @@ def seed_doctor_schedules(db: Session) -> int:
     doctors = db.query(DoctorProfile).order_by(DoctorProfile.id.asc()).all()
     for doctor in doctors:
         assign_department_to_doctor(db, doctor, department_name=doctor.specialty)
+        doctor_clinic = ensure_primary_doctor_clinic(db, doctor)
         for day_name, start_hour, end_hour in weekday_templates:
             db.add(
                 DoctorSchedule(
                     doctor_id=doctor.id,
+                    doctor_clinic_id=doctor_clinic.id,
                     day_of_week=day_name,
                     start_time=time(start_hour, 0),
                     end_time=time(end_hour, 0),
+                    slot_minutes=30,
                     location_label=doctor.clinic,
                     is_active=True,
                 )
@@ -510,6 +527,16 @@ def seed_doctor_schedules(db: Session) -> int:
             created += 1
     db.commit()
     return created
+
+
+def seed_appointment_slots(db: Session) -> int:
+    before_count = db.query(func.count(AppointmentSlot.id)).scalar() or 0
+    for (doctor_id,) in (
+        db.query(DoctorProfile.id).order_by(DoctorProfile.id.asc()).all()
+    ):
+        generate_slots_for_doctor(db, doctor_id)
+    after_count = db.query(func.count(AppointmentSlot.id)).scalar() or 0
+    return after_count - before_count
 
 
 def seed_appointments_and_visits(db: Session) -> tuple[int, int]:
@@ -643,6 +670,7 @@ def main() -> int:
         symptom_count = seed_symptom_catalog(db)
         credentials = seed_users_and_linked_profiles(db)
         schedule_count = seed_doctor_schedules(db)
+        slot_count = seed_appointment_slots(db)
         appointment_count, visit_count = seed_appointments_and_visits(db)
         doctor_count = db.query(func.count(DoctorProfile.id)).scalar() or 0
         patient_count = db.query(func.count(PatientProfile.id)).scalar() or 0
@@ -655,6 +683,7 @@ def main() -> int:
     print(f"Visits available: {visit_count}")
     print(f"Medical history records available: {history_count}")
     print(f"Doctor schedule rows available: {schedule_count}")
+    print(f"Appointment slot rows available: {slot_count}")
     print(f"Symptom catalog rows available: {symptom_count}")
     print("")
     print("Seeded local credentials:")
