@@ -214,11 +214,19 @@ def ensure_primary_doctor_clinic(db: Session, doctor: DoctorProfile) -> DoctorCl
 
 def ensure_demo_availability_for_doctor(db: Session, doctor: DoctorProfile) -> int:
     doctor_clinic = ensure_primary_doctor_clinic(db, doctor)
-    existing_count = (
-        db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == doctor.id).count()
+    existing_schedules = (
+        db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == doctor.id).all()
     )
-    if existing_count:
-        return 0
+    backfilled = 0
+    for schedule in existing_schedules:
+        if schedule.doctor_clinic_id is None:
+            schedule.doctor_clinic_id = doctor_clinic.id
+            schedule.location_label = (
+                schedule.location_label or doctor_clinic.clinic.name
+            )
+            backfilled += 1
+    if existing_schedules:
+        return backfilled
 
     created = 0
     for day in DEFAULT_WORKING_DAYS:

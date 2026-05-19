@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
-from app.db.models import AppointmentSlot, Clinic, DoctorProfile, DoctorSchedule, User
+from app.db.models import (
+    AppointmentSlot,
+    Clinic,
+    DoctorClinic,
+    DoctorProfile,
+    DoctorSchedule,
+    User,
+)
 from app.db.session import get_db
 from app.schemas.doctor import (
     AppointmentSlotResponse,
@@ -20,6 +28,7 @@ from app.services.clinical_records import assign_department_to_doctor
 from app.services.slot_booking import (
     SlotBookingValidationError,
     generate_slots_for_doctor,
+    get_primary_doctor_clinic,
 )
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
@@ -47,6 +56,28 @@ def _serialize_slot(slot: AppointmentSlot) -> AppointmentSlotResponse:
         end_at=slot.end_at,
         status=slot.status,
         clinic=_serialize_clinic(clinic),
+    )
+
+
+def _default_doctor_clinic_id(db: Session, doctor_id: int) -> int | None:
+    doctor_clinic = get_primary_doctor_clinic(db, doctor_id)
+    return doctor_clinic.id if doctor_clinic else None
+
+
+def _clear_future_open_slots(db: Session, doctor_id: int) -> None:
+    """Remove generated open slots so schedule edits recalculate availability."""
+    today_start = datetime.combine(date.today(), time.min)
+    doctor_clinic_ids = select(DoctorClinic.id).filter(
+        DoctorClinic.doctor_id == doctor_id
+    )
+    (
+        db.query(AppointmentSlot)
+        .filter(
+            AppointmentSlot.status == "open",
+            AppointmentSlot.start_at >= today_start,
+            AppointmentSlot.doctor_clinic_id.in_(doctor_clinic_ids),
+        )
+        .delete(synchronize_session=False)
     )
 
 
@@ -173,8 +204,12 @@ def create_doctor_schedule(
 ) -> DoctorScheduleResponse:
     if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
-    schedule = DoctorSchedule(doctor_id=doctor_id, **payload.model_dump())
+    schedule_data = payload.model_dump()
+    if schedule_data.get("doctor_clinic_id") is None:
+        schedule_data["doctor_clinic_id"] = _default_doctor_clinic_id(db, doctor_id)
+    schedule = DoctorSchedule(doctor_id=doctor_id, **schedule_data)
     db.add(schedule)
+    _clear_future_open_slots(db, doctor_id)
     db.commit()
     db.refresh(schedule)
     return DoctorScheduleResponse.model_validate(schedule, from_attributes=True)
@@ -201,8 +236,14 @@ def update_doctor_schedule(
     )
     if schedule is None:
         raise HTTPException(status_code=404, detail="Schedule not found.")
-    for key, value in payload.model_dump().items():
+    schedule_data = payload.model_dump()
+    if schedule_data.get("doctor_clinic_id") is None:
+        schedule_data["doctor_clinic_id"] = (
+            schedule.doctor_clinic_id or _default_doctor_clinic_id(db, doctor_id)
+        )
+    for key, value in schedule_data.items():
         setattr(schedule, key, value)
+    _clear_future_open_slots(db, doctor_id)
     db.commit()
     db.refresh(schedule)
     return DoctorScheduleResponse.model_validate(schedule, from_attributes=True)

@@ -4,10 +4,13 @@ from datetime import time
 
 from fastapi.testclient import TestClient
 
-from app.db.models import DoctorProfile
+from app.db.models import AppointmentSlot, DoctorProfile
 from app.db.session import SessionLocal
 from app.services.lab_pdf_extraction import extract_lab_values_from_text
-from app.services.slot_booking import ensure_demo_availability_for_all_doctors
+from app.services.slot_booking import (
+    ensure_demo_availability_for_all_doctors,
+    generate_slots_for_doctor,
+)
 
 PASSWORD = "password123"
 
@@ -159,25 +162,25 @@ def test_availability_seed_is_idempotent(client: TestClient) -> None:
     _register_and_login(client, "seed-doc@example.com", "doctor")
     db = SessionLocal()
     try:
-        doctor = (
-            db.query(DoctorProfile)
-            .filter(DoctorProfile.full_name.like("Patient%").is_(False))
-            .first()
+        doctor = DoctorProfile(
+            full_name="Seeded Availability Doctor",
+            specialty="Pediatrics",
+            clinic="Seed Clinic",
+            area="Gleem",
+            city="Alexandria",
         )
-        if doctor is None:
-            doctor = DoctorProfile(
-                full_name="Seeded Availability Doctor",
-                specialty="Pediatrics",
-                clinic="Seed Clinic",
-                area="Gleem",
-                city="Alexandria",
-            )
-            db.add(doctor)
-            db.commit()
+        db.add(doctor)
+        db.commit()
         first = ensure_demo_availability_for_all_doctors(db)
         second = ensure_demo_availability_for_all_doctors(db)
+        generate_slots_for_doctor(db, doctor.id)
+        first_slot_count = db.query(AppointmentSlot).count()
+        generate_slots_for_doctor(db, doctor.id)
+        second_slot_count = db.query(AppointmentSlot).count()
         assert first >= 0
         assert second == 0
+        assert first_slot_count > 0
+        assert second_slot_count == first_slot_count
         assert all(
             schedule.start_time in {time(9, 0), time(14, 0)}
             for schedule in doctor.schedules
