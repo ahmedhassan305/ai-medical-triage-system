@@ -626,7 +626,10 @@ textarea {
   padding: 20px;
   display: grid;
   gap: 16px;
-  transition: all 0.2s ease-out;
+  transition:
+    border-color 0.2s ease-out,
+    box-shadow 0.2s ease-out,
+    transform 0.2s ease-out;
   box-shadow: 0 2px 8px rgba(22, 51, 50, 0.06);
 }
 
@@ -645,6 +648,7 @@ textarea {
 
 .doctor-card__info {
   flex: 1;
+  min-width: 0;
 }
 
 .doctor-card__name {
@@ -696,7 +700,7 @@ textarea {
   display: flex;
   gap: 2px;
   align-items: center;
-  letter-spacing: -0.3em;
+  letter-spacing: 0;
 }
 
 .star {
@@ -735,9 +739,9 @@ textarea {
 
 .doctor-card__why-recommended {
   background: rgba(15, 118, 110, 0.04);
-  border-left: 3px solid var(--accent);
+  border-inline-start: 3px solid var(--accent);
   padding: 12px 14px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius-sm);
 }
 
 .doctor-card__why-recommended .micro-label {
@@ -754,6 +758,40 @@ textarea {
   color: var(--text-main);
   font-size: 0.95rem;
   line-height: 1.5;
+}
+
+.recommendation-reasons {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recommendation-reason {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: var(--text-main);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.reason-icon {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--accent);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.reason-text {
+  min-width: 0;
 }
 
 /* Recommendation logic section */
@@ -784,6 +822,7 @@ textarea {
   gap: 12px;
   font-size: 0.9rem;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .recommendation-item__label {
@@ -797,6 +836,7 @@ textarea {
   color: var(--text-main);
   flex: 1;
   line-height: 1.4;
+  min-width: 0;
 }
 
 .recommendation-item__hint {
@@ -826,6 +866,7 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .button-row--align-end {
@@ -1702,6 +1743,8 @@ button.activity-item:hover {
   .inline-filter,
   .doctor-suggestion-card__header,
   .doctor-suggestion-card__actions,
+  .doctor-card__header,
+  .doctor-card__actions,
   .appointment-prefill,
   .dashboard-hero,
   .workspace-card__header,
@@ -1712,6 +1755,24 @@ button.activity-item:hover {
   .coverage-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .doctor-card {
+    padding: 16px;
+  }
+
+  .doctor-card__rating {
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .recommendation-item {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .recommendation-item__label {
+    white-space: normal;
   }
 
   .funnel-row {
