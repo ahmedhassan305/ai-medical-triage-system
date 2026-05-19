@@ -11,6 +11,11 @@ import type {
 import { findPatientByNationalId } from "../api/patients";
 import { useLanguage } from "../i18n/useLanguage";
 import type { AppointmentPrefill } from "../lib/appointmentPrefill";
+import {
+  formatLocalizedDateTime,
+  formatLocalizedSlotLabel,
+  localizeAppointmentStatus,
+} from "../lib/localizedDisplay";
 import SectionPanel from "./SectionPanel";
 
 const ADMIN_APPOINTMENTS_PAGE_SIZE = 6;
@@ -44,37 +49,43 @@ function renderStatusLabel(
   status: AppointmentResponseDto["status"],
   t: ReturnType<typeof useLanguage>["t"],
 ): string {
-  switch (status) {
-    case "requested":
-      return t("pendingReview");
-    case "approved":
-      return t("confirmed");
-    case "completed":
-      return t("completed");
-    case "rejected":
-      return t("rejected");
-    default:
-      return status;
-  }
+  return localizeAppointmentStatus(status, t);
 }
 
-function formatDateTime(value?: string | null): string {
-  return value ? new Date(value).toLocaleString() : "Not scheduled yet";
+function formatDateTime(
+  value: string | null | undefined,
+  language: ReturnType<typeof useLanguage>["language"],
+): string {
+  return formatLocalizedDateTime(value, language);
 }
 
-function formatClinic(appointment: AppointmentResponseDto): string {
+function formatClinic(
+  appointment: AppointmentResponseDto,
+  t: ReturnType<typeof useLanguage>["t"],
+): string {
   const clinic = appointment.clinic ?? appointment.slot?.clinic;
   if (!clinic) {
-    return "Clinic not assigned";
+    return t("clinicNotAssigned");
   }
   return [clinic.name, clinic.area, clinic.city].filter(Boolean).join(" · ");
 }
 
-function describeSlot(slot?: AppointmentSlotDto | null): string {
+function describeSlot(
+  slot: AppointmentSlotDto | null | undefined,
+  t: ReturnType<typeof useLanguage>["t"],
+  language: ReturnType<typeof useLanguage>["language"],
+): string {
   if (!slot) {
-    return "No slot selected";
+    return t("noSlotSelected");
   }
-  return `${formatDateTime(slot.start_at)} - ${formatDateTime(slot.end_at)} (${slot.status})`;
+  return `${formatDateTime(slot.start_at, language)} - ${formatDateTime(slot.end_at, language)} (${localizeAppointmentStatus(slot.status, t)})`;
+}
+
+function formatRequestedAt(
+  value: string,
+  language: ReturnType<typeof useLanguage>["language"],
+): string {
+  return new Date(value).toLocaleString(language === "ar" ? "ar-EG" : "en-US");
 }
 
 export default function AppointmentsPanel({
@@ -90,7 +101,7 @@ export default function AppointmentsPanel({
   preFill,
   onClearPreFill,
 }: AppointmentsPanelProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [doctorId, setDoctorId] = useState<number | "">(preFill?.doctorId ?? "");
   const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
@@ -145,7 +156,7 @@ export default function AppointmentsPanel({
     setSlotLoading(true);
     setSlotError(null);
     setSelectedSlotId("");
-    listDoctorSlots(Number(doctorId))
+      listDoctorSlots(Number(doctorId))
       .then((slots) => {
         if (!cancelled) {
           setAvailableSlots(slots.filter((slot) => slot.status === "open"));
@@ -154,7 +165,7 @@ export default function AppointmentsPanel({
       .catch(() => {
         if (!cancelled) {
           setAvailableSlots([]);
-          setSlotError("Could not load this doctor's available times.");
+          setSlotError(t("couldNotLoadDoctorSlots"));
         }
       })
       .finally(() => {
@@ -166,12 +177,12 @@ export default function AppointmentsPanel({
     return () => {
       cancelled = true;
     };
-  }, [doctorId]);
+  }, [doctorId, t]);
 
   async function handleLookupPatient() {
     const nationalId = patientNationalId.trim();
     if (!nationalId) {
-      setPatientLookupError("Enter a patient national ID first.");
+      setPatientLookupError(t("enterPatientNationalIdFirst"));
       return;
     }
 
@@ -184,7 +195,7 @@ export default function AppointmentsPanel({
       setResolvedPatient(patient);
       setPatientId(patient.id);
     } catch {
-      setPatientLookupError("No patient profile was found for this national ID.");
+      setPatientLookupError(t("noPatientProfileFound"));
     } finally {
       setPatientLookupLoading(false);
     }
@@ -297,49 +308,49 @@ export default function AppointmentsPanel({
         <span>
           Showing {startItem}-{endItem} of {items.length}
         </span>
-        <div className="button-row">
-          <button
-            type="button"
-            className="button button--ghost button--small"
-            disabled={safePage === 1}
-            onClick={() => setPage(Math.max(1, safePage - 1))}
-          >
-            Previous
-          </button>
-          <span className="pagination-strip__page">
-            Page {safePage} / {pageCount}
-          </span>
-          <button
-            type="button"
-            className="button button--ghost button--small"
-            disabled={safePage === pageCount}
-            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
-          >
-            Next
-          </button>
+          <div className="button-row">
+            <button
+              type="button"
+              className="button button--ghost button--small"
+              disabled={safePage === 1}
+              onClick={() => setPage(Math.max(1, safePage - 1))}
+            >
+              {t("previous")}
+            </button>
+            <span className="pagination-strip__page">
+              {t("page")} {safePage} {t("of")} {pageCount}
+            </span>
+            <button
+              type="button"
+              className="button button--ghost button--small"
+              disabled={safePage === pageCount}
+              onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+            >
+              {t("next")}
+            </button>
+          </div>
         </div>
-      </div>
     );
   }
 
   function getPatientName(appointment: AppointmentResponseDto): string {
     return (
       patients.find((patient) => patient.id === appointment.patient_id)?.full_name ??
-      `Patient #${appointment.patient_id}`
+      `${t("patientNumber")} #${appointment.patient_id}`
     );
   }
 
   function getDoctorName(appointment: AppointmentResponseDto): string {
     return (
       doctors.find((doctor) => doctor.id === appointment.doctor_id)?.full_name ??
-      `Doctor #${appointment.doctor_id}`
+      `${t("doctorNumber")} #${appointment.doctor_id}`
     );
   }
 
   function getDoctorSpecialty(appointment: AppointmentResponseDto): string {
     return (
       doctors.find((doctor) => doctor.id === appointment.doctor_id)?.specialty ??
-      "Specialty not recorded"
+      t("specialtyNotRecorded")
     );
   }
 
@@ -356,8 +367,8 @@ export default function AppointmentsPanel({
       <article key={appointment.id} className="entity-card entity-card--appointment">
         <div className="entity-card__header">
           <div>
-            <h3>Appointment #{appointment.id}</h3>
-            <p>{appointment.reason}</p>
+            <h3>{t("appointmentId")} #{appointment.id}</h3>
+            <p dir="auto">{appointment.reason}</p>
           </div>
           <span className={`badge badge--status-${appointment.status}`}>
             {renderStatusLabel(appointment.status, t)}
@@ -375,18 +386,22 @@ export default function AppointmentsPanel({
           </div>
           <div>
             <strong>{t("scheduled")}</strong>
-            <span>{formatDateTime(appointment.scheduled_for)}</span>
+            <span>{formatDateTime(appointment.scheduled_for, language)}</span>
           </div>
           <div>
             <strong>{t("clinicReview")}</strong>
-            <span>{formatClinic(appointment)}</span>
+            <span>{formatClinic(appointment, t)}</span>
           </div>
         </div>
 
         <p className="muted-copy">
-          Requested: {new Date(appointment.requested_at).toLocaleString()}
+          {t("requestedAt")}: {formatRequestedAt(appointment.requested_at, language)}
         </p>
-        {appointment.notes ? <p className="muted-copy">Notes: {appointment.notes}</p> : null}
+        {appointment.notes ? (
+          <p className="muted-copy" dir="auto">
+            {appointment.notes}
+          </p>
+        ) : null}
 
         {options?.showWorkflowActions || options?.showDetailsAction ? (
           <div className="button-row">
@@ -396,7 +411,7 @@ export default function AppointmentsPanel({
                 className="button button--ghost button--small"
                 onClick={() => openDetails(appointment)}
               >
-                View details
+                {t("viewDetails")}
               </button>
             ) : null}
             {options.showWorkflowActions && appointment.status === "requested" ? (
@@ -406,14 +421,14 @@ export default function AppointmentsPanel({
                   className="button button--primary"
                   onClick={() => onUpdateStatus(appointment.id, { status: "approved" })}
                 >
-                  Approve
+                  {t("approve")}
                 </button>
                 <button
                   type="button"
                   className="button button--ghost"
                   onClick={() => onUpdateStatus(appointment.id, { status: "rejected" })}
                 >
-                  Reject
+                  {t("reject")}
                 </button>
               </>
             ) : null}
@@ -437,7 +452,9 @@ export default function AppointmentsPanel({
         <div className="appointment-page-block__header">
           <div>
             <p className="micro-label">{label}</p>
-            <h4>{items.length} appointments</h4>
+            <h4>
+              {items.length} {t("trackedBookings")}
+            </h4>
           </div>
           {renderPaginationControls(items, page, setPage)}
         </div>
@@ -447,19 +464,19 @@ export default function AppointmentsPanel({
         ) : (
           <div className="appointment-table">
             <div className="appointment-table__header">
-              <span>ID</span>
-              <span>Patient</span>
+              <span>{t("appointmentId")}</span>
+              <span>{t("patientLabel")}</span>
               <span>{t("doctor")}</span>
-              <span>Date</span>
-              <span>Status</span>
-              <span>Action</span>
+              <span>{t("dateLabel")}</span>
+              <span>{t("statusLabel")}</span>
+              <span>{t("actionLabel")}</span>
             </div>
             {pageItems.map((appointment) => (
               <div key={appointment.id} className="appointment-table__row">
                 <strong>#{appointment.id}</strong>
                 <span>{getPatientName(appointment)}</span>
                 <span>{getDoctorName(appointment)}</span>
-                <span>{formatDateTime(appointment.scheduled_for)}</span>
+                <span>{formatDateTime(appointment.scheduled_for, language)}</span>
                 <span className={`badge badge--status-${appointment.status}`}>
                   {renderStatusLabel(appointment.status, t)}
                 </span>
@@ -468,7 +485,7 @@ export default function AppointmentsPanel({
                   className="button button--ghost button--small"
                   onClick={() => openDetails(appointment)}
                 >
-                  View details
+                  {t("viewDetails")}
                 </button>
               </div>
             ))}
@@ -489,15 +506,15 @@ export default function AppointmentsPanel({
         <div className="detail-drawer__panel">
           <div className="entity-card__header">
             <div>
-              <p className="micro-label">Appointment details</p>
-              <h3>Appointment #{selectedAppointment.id}</h3>
+              <p className="micro-label">{t("appointmentDetails")}</p>
+              <h3>{t("appointmentId")} #{selectedAppointment.id}</h3>
             </div>
             <button
               type="button"
               className="button button--ghost button--small"
               onClick={() => setSelectedAppointment(null)}
             >
-              Close
+              {t("close")}
             </button>
           </div>
 
@@ -512,7 +529,7 @@ export default function AppointmentsPanel({
             </div>
             <div>
               <strong>{t("patientNationalId")}</strong>
-              <span>{patient?.national_id ?? "Not available"}</span>
+              <span>{patient?.national_id ?? t("notAvailable")}</span>
             </div>
             <div>
               <strong>{t("doctor")}</strong>
@@ -524,43 +541,43 @@ export default function AppointmentsPanel({
             </div>
             <div>
               <strong>{t("clinicReview")}</strong>
-              <span>{formatClinic(selectedAppointment)}</span>
+              <span>{formatClinic(selectedAppointment, t)}</span>
             </div>
             <div>
               <strong>{t("scheduled")}</strong>
-              <span>{formatDateTime(selectedAppointment.scheduled_for)}</span>
+              <span>{formatDateTime(selectedAppointment.scheduled_for, language)}</span>
             </div>
             <div>
               <strong>{t("scheduled")}</strong>
-              <span>{describeSlot(selectedAppointment.slot)}</span>
+              <span dir="auto">{describeSlot(selectedAppointment.slot, t, language)}</span>
             </div>
             <div>
               <strong>{t("reason")}</strong>
-              <span>{selectedAppointment.reason}</span>
+              <span dir="auto">{selectedAppointment.reason}</span>
             </div>
             <div>
               <strong>{t("notes")}</strong>
-              <span>{selectedAppointment.notes ?? "No notes recorded"}</span>
+              <span dir="auto">{selectedAppointment.notes ?? t("noNotesRecorded")}</span>
             </div>
             <div>
-              <strong>Created</strong>
-              <span>{formatDateTime(selectedAppointment.requested_at)}</span>
+              <strong>{t("createdAt")}</strong>
+              <span>{formatDateTime(selectedAppointment.requested_at, language)}</span>
             </div>
             <div>
-              <strong>Last updated</strong>
-              <span>Not separately recorded</span>
+              <strong>{t("lastUpdated")}</strong>
+              <span>{t("notSeparatelyRecorded")}</span>
             </div>
           </div>
 
           {role === "admin" ? (
             <div className="appointment-admin-actions">
-              <label htmlFor="appointment-status-notes">Admin status notes</label>
+              <label htmlFor="appointment-status-notes">{t("adminStatusNotes")}</label>
               <textarea
                 id="appointment-status-notes"
                 rows={3}
                 value={statusNotes}
                 onChange={(event) => setStatusNotes(event.target.value)}
-                placeholder="Optional reason for status change"
+                placeholder={t("optionalReasonForStatusChange")}
               />
               <div className="button-row">
                 <button
@@ -569,7 +586,7 @@ export default function AppointmentsPanel({
                   disabled={loading || selectedAppointment.status === "approved"}
                   onClick={() => handleAdminStatusUpdate("approved")}
                 >
-                  Mark confirmed
+                  {t("markConfirmed")}
                 </button>
                 <button
                   type="button"
@@ -577,7 +594,7 @@ export default function AppointmentsPanel({
                   disabled={loading || selectedAppointment.status === "rejected"}
                   onClick={() => handleAdminStatusUpdate("rejected")}
                 >
-                  Mark rejected
+                  {t("markRejected")}
                 </button>
               </div>
             </div>
@@ -591,18 +608,18 @@ export default function AppointmentsPanel({
     <SectionPanel
       eyebrow={t("coordination")}
       title={t("appointmentsTitle")}
-      description="Patients request available slots, doctors review requests, and admins can inspect or update reservation status."
+      description={t("appointmentsPanelDescription")}
     >
       {role !== "doctor" ? (
         <div className="stack-md">
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">New booking</p>
+                <p className="micro-label">{t("newBooking")}</p>
                 <h3>
                   {role === "admin"
-                    ? "Create appointment request"
-                    : "Book a follow-up appointment"}
+                    ? t("createAppointmentRequest")
+                    : t("bookAFollowUpAppointment")}
                 </h3>
               </div>
             </div>
@@ -610,12 +627,15 @@ export default function AppointmentsPanel({
               {preFill ? (
                 <div className="field field--full">
                   <div className="appointment-prefill">
-                    <div>
-                      <p className="micro-label">Ready from triage</p>
-                      <h3>Dr. {preFill.doctorName} is preselected</h3>
-                      <p>
-                        The appointment request was prepared from the triage result for{" "}
-                        {preFill.specialty}. Review the details below and choose an available slot.
+                  <div>
+                      <p className="micro-label">{t("readyFromTriage")}</p>
+                      <h3>
+                        Dr. {preFill.doctorName} {t("isPreselected")}
+                      </h3>
+                      <p dir="auto">
+                        {language === "ar"
+                          ? `${preFill.specialty} من نتيجة الفرز. ${t("reviewDetailsBelow")}`
+                          : `The appointment request was prepared from the triage result for ${preFill.specialty}. ${t("reviewDetailsBelow")}`}
                       </p>
                     </div>
                     {onClearPreFill ? (
@@ -624,7 +644,7 @@ export default function AppointmentsPanel({
                         className="button button--ghost button--small"
                         onClick={onClearPreFill}
                       >
-                        Clear recommendation
+                        {t("clearRecommendation")}
                       </button>
                     ) : null}
                   </div>
@@ -640,7 +660,7 @@ export default function AppointmentsPanel({
                       type="text"
                       value={patientNationalId}
                       onChange={(event) => setPatientNationalId(event.target.value)}
-                      placeholder="Enter Egyptian national ID"
+                      placeholder={t("enterEgyptianNationalId")}
                     />
                     <button
                       type="button"
@@ -648,12 +668,12 @@ export default function AppointmentsPanel({
                       disabled={patientLookupLoading}
                       onClick={handleLookupPatient}
                     >
-                      {patientLookupLoading ? "Searching..." : "Find patient"}
+                      {patientLookupLoading ? t("searching") : t("findPatient")}
                     </button>
                   </div>
                   {resolvedPatient ? (
                     <small className="field__hint">
-                      Found {resolvedPatient.full_name} · #{resolvedPatient.id} ·{" "}
+                      {t("found")} {resolvedPatient.full_name} · #{resolvedPatient.id} ·{" "}
                       {resolvedPatient.sex}
                     </small>
                   ) : null}
@@ -673,7 +693,7 @@ export default function AppointmentsPanel({
                     setDoctorId("");
                   }}
                 >
-                  <option value="">All specialties</option>
+                  <option value="">{t("allSpecialties")}</option>
                   {specialties.map((specialty) => (
                     <option key={specialty} value={specialty}>
                       {specialty}
@@ -695,22 +715,22 @@ export default function AppointmentsPanel({
                   {filteredDoctors.map((doctor) => (
                     <option key={doctor.id} value={doctor.id}>
                       {doctor.full_name} · {doctor.specialty} · {doctor.area ?? doctor.city ?? doctor.clinic}
-                      {preFill?.doctorId === doctor.id ? " · Recommended" : ""}
+                      {preFill?.doctorId === doctor.id ? ` · ${t("recommended")}` : ""}
                     </option>
                   ))}
                 </select>
                 {selectedDoctor ? (
                   <small className="field__hint">
                     {preFill?.doctorId === selectedDoctor.id
-                      ? "Preselected from the triage recommendation so the patient does not need to search again. "
+                      ? `${t("preselectedFromTriageRecommendation")} `
                       : ""}
-                    {selectedDoctor.clinic} · {selectedDoctor.area ?? "Area not listed"}
+                    {selectedDoctor.clinic} · {selectedDoctor.area ?? t("areaNotListed")}
                   </small>
                 ) : null}
               </div>
 
               <div className="field field--full">
-                <label htmlFor="appointment-slot">Available slot</label>
+                <label htmlFor="appointment-slot">{t("availableSlot")}</label>
                 <select
                   id="appointment-slot"
                   value={selectedSlotId}
@@ -720,18 +740,18 @@ export default function AppointmentsPanel({
                   disabled={!doctorId || slotLoading}
                 >
                   <option value="">
-                    {slotLoading ? "Loading slots..." : "Select an available time"}
+                    {slotLoading ? t("loadingSlots") : t("selectAvailableTime")}
                   </option>
                   {availableSlots.map((slot) => (
                     <option key={slot.id} value={slot.id}>
-                      {formatDateTime(slot.start_at)} · {slot.clinic?.name ?? "Clinic"}
+                      {formatLocalizedSlotLabel(slot, language)}
                     </option>
                   ))}
                 </select>
                 {slotError ? <small className="field__error">{slotError}</small> : null}
                 {!slotLoading && doctorId && availableSlots.length === 0 ? (
                   <small className="field__hint">
-                    No open slots are currently available for this doctor.
+                    {t("noOpenSlotsAvailable")}
                   </small>
                 ) : null}
               </div>
@@ -743,7 +763,7 @@ export default function AppointmentsPanel({
                   rows={3}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Follow-up, consult, medication review..."
+                  placeholder={t("followUpConsultMedicationReview")}
                 />
               </div>
 
@@ -753,7 +773,7 @@ export default function AppointmentsPanel({
                   id="appointment-notes"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
-                  placeholder="Optional extra context"
+                  placeholder={t("optionalExtraContext")}
                 />
               </div>
 
@@ -768,7 +788,7 @@ export default function AppointmentsPanel({
                   !(patientId || currentPatientId)
                 }
               >
-                {loading ? "Saving..." : "Request appointment"}
+                {loading ? t("saving") : t("requestAppointment")}
               </button>
             </form>
           </section>
@@ -777,7 +797,7 @@ export default function AppointmentsPanel({
             <div className="workspace-card__header">
               <div>
                 <p className="micro-label">{t("appointmentHistory")}</p>
-                <h3>{appointments.length} tracked bookings</h3>
+                <h3>{appointments.length} {t("trackedBookings")}</h3>
               </div>
             </div>
 
@@ -789,14 +809,14 @@ export default function AppointmentsPanel({
                     className={sortBy === "date" ? "is-active" : ""}
                     onClick={() => setSortBy("date")}
                   >
-                    Sort by date
+                    {t("sortByDate")}
                   </button>
                   <button
                     type="button"
                     className={sortBy === "id" ? "is-active" : ""}
                     onClick={() => setSortBy("id")}
                   >
-                    Sort by number
+                    {t("sortByNumber")}
                   </button>
                 </div>
                 <button
@@ -804,7 +824,7 @@ export default function AppointmentsPanel({
                   className="button button--ghost button--small"
                   onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
                 >
-                  {sortDirection === "asc" ? "Ascending" : "Descending"}
+                  {sortDirection === "asc" ? t("ascending") : t("descending")}
                 </button>
               </div>
             ) : null}
@@ -812,18 +832,18 @@ export default function AppointmentsPanel({
             {role === "admin" ? (
               <div className="appointment-page-grid">
                 {renderAdminAppointmentTable(
-                  "Active and upcoming",
+                  t("activeAndUpcoming"),
                   activeAppointments,
                   activePage,
                   setActivePage,
-                  "No current appointment requests.",
+                  t("noCurrentAppointmentRequests"),
                 )}
                 {renderAdminAppointmentTable(
-                  "Previous decisions",
+                  t("previousDecisions"),
                   previousAppointments,
                   previousPage,
                   setPreviousPage,
-                  "Completed and rejected appointments will appear here.",
+                  t("noPreviousDecisions"),
                 )}
               </div>
             ) : (
@@ -833,7 +853,8 @@ export default function AppointmentsPanel({
                   <div className="stack-md">
                     {activeAppointments.length === 0 ? (
                       <div className="empty-state">
-                        No current appointment requests. Start with a new booking above.
+                        {t("noCurrentAppointmentRequests")}{" "}
+                        {language === "ar" ? "" : t("startWithANewBookingAbove")}
                       </div>
                     ) : (
                       activeAppointments.map((appointment) =>
@@ -846,11 +867,11 @@ export default function AppointmentsPanel({
                 </div>
 
                 <div>
-                  <p className="micro-label">Previous decisions</p>
+                  <p className="micro-label">{t("previousDecisions")}</p>
                   <div className="stack-md">
                     {previousAppointments.length === 0 ? (
                       <div className="empty-state">
-                        Completed and rejected appointments will appear here for reference.
+                        {t("noPreviousDecisions")}
                       </div>
                     ) : (
                       previousAppointments.map((appointment) =>
@@ -875,12 +896,14 @@ export default function AppointmentsPanel({
             <div className="workspace-card__header">
               <div>
                 <p className="micro-label">{t("pendingApprovals")}</p>
-                <h3>{pendingAppointments.length} requests need a decision</h3>
+                <h3>
+                  {pendingAppointments.length} {t("requestsNeedDecision")}
+                </h3>
               </div>
             </div>
             <div className="stack-md">
               {pendingAppointments.length === 0 ? (
-                <div className="empty-state">No pending approvals right now.</div>
+                <div className="empty-state">{t("noPendingApprovalsRightNow")}</div>
               ) : (
                 pendingAppointments.map((appointment) =>
                   renderAppointmentCard(appointment, {
@@ -896,13 +919,15 @@ export default function AppointmentsPanel({
             <div className="workspace-card__header">
               <div>
                 <p className="micro-label">{t("confirmedAppointments")}</p>
-                <h3>{confirmedAppointments.length} upcoming bookings</h3>
+                <h3>
+                  {confirmedAppointments.length} {t("upcomingBookings")}
+                </h3>
               </div>
             </div>
             <div className="stack-md">
               {confirmedAppointments.length === 0 ? (
                 <div className="empty-state">
-                  Confirmed appointments will appear here once requests are approved.
+                  {t("confirmedAppointmentsWillAppear")}
                 </div>
               ) : (
                 confirmedAppointments.map((appointment) =>
@@ -922,7 +947,7 @@ export default function AppointmentsPanel({
             <div className="stack-md">
               {[...completedAppointments, ...rejectedAppointments].length === 0 ? (
                 <div className="empty-state">
-                  Past completed and rejected appointment decisions will appear here.
+                  {t("pastCompletedRejectedAppear")}
                 </div>
               ) : (
                 [...completedAppointments, ...rejectedAppointments].map((appointment) =>
