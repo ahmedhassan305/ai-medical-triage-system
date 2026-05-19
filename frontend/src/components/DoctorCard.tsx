@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/useLanguage";
+import { formatLocalizedDateTime } from "../lib/localizedDisplay";
 import type { DoctorSuggestionDto } from "../api/dto";
 
 type DoctorCardProps = {
@@ -20,6 +22,7 @@ type RecommendationReason = {
 function getRecommendationReasons(
   doctor: DoctorSuggestionDto,
   specialty: string,
+  t: ReturnType<typeof useLanguage>["t"],
   patientLocation?: string | null,
 ): RecommendationReason[] {
   const reasons: RecommendationReason[] = [];
@@ -27,7 +30,7 @@ function getRecommendationReasons(
   // Specialty match
   if (doctor.specialty.toLowerCase() === specialty.toLowerCase()) {
     reasons.push({
-      text: "Specialty matches your condition",
+      text: t("specialtyMatchesYourCondition"),
       icon: "✓",
       type: "specialty",
     });
@@ -36,7 +39,7 @@ function getRecommendationReasons(
     specialty.toLowerCase().includes(doctor.specialty.toLowerCase())
   ) {
     reasons.push({
-      text: `Specializes in ${doctor.specialty}`,
+      text: `${t("specializesIn")} ${doctor.specialty}`,
       icon: "✓",
       type: "specialty",
     });
@@ -44,23 +47,25 @@ function getRecommendationReasons(
 
   // Location proximity
   if (patientLocation) {
-    if (doctor.area?.toLowerCase() === patientLocation.toLowerCase() ||
-        doctor.city?.toLowerCase() === patientLocation.toLowerCase()) {
+    if (
+      doctor.area?.toLowerCase() === patientLocation.toLowerCase() ||
+      doctor.city?.toLowerCase() === patientLocation.toLowerCase()
+    ) {
       reasons.push({
-        text: "Near your location",
+        text: t("nearYourLocation"),
         icon: "📍",
         type: "location",
       });
     } else if (doctor.distance_km !== null && doctor.distance_km !== undefined) {
       if (doctor.distance_km <= 5) {
         reasons.push({
-          text: "Very close to you",
+          text: t("veryCloseToYou"),
           icon: "📍",
           type: "location",
         });
       } else if (doctor.distance_km <= 15) {
         reasons.push({
-          text: `${doctor.distance_km.toFixed(1)} km away`,
+          text: `${doctor.distance_km.toFixed(1)} ${t("kmAway")}`,
           icon: "📍",
           type: "location",
         });
@@ -72,7 +77,7 @@ function getRecommendationReasons(
   ) {
     // If no patient location context, still show location is available
     reasons.push({
-      text: "Location info available",
+      text: t("locationInfoAvailable"),
       icon: "📍",
       type: "location",
     });
@@ -87,19 +92,19 @@ function getRecommendationReasons(
 
     if (slotDate.toDateString() === today.toDateString()) {
       reasons.push({
-        text: "Available today",
+        text: t("availableToday"),
         icon: "⏰",
         type: "availability",
       });
     } else if (slotDate.toDateString() === tomorrow.toDateString()) {
       reasons.push({
-        text: "Available tomorrow",
+        text: t("availableTomorrow"),
         icon: "⏰",
         type: "availability",
       });
     } else {
       reasons.push({
-        text: `Available soon`,
+        text: t("availableSoon"),
         icon: "⏰",
         type: "availability",
       });
@@ -147,52 +152,36 @@ function RatingStars({
   );
 }
 
-function formatEarliestSlot(dateValue?: string | null): string | null {
-  if (!dateValue) {
-    return null;
-  }
-  try {
-    const date = new Date(dateValue);
-    return date.toLocaleString("en-GB", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return dateValue;
-  }
-}
-
 export default function DoctorCard({
   doctor,
   specialty,
   patientLocation,
   onReserveAppointment,
 }: DoctorCardProps) {
-  const reasons = getRecommendationReasons(doctor, specialty, patientLocation);
+  const { t, language } = useLanguage();
+  const reasons = getRecommendationReasons(doctor, specialty, t, patientLocation);
   return (
     <article className="doctor-card">
       {/* Header with doctor name and rating */}
       <div className="doctor-card__header">
-        <div className="doctor-card__info">
-          <h3 className="doctor-card__name">{doctor.full_name}</h3>
-          <p className="doctor-card__specialty">{doctor.specialty}</p>
-          <p className="doctor-card__clinic">{doctor.clinic}</p>
-          {doctor.area && (
-            <p className="doctor-card__location">
-              {doctor.area}
-              {doctor.city && `, ${doctor.city}`}
-            </p>
-          )}
-        </div>
+          <div className="doctor-card__info">
+            <h3 className="doctor-card__name">{doctor.full_name}</h3>
+            <p className="doctor-card__specialty">{doctor.specialty}</p>
+            <p className="doctor-card__clinic">{doctor.clinic}</p>
+            {doctor.area && (
+              <p className="doctor-card__location">
+                {doctor.area}
+                {doctor.city && `, ${doctor.city}`}
+              </p>
+            )}
+          </div>
         <RatingStars rating={doctor.rating} />
       </div>
 
       {/* Why recommended section */}
       {reasons.length > 0 && (
         <div className="doctor-card__why-recommended">
-          <p className="micro-label">Why recommended</p>
+          <p className="micro-label">{t("whyRecommended")}</p>
           <ul className="recommendation-reasons">
             {reasons.map((reason, idx) => (
               <li key={idx} className="recommendation-reason">
@@ -208,15 +197,15 @@ export default function DoctorCard({
 
       {/* Recommendation logic section */}
       <div className="doctor-card__recommendation-logic">
-        <p className="micro-label">Match details</p>
+        <p className="micro-label">{t("matchDetails")}</p>
         <div className="recommendation-items">
           {/* Specialty match */}
           <div className="recommendation-item">
-            <span className="recommendation-item__label">Specialty:</span>
+            <span className="recommendation-item__label">{t("specialtyMatchesLabel")}</span>
             <span className="recommendation-item__value">
-              {specialty} match
+              {specialty} {t("specialtyMatch")}
               {doctor.specialty_match_reason && (
-                <span className="recommendation-item__hint">
+                <span className="recommendation-item__hint" dir="auto">
                   {" — "}
                   {doctor.specialty_match_reason}
                 </span>
@@ -228,14 +217,15 @@ export default function DoctorCard({
           {(doctor.distance_km !== null && doctor.distance_km !== undefined) ||
           doctor.area ? (
             <div className="recommendation-item">
-              <span className="recommendation-item__label">Location:</span>
+              <span className="recommendation-item__label">{t("locationLabel")}</span>
               <span className="recommendation-item__value">
                 {doctor.distance_km !== null && doctor.distance_km !== undefined ? (
                   <>
-                    {doctor.distance_km.toFixed(1)} km away
+                    {doctor.distance_km.toFixed(1)} {t("kmAway")}
                     {patientLocation && (
-                      <span className="recommendation-item__hint">
-                        {" — from "}
+                      <span className="recommendation-item__hint" dir="auto">
+                        {" — "}
+                        {t("from")}{" "}
                         {patientLocation}
                       </span>
                     )}
@@ -246,7 +236,7 @@ export default function DoctorCard({
                     {doctor.city && `, ${doctor.city}`}
                   </>
                 ) : (
-                  "Location available"
+                  t("locationInfoAvailable")
                 )}
               </span>
             </div>
@@ -255,9 +245,9 @@ export default function DoctorCard({
           {/* Earliest availability */}
           {doctor.earliest_available_slot ? (
             <div className="recommendation-item">
-              <span className="recommendation-item__label">Available:</span>
+              <span className="recommendation-item__label">{t("availableSlot")}</span>
               <span className="recommendation-item__value recommendation-item__availability">
-                {formatEarliestSlot(doctor.earliest_available_slot)}
+                {formatLocalizedDateTime(doctor.earliest_available_slot, language)}
               </span>
             </div>
           ) : null}
@@ -268,7 +258,7 @@ export default function DoctorCard({
       {doctor.source_name && (
         <div className="doctor-card__source">
           <span className="badge badge--neutral">
-            Listed on {doctor.source_name}
+            {t("listedOn")} {doctor.source_name}
           </span>
         </div>
       )}
@@ -282,7 +272,7 @@ export default function DoctorCard({
             target="_blank"
             rel="noreferrer"
           >
-            View profile
+            {t("viewProfile")}
           </a>
         )}
         {onReserveAppointment && (
@@ -291,7 +281,7 @@ export default function DoctorCard({
             className="button button--primary button--small"
             onClick={onReserveAppointment}
           >
-            Reserve Appointment
+            {t("reserveAppointment")}
           </button>
         )}
       </div>

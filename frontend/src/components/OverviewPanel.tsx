@@ -7,6 +7,7 @@ import type {
   VisitResponseDto,
 } from "../api/dto";
 import { useLanguage } from "../i18n/useLanguage";
+import { localizeAppointmentStatus } from "../lib/localizedDisplay";
 import type { DashboardTab } from "./DashboardNav";
 
 type OverviewPanelProps = {
@@ -96,19 +97,7 @@ function classForStatus(status: string): string {
 }
 
 function appointmentStatusLabel(status: string, t: ReturnType<typeof useLanguage>["t"]): string {
-  if (status === "requested") {
-    return t("requested");
-  }
-  if (status === "approved") {
-    return t("confirmed");
-  }
-  if (status === "completed") {
-    return t("completed");
-  }
-  if (status === "rejected") {
-    return t("rejected");
-  }
-  return status;
+  return localizeAppointmentStatus(status, t);
 }
 
 function topDoctorForAppointment(
@@ -825,7 +814,7 @@ function DoctorOverview({
                     </div>
                     <div className="activity-meta">
                       <span className="badge badge--status-requested">
-                        requested
+                        {t("requested")}
                       </span>
                       <small>{formatDateTime(appointment.requested_at)}</small>
                     </div>
@@ -904,7 +893,7 @@ function DoctorOverview({
                     </div>
                     <div className="activity-meta">
                       <span className="badge badge--status-completed">
-                        completed
+                        {t("completed")}
                       </span>
                       <small>{formatDateTime(appointment.scheduled_for)}</small>
                     </div>

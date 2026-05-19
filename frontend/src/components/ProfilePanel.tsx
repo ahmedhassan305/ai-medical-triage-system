@@ -27,6 +27,10 @@ import {
 import { useLanguage } from "../i18n/useLanguage";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
 import {
+  localizeAppointmentStatus,
+  localizeSlotStatus,
+} from "../lib/localizedDisplay";
+import {
   composeDoctorSpecialty,
   MEDICAL_SPECIALTY_GROUPS,
   splitDoctorSpecialty,
@@ -554,7 +558,7 @@ function AdminOperationsPanel({
                             </div>
                             <div className="activity-meta">
                               <span className={`badge badge--status-${appointment.status}`}>
-                                {appointment.status}
+                                {localizeAppointmentStatus(appointment.status, t)}
                               </span>
                               <small>{formatDateTime(appointment.scheduled_for || appointment.requested_at)}</small>
                             </div>
@@ -971,7 +975,7 @@ function AdminOperationsPanel({
                             </p>
                           </div>
                           <div className="activity-meta">
-                            <span className="badge">{slot.status}</span>
+                            <span className="badge">{localizeSlotStatus(slot.status, t)}</span>
                           </div>
                         </article>
                       ))
@@ -1003,7 +1007,7 @@ function AdminOperationsPanel({
                             </div>
                             <div className="activity-meta">
                               <span className={`badge badge--status-${appointment.status}`}>
-                                {appointment.status}
+                                {localizeAppointmentStatus(appointment.status, t)}
                               </span>
                               <small>{formatDateTime(appointment.scheduled_for || appointment.requested_at)}</small>
                             </div>
