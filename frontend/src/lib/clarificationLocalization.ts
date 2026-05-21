@@ -13,6 +13,8 @@ const QUESTION_TRANSLATION_KEYS: Array<{
     key: "clarificationQuestionAdditionalSymptoms",
   },
   { includes: "where exactly is the pain", key: "clarificationPainLocation" },
+  { includes: "did this start after an injury", key: "clarificationInjuryTrigger" },
+  { includes: "fall, heavy lifting, or exercise", key: "clarificationInjuryTrigger" },
   { includes: "how severe is the pain", key: "clarificationPainSeverity" },
   {
     includes: "how severe is the breathing difficulty",
@@ -34,6 +36,10 @@ const OPTION_TRANSLATIONS: Record<string, TranslationKey> = {
   "Breathing difficulty": "clarificationBreathingDifficulty",
   Pain: "clarificationPain",
   Fever: "clarificationFever",
+  "Yes, clear injury": "clarificationClearInjury",
+  "After exercise/strain": "clarificationAfterExerciseStrain",
+  "No injury": "clarificationNoInjury",
+  "Not sure": "clarificationNotSure",
 };
 
 export function translateClarificationQuestion(

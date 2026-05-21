@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   AppointmentSlotDto,
+  DoctorReviewCreateDto,
+  DoctorReviewResponseDto,
   DoctorProfileResponseDto,
   DoctorProfileUpsertDto,
   DoctorScheduleCreateDto,
@@ -84,6 +86,16 @@ export async function updateDoctorSchedule(
 ): Promise<DoctorScheduleDto> {
   const response = await api.patch<DoctorScheduleDto>(
     apiPaths.doctors.schedule(doctorId, scheduleId),
+    payload,
+  );
+  return response.data;
+}
+
+export async function submitDoctorReview(
+  payload: DoctorReviewCreateDto,
+): Promise<DoctorReviewResponseDto> {
+  const response = await api.post<DoctorReviewResponseDto>(
+    apiPaths.doctors.reviews,
     payload,
   );
   return response.data;

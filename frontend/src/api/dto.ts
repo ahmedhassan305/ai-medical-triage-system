@@ -72,6 +72,8 @@ export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   id: number;
   user_id: number | null;
   department_id?: number | null;
+  rating?: number | null;
+  review_count?: number;
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;
@@ -148,6 +150,7 @@ export type TriageRequestDto = {
   query: string;
   patient_id?: number;
   lab_values?: LabValueDto[];
+  language?: "en" | "ar";
 };
 
 export type DoctorScheduleDto = {
@@ -213,9 +216,27 @@ export type DoctorSuggestionDto = {
   source_url?: string | null;
   booking_url?: string | null;
   rating?: number | null;
+  review_count?: number;
   recommendation_reason?: string | null;
   distance_km?: number | null;
   specialty_match_reason?: string | null;
+};
+
+export type DoctorReviewCreateDto = {
+  doctor_id: number;
+  rating: number;
+  comment?: string | null;
+  appointment_id?: number | null;
+  visit_id?: number | null;
+};
+
+export type DoctorReviewResponseDto = DoctorReviewCreateDto & {
+  id: number;
+  patient_id: number;
+  appointment_id?: number | null;
+  visit_id?: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ClarificationQuestionDto = {

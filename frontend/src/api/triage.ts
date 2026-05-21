@@ -13,11 +13,13 @@ export async function triage(
   query: string,
   patientId?: number,
   labValues: LabValueDto[] = [],
+  language: "en" | "ar" = "en",
 ): Promise<TriageResponseDto> {
   const payload: TriageRequestDto = {
     query,
     patient_id: patientId,
     lab_values: labValues,
+    language,
   };
   const response = await api.post<TriageResponseDto>(apiPaths.triage, payload);
   return response.data;
