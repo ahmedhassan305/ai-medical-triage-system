@@ -6,7 +6,18 @@ from collections.abc import Iterable
 from app.schemas.triage import ClinicalFeatures, TriageLevel
 
 _BODY_SYSTEM_PATTERNS: dict[str, tuple[str, ...]] = {
-    "cardiac": ("chest", "heart", "palpitation", "pressure"),
+    # Keep cardiac matching specific. Generic "chest" wording is common in
+    # lung problems too, so specialty routing should not treat it as cardiac
+    # unless there is a heart-pattern phrase or cardiac symptom.
+    "cardiac": (
+        "heart",
+        "palpitation",
+        "chest pressure",
+        "crushing chest",
+        "elephant on chest",
+        "pain spreading to jaw",
+        "pain spreading to arm",
+    ),
     "respiratory": ("breath", "wheez", "cough", "lung"),
     "neurologic": (
         "headache",
@@ -100,13 +111,19 @@ _RED_FLAG_PATTERNS: dict[str, tuple[str, ...]] = {
     "breathing distress": (
         "can't breathe",
         "cannot breathe",
+        "not breathing",
         "severe shortness of breath",
+        "severe trouble breathing",
+        "severe difficulty breathing",
         "blue lips",
+        "blue fingertips",
         "barely speak",
     ),
     "possible heart emergency": (
         "chest pain with shortness of breath",
+        "chest pain and shortness of breath",
         "chest pressure with sweating",
+        "crushing chest pain",
         "pain spreading to jaw",
         "pain spreading to arm",
         "heart attack",
@@ -287,6 +304,18 @@ def extract_clinical_features(
     severity = _extract_severity(lowered)
     body_systems = _extract_body_systems(lowered)
     red_flags = _extract_red_flags(lowered)
+    denied_features = _extract_negated_red_flags(lowered)
+    if denied_features:
+        symptoms = [symptom for symptom in symptoms if symptom not in denied_features]
+        if "neurologic" in body_systems and not {
+            "headache",
+            "dizziness",
+            "numbness",
+            "weakness",
+        }.intersection(symptoms):
+            body_systems = [
+                system for system in body_systems if system != "neurologic"
+            ] or ["general"]
 
     risk_factors: list[str] = []
     if age is not None and age < 5:
@@ -303,7 +332,7 @@ def extract_clinical_features(
         severity=severity,
         progression=_extract_progression(lowered),
         red_flags_present=red_flags,
-        red_flags_denied=_extract_negated_red_flags(lowered),
+        red_flags_denied=denied_features,
         risk_factors=risk_factors,
         missing_critical_details=_missing_details(symptoms, onset, severity),
     )

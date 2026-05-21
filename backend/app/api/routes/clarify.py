@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_optional_current_user
@@ -6,6 +6,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.triage import ClarificationRequest, ClarificationResponse
 from app.services.clarification_service import build_enriched_query
+from app.services.exceptions import TriageSystemUnavailable
 from app.services.triage_service import triage
 
 router = APIRouter(prefix="/clarify", tags=["clarify"])
@@ -21,11 +22,17 @@ def clarify_and_triage(
         raise HTTPException(status_code=401, detail="Authentication required.")
 
     enriched_query = build_enriched_query(payload.original_query, payload.answers)
-    result = triage(
-        enriched_query,
-        patient_id=payload.patient_id,
-        db=db,
-    )
+    try:
+        result = triage(
+            enriched_query,
+            patient_id=payload.patient_id,
+            db=db,
+        )
+    except TriageSystemUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     result.needs_clarification = False
     result.questions = []
     return ClarificationResponse(

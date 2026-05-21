@@ -157,3 +157,16 @@ class StructuredReasoningOutput(BaseModel):
     recommended_actions: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)
     clinical_features: ClinicalFeatures | None = None
+
+
+class RejectedSpecialty(BaseModel):
+    specialty: str = ""
+    reason: str = ""
+
+
+class SpecialtyAdjudicationOutput(BaseModel):
+    final_specialty: str | None = None
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reasoning: str = ""
+    rejected_specialties: list[RejectedSpecialty] = Field(default_factory=list)
+    relevant_reference_titles: list[str] = Field(default_factory=list)

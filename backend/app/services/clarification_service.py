@@ -698,87 +698,73 @@ def _fallback_clarification_questions(
     triage_level: str | None = None,
     clinical_features: ClinicalFeatures | None = None,
 ) -> list[ClarificationQuestion]:
-    lowered = query.lower()
-    specialty = (recommended_specialty or "").lower()
-    conditions = _condition_names(summary)
-    combined = f"{lowered} {specialty} {conditions}"
+    """Deterministic backup questions based on missing details, not keywords.
+
+    This fallback is intentionally conservative. The preferred path is the LLM
+    question generator. If that is unavailable, we ask only questions justified
+    by structured clinical features/missing details instead of scanning the raw
+    text, condition names, or specialty labels for broad keyword matches.
+    """
     questions: list[ClarificationQuestion] = []
 
     missing_details = set(
         clinical_features.missing_critical_details if clinical_features else []
     )
-    if "whether activity makes it worse" in missing_details:
-        _add_unique(questions, SMART_QUESTION_BANK["chest_cardiac"])
-    if "whether it started suddenly" in missing_details:
-        _add_unique(questions, QUESTION_BANK["headache"])
+    symptoms = set(clinical_features.symptoms if clinical_features else [])
+    body_systems = set(clinical_features.body_systems if clinical_features else [])
+
     if "where the pain is strongest" in missing_details:
         _add_unique(questions, SMART_QUESTION_BANK["gastroenterology"])
+    if (
+        "whether activity makes it worse" in missing_details
+        or "whether it spreads" in missing_details
+    ):
+        if "cardiac" in body_systems or "chest discomfort" in symptoms:
+            _add_unique(questions, SMART_QUESTION_BANK["chest_cardiac"])
+    if "whether it started suddenly" in missing_details:
+        _add_unique(questions, QUESTION_BANK["headache"])
     if "whether there is weakness or numbness" in missing_details:
         _add_unique(questions, SMART_QUESTION_BANK["pain_red_flags"])
 
-    if "chest pain" in combined or "cardiology" in combined:
-        _add_unique(questions, SMART_QUESTION_BANK["chest_cardiac"])
+    if "when it started" in missing_details:
+        if "breathing difficulty" in symptoms:
+            _add_unique(questions, [QUESTION_BANK["breathing"][1]])
+        elif "cough" in symptoms:
+            _add_unique(questions, [QUESTION_BANK["cough"][1]])
+        elif "fever" in symptoms:
+            _add_unique(questions, [QUESTION_BANK["fever"][1]])
+        else:
+            _add_unique(questions, [QUESTION_BANK["default"][0]])
 
-    if _has_any(
-        combined,
-        (
-            "fracture",
-            "sprain",
-            "tendin",
-            "orthopedic",
-            "orthopedics",
-            "arm",
-            "leg",
-            "back",
-            "neck",
-        ),
-    ):
-        _add_unique(questions, SMART_QUESTION_BANK["pain_red_flags"])
-        _add_unique(questions, SMART_QUESTION_BANK["orthopedics"])
+    if "how severe it is" in missing_details:
+        if "breathing difficulty" in symptoms:
+            _add_unique(questions, [QUESTION_BANK["breathing"][0]])
+        elif "headache" in symptoms:
+            _add_unique(questions, [QUESTION_BANK["headache"][0]])
+        else:
+            _add_unique(questions, [QUESTION_BANK["default"][1]])
 
-    if _has_any(
-        combined,
-        (
-            "headache",
-            "migraine",
-            "stroke",
-            "meningitis",
-            "neurology",
-            "dizziness",
-            "vertigo",
-        ),
-    ):
-        _add_unique(questions, SMART_QUESTION_BANK["neurology"])
-
-    if _has_any(
-        combined,
-        (
-            "abdominal",
-            "stomach",
-            "gastro",
-            "appendicitis",
-            "gastritis",
-            "bowel",
-            "liver",
-        ),
-    ):
+    # Body-system questions are allowed only after structured extraction has
+    # identified that system. This avoids broad raw keyword category drift.
+    if "respiratory" in body_systems:
+        if "cough" in symptoms:
+            _add_unique(questions, QUESTION_BANK["cough"][:2])
+        if "breathing difficulty" in symptoms:
+            _add_unique(questions, QUESTION_BANK["breathing"][:2])
+    if "musculoskeletal" in body_systems:
+        _add_unique(questions, SMART_QUESTION_BANK["pain_red_flags"][:2])
+        _add_unique(questions, SMART_QUESTION_BANK["orthopedics"][:1])
+    if "neurologic" in body_systems:
+        _add_unique(questions, SMART_QUESTION_BANK["neurology"][:2])
+    if "gastrointestinal" in body_systems:
         _add_unique(questions, SMART_QUESTION_BANK["gastroenterology"])
-
-    if _has_any(combined, ("ent", "ear", "throat", "sinus", "tonsil", "hearing")):
+    if "ent" in body_systems:
         _add_unique(questions, SMART_QUESTION_BANK["ent"])
-
-    if _has_any(combined, ("rash", "skin", "dermat", "hives", "urticaria")):
+    if "skin" in body_systems:
         _add_unique(questions, SMART_QUESTION_BANK["dermatology"])
 
-    for keyword, category in KEYWORD_TO_CATEGORY.items():
-        if keyword in lowered:
-            _add_unique(
-                questions, QUESTION_BANK.get(category, QUESTION_BANK["default"])
-            )
-            break
-
     if not questions:
-        _add_unique(questions, QUESTION_BANK["default"])
+        _add_unique(questions, QUESTION_BANK["default"][:2])
 
     if triage_level == "high":
         return questions[:MAX_CLARIFICATION_QUESTIONS]
