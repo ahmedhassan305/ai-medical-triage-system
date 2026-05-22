@@ -608,7 +608,9 @@ export default function TriagePanel({
                   <p className="micro-label">{t("attention")}</p>
                   <ul className="list">
                     {result.red_flags.map((flag) => (
-                      <li key={flag}>{flag}</li>
+                      <li key={flag} dir="auto">
+                        {flag}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -619,7 +621,7 @@ export default function TriagePanel({
           <div className="result-grid">
             <section className="result-card">
               <p className="micro-label">{t("recentClinicalSummary")}</p>
-              <p>{result.clinical_summary}</p>
+              <p dir="auto">{result.clinical_summary}</p>
             </section>
 
             <section className="result-card">
@@ -649,7 +651,7 @@ export default function TriagePanel({
                           {getLikelihoodLabel(condition.likelihood, t)}
                         </span>
                       </div>
-                      <p>{condition.explanation}</p>
+                      <p dir="auto">{condition.explanation}</p>
                     </article>
                   ))}
                 </div>
@@ -663,7 +665,7 @@ export default function TriagePanel({
                 <p className="muted-copy">{t("noDoctorsMatchedYet")}</p>
               ) : (
                 <div className="stack-md">
-                  {result.suggested_doctors.map((doctor) => {
+                  {result.suggested_doctors.map((doctor, index) => {
                     const patientLoc =
                       role === "patient"
                         ? patientProfile?.current_governorate ||
@@ -677,6 +679,7 @@ export default function TriagePanel({
                         doctor={doctor}
                         specialty={result.recommended_specialty || t("generalPractice")}
                         patientLocation={patientLoc || null}
+                        rank={index + 1}
                         onReserveAppointment={
                           onReserveAppointment
                             ? () =>

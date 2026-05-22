@@ -869,6 +869,185 @@ textarea {
   flex-wrap: wrap;
 }
 
+.doctor-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(15, 118, 110, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(255, 214, 165, 0.2), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(236, 244, 242, 0.82));
+  box-shadow: 0 18px 36px rgba(22, 51, 50, 0.08);
+}
+
+.doctor-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--accent), rgba(255, 214, 165, 0.95));
+  opacity: 0.78;
+}
+
+[dir="rtl"] .doctor-card::before {
+  inset: 0 0 0 auto;
+}
+
+.doctor-card--top-ranked {
+  border-color: rgba(15, 118, 110, 0.28);
+  box-shadow: 0 24px 48px rgba(15, 118, 110, 0.14);
+}
+
+.doctor-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doctor-card__rank {
+  flex-shrink: 0;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.09);
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 5px 9px;
+}
+
+.doctor-card__why-recommended {
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.075), rgba(255, 255, 255, 0.72)),
+    rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(15, 118, 110, 0.13);
+  border-inline-start: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.recommendation-reason {
+  align-items: center;
+}
+
+.reason-icon {
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 6px 16px rgba(22, 51, 50, 0.06);
+}
+
+.reason-icon--availability {
+  background: rgba(255, 214, 165, 0.32);
+  color: #a15c05;
+}
+
+.reason-icon--location {
+  background: rgba(214, 242, 238, 0.82);
+}
+
+.reason-icon--continuity,
+.reason-icon--booking {
+  background: rgba(22, 51, 50, 0.08);
+  color: var(--bg-ink);
+}
+
+.reason-text {
+  color: var(--bg-ink-soft);
+  font-weight: 650;
+}
+
+.doctor-card__match-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.doctor-card__match-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(15, 118, 110, 0.13);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  padding: 7px 10px;
+}
+
+.doctor-card__match-pill strong {
+  color: var(--accent);
+}
+
+.doctor-card__match-pill--available {
+  background: rgba(255, 214, 165, 0.22);
+  border-color: rgba(217, 119, 6, 0.18);
+}
+
+.doctor-card__review-count {
+  margin: -8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: end;
+}
+
+.doctor-card__source {
+  margin-top: -4px;
+}
+
+.doctor-card__actions {
+  padding-top: 2px;
+}
+
+.doctor-review-box {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(circle at top right, rgba(255, 214, 165, 0.2), transparent 32%),
+    rgba(15, 118, 110, 0.045);
+}
+
+.doctor-review-box textarea {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-main);
+  resize: vertical;
+}
+
+.doctor-review-stars {
+  display: flex;
+  gap: 4px;
+}
+
+.doctor-review-star {
+  border: 0;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 2px;
+  transition:
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.doctor-review-star.is-active,
+.doctor-review-star:hover {
+  color: #f59e0b;
+  transform: translateY(-1px);
+}
+
+.success-copy {
+  margin: 0;
+  color: var(--success);
+  font-weight: 700;
+}
+
 .button-row--align-end {
   justify-content: flex-end;
   align-self: end;

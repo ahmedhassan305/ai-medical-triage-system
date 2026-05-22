@@ -57,7 +57,7 @@ function isStatus(error: unknown, statusCode: number): boolean {
 }
 
 export default function HomePage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [session, setSession] = useState<TokenResponseDto | null>(() => readSession());
   const [user, setUser] = useState<UserResponseDto | null>(null);
   const [patientProfile, setPatientProfile] =
@@ -399,6 +399,7 @@ export default function HomePage() {
         triageQuery.trim(),
         selectedPatientId ?? undefined,
         triageLabValues,
+        language,
       );
       setTriageResult(result);
     } catch (error) {

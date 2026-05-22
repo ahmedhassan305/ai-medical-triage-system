@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { useLanguage } from "../i18n/useLanguage";
 import { formatLocalizedDateTime } from "../lib/localizedDisplay";
 import type { DoctorSuggestionDto } from "../api/dto";
@@ -6,76 +8,116 @@ type DoctorCardProps = {
   doctor: DoctorSuggestionDto;
   specialty: string;
   patientLocation?: string | null;
+  rank?: number;
   onReserveAppointment?: () => void;
 };
 
 type RecommendationReason = {
   text: string;
   icon: string;
-  type: "specialty" | "location" | "availability";
+  type: "specialty" | "location" | "availability" | "continuity" | "profile" | "booking";
 };
 
-/**
- * Generates structured recommendation reasons based on doctor and patient data.
- * Returns concise, user-friendly reasons why this doctor was recommended.
- */
-function getRecommendationReasons(
+function splitBackendReasons(reason?: string | null): string[] {
+  return (reason || "")
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function classifyBackendReason(
+  reason: string,
+  doctor: DoctorSuggestionDto,
+  language: ReturnType<typeof useLanguage>["language"],
+  t: ReturnType<typeof useLanguage>["t"],
+): RecommendationReason {
+  const normalized = reason.toLowerCase();
+
+  if (normalized.includes("specialty matches")) {
+    return {
+      text: `${t("specialtyMatch")}: ${doctor.specialty}`,
+      icon: "✓",
+      type: "specialty",
+    };
+  }
+
+  if (normalized.includes("location")) {
+    const location = reason.replace(/^Location is closer to you:\s*/i, "").trim();
+    return {
+      text: location ? `${t("nearYourLocation")}: ${location}` : t("nearYourLocation"),
+      icon: "📍",
+      type: "location",
+    };
+  }
+
+  if (normalized.includes("appointment") || normalized.includes("availability")) {
+    return {
+      text: doctor.earliest_available_slot
+        ? `${t("availableSlot")}: ${formatLocalizedDateTime(
+            doctor.earliest_available_slot,
+            language,
+          )}`
+        : t("availableSoon"),
+      icon: "⏰",
+      type: "availability",
+    };
+  }
+
+  if (normalized.includes("seen this doctor")) {
+    return {
+      text: t("seenDoctorBefore"),
+      icon: "↻",
+      type: "continuity",
+    };
+  }
+
+  if (normalized.includes("profile text overlaps")) {
+    return {
+      text: reason.replace(/^Profile text overlaps with this case:\s*/i, `${t("because")} `),
+      icon: "⌁",
+      type: "profile",
+    };
+  }
+
+  if (normalized.includes("booking")) {
+    return {
+      text: t("bookingLinkAvailable"),
+      icon: "↗",
+      type: "booking",
+    };
+  }
+
+  return {
+    text: reason,
+    icon: "•",
+    type: "profile",
+  };
+}
+
+function getFallbackReasons(
   doctor: DoctorSuggestionDto,
   specialty: string,
+  language: ReturnType<typeof useLanguage>["language"],
   t: ReturnType<typeof useLanguage>["t"],
   patientLocation?: string | null,
 ): RecommendationReason[] {
   const reasons: RecommendationReason[] = [];
 
-  // Specialty match
   if (doctor.specialty.toLowerCase() === specialty.toLowerCase()) {
     reasons.push({
-      text: t("specialtyMatchesYourCondition"),
-      icon: "✓",
-      type: "specialty",
-    });
-  } else if (
-    doctor.specialty.toLowerCase().includes(specialty.toLowerCase()) ||
-    specialty.toLowerCase().includes(doctor.specialty.toLowerCase())
-  ) {
-    reasons.push({
-      text: `${t("specializesIn")} ${doctor.specialty}`,
+      text: doctor.specialty_match_reason || t("specialtyMatchesYourCondition"),
       icon: "✓",
       type: "specialty",
     });
   }
 
-  // Location proximity
-  if (patientLocation) {
-    if (
-      doctor.area?.toLowerCase() === patientLocation.toLowerCase() ||
-      doctor.city?.toLowerCase() === patientLocation.toLowerCase()
-    ) {
-      reasons.push({
-        text: t("nearYourLocation"),
-        icon: "📍",
-        type: "location",
-      });
-    } else if (doctor.distance_km !== null && doctor.distance_km !== undefined) {
-      if (doctor.distance_km <= 5) {
-        reasons.push({
-          text: t("veryCloseToYou"),
-          icon: "📍",
-          type: "location",
-        });
-      } else if (doctor.distance_km <= 15) {
-        reasons.push({
-          text: `${doctor.distance_km.toFixed(1)} ${t("kmAway")}`,
-          icon: "📍",
-          type: "location",
-        });
-      }
-    }
-  } else if (
-    doctor.area ||
-    (doctor.distance_km !== null && doctor.distance_km !== undefined)
-  ) {
-    // If no patient location context, still show location is available
+  if (patientLocation && [doctor.area, doctor.city].some((part) => part === patientLocation)) {
+    reasons.push({
+      text: t("nearYourLocation"),
+      icon: "📍",
+      type: "location",
+    });
+  } else if (doctor.area || doctor.city) {
     reasons.push({
       text: t("locationInfoAvailable"),
       icon: "📍",
@@ -83,44 +125,36 @@ function getRecommendationReasons(
     });
   }
 
-  // Earliest availability
   if (doctor.earliest_available_slot) {
-    const slotDate = new Date(doctor.earliest_available_slot);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (slotDate.toDateString() === today.toDateString()) {
-      reasons.push({
-        text: t("availableToday"),
-        icon: "⏰",
-        type: "availability",
-      });
-    } else if (slotDate.toDateString() === tomorrow.toDateString()) {
-      reasons.push({
-        text: t("availableTomorrow"),
-        icon: "⏰",
-        type: "availability",
-      });
-    } else {
-      reasons.push({
-        text: t("availableSoon"),
-        icon: "⏰",
-        type: "availability",
-      });
-    }
+    reasons.push({
+      text: `${t("availableSlot")}: ${formatLocalizedDateTime(
+        doctor.earliest_available_slot,
+        language,
+      )}`,
+      icon: "⏰",
+      type: "availability",
+    });
   }
 
   return reasons;
 }
 
-function RatingStars({
-  rating,
-  className,
-}: {
-  rating?: number | null;
-  className?: string;
-}) {
+function getRecommendationReasons(
+  doctor: DoctorSuggestionDto,
+  specialty: string,
+  language: ReturnType<typeof useLanguage>["language"],
+  t: ReturnType<typeof useLanguage>["t"],
+  patientLocation?: string | null,
+): RecommendationReason[] {
+  const backendReasons = splitBackendReasons(doctor.recommendation_reason);
+  if (backendReasons.length > 0) {
+    return backendReasons.map((reason) => classifyBackendReason(reason, doctor, language, t));
+  }
+
+  return getFallbackReasons(doctor, specialty, language, t, patientLocation);
+}
+
+function RatingStars({ rating }: { rating?: number | null }) {
   if (!rating || rating < 0 || rating > 5) {
     return null;
   }
@@ -129,15 +163,15 @@ function RatingStars({
   const hasHalfStar = rating % 1 !== 0;
 
   return (
-    <div className={`doctor-card__rating ${className || ""}`}>
-      <div className="rating-stars">
-        {Array.from({ length: 5 }).map((_, i) => (
+    <div className="doctor-card__rating">
+      <div className="rating-stars" aria-label={`Rating ${rating.toFixed(1)} out of 5`}>
+        {Array.from({ length: 5 }).map((_, index) => (
           <span
-            key={i}
+            key={index}
             className={`star ${
-              i < fullStars
+              index < fullStars
                 ? "star--full"
-                : i === fullStars && hasHalfStar
+                : index === fullStars && hasHalfStar
                   ? "star--half"
                   : "star--empty"
             }`}
@@ -156,114 +190,83 @@ export default function DoctorCard({
   doctor,
   specialty,
   patientLocation,
+  rank,
   onReserveAppointment,
 }: DoctorCardProps) {
   const { t, language } = useLanguage();
-  const reasons = getRecommendationReasons(doctor, specialty, t, patientLocation);
+  const reasons = useMemo(
+    () => getRecommendationReasons(doctor, specialty, language, t, patientLocation),
+    [doctor, language, patientLocation, specialty, t],
+  );
+  const locationLabel = [doctor.area, doctor.city].filter(Boolean).join(", ");
+
   return (
-    <article className="doctor-card">
-      {/* Header with doctor name and rating */}
+    <article className={`doctor-card ${rank === 1 ? "doctor-card--top-ranked" : ""}`}>
       <div className="doctor-card__header">
-          <div className="doctor-card__info">
+        <div className="doctor-card__info">
+          <div className="doctor-card__title-row">
             <h3 className="doctor-card__name">{doctor.full_name}</h3>
-            <p className="doctor-card__specialty">{doctor.specialty}</p>
-            <p className="doctor-card__clinic">{doctor.clinic}</p>
-            {doctor.area && (
-              <p className="doctor-card__location">
-                {doctor.area}
-                {doctor.city && `, ${doctor.city}`}
-              </p>
-            )}
+            {rank ? (
+              <span className="doctor-card__rank">
+                #{rank} {rank === 1 ? t("recommended") : ""}
+              </span>
+            ) : null}
           </div>
+          <p className="doctor-card__specialty">{doctor.specialty}</p>
+          <p className="doctor-card__clinic">{doctor.clinic}</p>
+          {locationLabel ? <p className="doctor-card__location">{locationLabel}</p> : null}
+        </div>
         <RatingStars rating={doctor.rating} />
       </div>
+      {doctor.rating ? (
+        <p className="doctor-card__review-count">
+          {doctor.review_count
+            ? `${doctor.review_count} ${doctor.review_count === 1 ? "review" : "reviews"}`
+            : null}
+        </p>
+      ) : null}
 
-      {/* Why recommended section */}
-      {reasons.length > 0 && (
+      {reasons.length > 0 ? (
         <div className="doctor-card__why-recommended">
           <p className="micro-label">{t("whyRecommended")}</p>
           <ul className="recommendation-reasons">
-            {reasons.map((reason, idx) => (
-              <li key={idx} className="recommendation-reason">
-                <span className="reason-icon" aria-hidden="true">
+            {reasons.slice(0, 5).map((reason, index) => (
+              <li key={`${reason.type}-${index}`} className="recommendation-reason">
+                <span
+                  className={`reason-icon reason-icon--${reason.type}`}
+                  aria-hidden="true"
+                >
                   {reason.icon}
                 </span>
-                <span className="reason-text">{reason.text}</span>
+                <span className="reason-text" dir="auto">
+                  {reason.text}
+                </span>
               </li>
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
-      {/* Recommendation logic section */}
-      <div className="doctor-card__recommendation-logic">
-        <p className="micro-label">{t("matchDetails")}</p>
-        <div className="recommendation-items">
-          {/* Specialty match */}
-          <div className="recommendation-item">
-            <span className="recommendation-item__label">{t("specialtyMatchesLabel")}</span>
-            <span className="recommendation-item__value">
-              {specialty} {t("specialtyMatch")}
-              {doctor.specialty_match_reason && (
-                <span className="recommendation-item__hint" dir="auto">
-                  {" — "}
-                  {doctor.specialty_match_reason}
-                </span>
-              )}
-            </span>
-          </div>
-
-          {/* Location proximity */}
-          {(doctor.distance_km !== null && doctor.distance_km !== undefined) ||
-          doctor.area ? (
-            <div className="recommendation-item">
-              <span className="recommendation-item__label">{t("locationLabel")}</span>
-              <span className="recommendation-item__value">
-                {doctor.distance_km !== null && doctor.distance_km !== undefined ? (
-                  <>
-                    {doctor.distance_km.toFixed(1)} {t("kmAway")}
-                    {patientLocation && (
-                      <span className="recommendation-item__hint" dir="auto">
-                        {" — "}
-                        {t("from")}{" "}
-                        {patientLocation}
-                      </span>
-                    )}
-                  </>
-                ) : doctor.area ? (
-                  <>
-                    {doctor.area}
-                    {doctor.city && `, ${doctor.city}`}
-                  </>
-                ) : (
-                  t("locationInfoAvailable")
-                )}
-              </span>
-            </div>
-          ) : null}
-
-          {/* Earliest availability */}
-          {doctor.earliest_available_slot ? (
-            <div className="recommendation-item">
-              <span className="recommendation-item__label">{t("availableSlot")}</span>
-              <span className="recommendation-item__value recommendation-item__availability">
-                {formatLocalizedDateTime(doctor.earliest_available_slot, language)}
-              </span>
-            </div>
-          ) : null}
-        </div>
+      <div className="doctor-card__match-strip">
+        <span className="doctor-card__match-pill">
+          <strong>{t("specialtyMatchesLabel")}</strong> {doctor.specialty}
+        </span>
+        {doctor.earliest_available_slot ? (
+          <span className="doctor-card__match-pill doctor-card__match-pill--available">
+            <strong>{t("availableSlot")}</strong>{" "}
+            {formatLocalizedDateTime(doctor.earliest_available_slot, language)}
+          </span>
+        ) : null}
       </div>
 
-      {/* Source information */}
-      {doctor.source_name && (
+      {doctor.source_name ? (
         <div className="doctor-card__source">
           <span className="badge badge--neutral">
             {t("listedOn")} {doctor.source_name}
           </span>
         </div>
-      )}
+      ) : null}
 
-      {/* Actions */}
       <div className="doctor-card__actions">
         {(doctor.booking_url || doctor.source_url) && (
           <a
@@ -275,7 +278,7 @@ export default function DoctorCard({
             {t("viewProfile")}
           </a>
         )}
-        {onReserveAppointment && (
+        {onReserveAppointment ? (
           <button
             type="button"
             className="button button--primary button--small"
@@ -283,7 +286,7 @@ export default function DoctorCard({
           >
             {t("reserveAppointment")}
           </button>
-        )}
+        ) : null}
       </div>
     </article>
   );

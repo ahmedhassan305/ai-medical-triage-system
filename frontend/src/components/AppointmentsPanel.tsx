@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { listDoctorSlots } from "../api/doctors";
+import { listDoctorSlots, submitDoctorReview } from "../api/doctors";
 import type {
   AppointmentResponseDto,
   AppointmentSlotDto,
@@ -123,6 +123,18 @@ export default function AppointmentsPanel({
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentResponseDto | null>(null);
   const [statusNotes, setStatusNotes] = useState("");
+  const [reviewForms, setReviewForms] = useState<
+    Record<
+      number,
+      {
+        rating: number;
+        comment: string;
+        loading: boolean;
+        error: string | null;
+        success: boolean;
+      }
+    >
+  >({});
 
   const specialties = useMemo(
     () => Array.from(new Set(doctors.map((doctor) => doctor.specialty).filter(Boolean))).sort(),
@@ -354,6 +366,70 @@ export default function AppointmentsPanel({
     );
   }
 
+  function getReviewForm(appointmentId: number) {
+    return (
+      reviewForms[appointmentId] ?? {
+        rating: 5,
+        comment: "",
+        loading: false,
+        error: null,
+        success: false,
+      }
+    );
+  }
+
+  function updateReviewForm(
+    appointmentId: number,
+    patch: Partial<ReturnType<typeof getReviewForm>>,
+  ) {
+    setReviewForms((current) => ({
+      ...current,
+      [appointmentId]: {
+        ...(current[appointmentId] ?? {
+          rating: 5,
+          comment: "",
+          loading: false,
+          error: null,
+          success: false,
+        }),
+        ...patch,
+      },
+    }));
+  }
+
+  function canReviewAppointment(appointment: AppointmentResponseDto): boolean {
+    if (role !== "patient" || currentPatientId !== appointment.patient_id) {
+      return false;
+    }
+    if (appointment.status === "completed") {
+      return true;
+    }
+    return Boolean(
+      appointment.status === "approved" &&
+        appointment.scheduled_for &&
+        new Date(appointment.scheduled_for) <= new Date(),
+    );
+  }
+
+  async function handleDoctorReviewSubmit(appointment: AppointmentResponseDto) {
+    const form = getReviewForm(appointment.id);
+    updateReviewForm(appointment.id, { loading: true, error: null, success: false });
+    try {
+      await submitDoctorReview({
+        doctor_id: appointment.doctor_id,
+        appointment_id: appointment.id,
+        rating: form.rating,
+        comment: form.comment.trim() || null,
+      });
+      updateReviewForm(appointment.id, { loading: false, success: true });
+    } catch (error) {
+      updateReviewForm(appointment.id, {
+        loading: false,
+        error: error instanceof Error ? error.message : "Could not submit review.",
+      });
+    }
+  }
+
   function openDetails(appointment: AppointmentResponseDto) {
     setSelectedAppointment(appointment);
     setStatusNotes(appointment.notes ?? "");
@@ -363,6 +439,9 @@ export default function AppointmentsPanel({
     appointment: AppointmentResponseDto,
     options?: { showWorkflowActions?: boolean; showDetailsAction?: boolean },
   ) {
+    const reviewForm = getReviewForm(appointment.id);
+    const showReviewForm = canReviewAppointment(appointment);
+
     return (
       <article key={appointment.id} className="entity-card entity-card--appointment">
         <div className="entity-card__header">
@@ -401,6 +480,56 @@ export default function AppointmentsPanel({
           <p className="muted-copy" dir="auto">
             {appointment.notes}
           </p>
+        ) : null}
+
+        {showReviewForm ? (
+          <div className="doctor-review-box">
+            <div>
+              <p className="micro-label">{t("rateDoctor")}</p>
+              <p className="muted-copy">{t("doctorRatingHint")}</p>
+            </div>
+            <div className="doctor-review-stars" aria-label={t("yourRating")}>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`doctor-review-star ${
+                    value <= reviewForm.rating ? "is-active" : ""
+                  }`}
+                  onClick={() => updateReviewForm(appointment.id, { rating: value })}
+                  aria-label={`${value}`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            <textarea
+              rows={2}
+              value={reviewForm.comment}
+              onChange={(event) =>
+                updateReviewForm(appointment.id, { comment: event.target.value })
+              }
+              placeholder={t("optionalReviewComment")}
+            />
+            {reviewForm.error ? (
+              <p className="form-error" role="alert">
+                {reviewForm.error}
+              </p>
+            ) : null}
+            {reviewForm.success ? (
+              <p className="success-copy">{t("reviewSubmitted")}</p>
+            ) : null}
+            <div className="button-row button-row--align-end">
+              <button
+                type="button"
+                className="button button--primary button--small"
+                disabled={reviewForm.loading}
+                onClick={() => handleDoctorReviewSubmit(appointment)}
+              >
+                {reviewForm.loading ? t("saving") : t("submitReview")}
+              </button>
+            </div>
+          </div>
         ) : null}
 
         {options?.showWorkflowActions || options?.showDetailsAction ? (

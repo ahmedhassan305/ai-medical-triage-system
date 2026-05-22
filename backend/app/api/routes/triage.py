@@ -13,6 +13,7 @@ from app.schemas.triage import (
 )
 from app.services.access_control import ensure_patient_profile_access
 from app.services.clinical_records import persist_triage_assessment
+from app.services.exceptions import TriageSystemUnavailable
 from app.services.lab_pdf_extraction import extract_lab_values_from_pdf
 from app.services.triage_service import triage as run_triage
 
@@ -34,12 +35,18 @@ def triage_route(
             )
         patient = ensure_patient_profile_access(db, current_user, payload.patient_id)
 
-    response = run_triage(
-        payload.query,
-        patient_id=patient.id if patient else None,
-        db=db,
-        lab_values=payload.lab_values,
-    )
+    try:
+        response = run_triage(
+            payload.query,
+            patient_id=patient.id if patient else None,
+            db=db,
+            lab_values=payload.lab_values,
+        )
+    except TriageSystemUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     if patient is not None:
         persist_triage_assessment(
             db,

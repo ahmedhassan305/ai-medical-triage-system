@@ -24,6 +24,10 @@ export const apiPaths = {
     list: `${API_V1_PREFIX}/doctors/`,
     me: `${API_V1_PREFIX}/doctors/me`,
     byId: (doctorId: number) => `${API_V1_PREFIX}/doctors/${doctorId}`,
+    reviews: `${API_V1_PREFIX}/doctors/reviews`,
+    doctorReviews: (doctorId: number) =>
+      `${API_V1_PREFIX}/doctors/${doctorId}/reviews`,
+    rating: (doctorId: number) => `${API_V1_PREFIX}/doctors/${doctorId}/rating`,
     slots: (doctorId: number) => `${API_V1_PREFIX}/doctors/${doctorId}/slots`,
     schedules: (doctorId: number) =>
       `${API_V1_PREFIX}/doctors/${doctorId}/schedules`,

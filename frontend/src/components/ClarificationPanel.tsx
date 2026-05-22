@@ -26,7 +26,7 @@ export default function ClarificationPanel({
   patientId,
   onComplete,
 }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -42,6 +42,7 @@ export default function ClarificationPanel({
           }),
         ),
         patient_id: patientId,
+        language,
       };
       const response = await api.post(apiPaths.clarify, payload);
       if (response.data.triage_result) {
