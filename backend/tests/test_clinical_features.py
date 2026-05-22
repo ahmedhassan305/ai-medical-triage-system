@@ -63,7 +63,9 @@ def test_llm_feature_payload_parser_normalizes_body_system_aliases() -> None:
 
 
 def test_llm_feature_prompt_instructs_meaning_not_keywords() -> None:
-    local = ClinicalFeatures(symptoms=["abdominal pain"], body_systems=["gastrointestinal"])
+    local = ClinicalFeatures(
+        symptoms=["abdominal pain"], body_systems=["gastrointestinal"]
+    )
     prompt = OllamaClinicalFeatureExtractor(model="test-model")._build_prompt(
         query="my tummy feels twisted",
         local_features=local,

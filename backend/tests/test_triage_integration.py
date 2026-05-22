@@ -54,7 +54,9 @@ def test_triage_reasoner_mode_stub(monkeypatch) -> None:
     assert isinstance(payload["suspected_conditions"], list)
 
 
-def test_ollama_mode_unavailable_returns_503_without_keyword_fallback(monkeypatch) -> None:
+def test_ollama_mode_unavailable_returns_503_without_keyword_fallback(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("REASONER_MODE", "ollama")
     monkeypatch.setenv("RAG_RETRIEVER", "stub")
     monkeypatch.setenv("STRICT_REASONER", "false")

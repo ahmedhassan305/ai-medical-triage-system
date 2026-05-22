@@ -13,8 +13,8 @@ from app.schemas.triage import (
 )
 from app.services.access_control import ensure_patient_profile_access
 from app.services.clinical_records import persist_triage_assessment
-from app.services.lab_pdf_extraction import extract_lab_values_from_pdf
 from app.services.exceptions import TriageSystemUnavailable
+from app.services.lab_pdf_extraction import extract_lab_values_from_pdf
 from app.services.triage_service import triage as run_triage
 
 router = APIRouter(tags=["triage"])

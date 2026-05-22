@@ -5,8 +5,7 @@ class TriageSystemUnavailable(RuntimeError):
     """Raised when the configured AI triage reasoner cannot produce output."""
 
     default_message = (
-        "The triage AI system is unresponsive right now. "
-        "Please try again shortly."
+        "The triage AI system is unresponsive right now. " "Please try again shortly."
     )
 
     def __init__(self, message: str | None = None) -> None:
