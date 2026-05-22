@@ -65,7 +65,7 @@ class StubSpecialtyAdjudicator:
         systems = set(clinical_features.body_systems)
         red_flags = set(clinical_features.red_flags_present)
 
-        if "cardiac" in systems and "possible heart emergency" in red_flags:
+        if "possible heart emergency" in red_flags:
             specialty = "Cardiology"
             reason = "Structured features indicate a possible heart emergency."
         else:
@@ -157,7 +157,8 @@ class OllamaSpecialtyAdjudicator:
                 return parsed
             logger.warning("specialty_adjudicator_parse_failed raw=%s", raw[:1000])
             raise TriageSystemUnavailable(
-                "The triage AI system is unresponsive right now. Please try again shortly."
+                "The triage AI system is unresponsive right now. "
+                "Please try again shortly."
             )
         except TriageSystemUnavailable:
             raise
@@ -206,7 +207,8 @@ class OllamaSpecialtyAdjudicator:
             '  "rejected_specialties": [\n'
             '    {"specialty": "specialty considered", "reason": "why rejected"}\n'
             "  ],\n"
-            '  "relevant_reference_titles": ["reference title that truly supports the case"]\n'
+            '  "relevant_reference_titles": ['
+            '"reference title that truly supports the case"]\n'
             "}\n\n"
             "Important adjudication principles:\n"
             "- Choose exactly one allowed specialty. Never invent another specialty.\n"

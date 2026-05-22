@@ -122,7 +122,9 @@ class OllamaClinicalFeatureExtractor:
         except TriageSystemUnavailable:
             raise
         except Exception as exc:
-            logger.exception("clinical_feature_extractor_failed no_keyword_fallback=true")
+            logger.exception(
+                "clinical_feature_extractor_failed no_keyword_fallback=true"
+            )
             raise TriageSystemUnavailable() from exc
 
     def _build_prompt(
@@ -153,7 +155,9 @@ class OllamaClinicalFeatureExtractor:
             "{\n"
             '  "chief_complaint": "plain clinical concept or null",\n'
             '  "symptoms": ["normalized symptom"],\n'
-            '  "body_systems": ["cardiac|respiratory|neurologic|gastrointestinal|musculoskeletal|skin|mental_health|ent|eye|general"],\n'
+            '  "body_systems": ["cardiac|respiratory|neurologic|'
+            "gastrointestinal|musculoskeletal|skin|mental_health|ent|"
+            'eye|general"],\n'
             '  "onset": "sudden|recent|longstanding|unknown",\n'
             '  "duration": "brief free-text duration or null",\n'
             '  "severity": "mild|moderate|severe|unknown",\n'
@@ -161,24 +165,31 @@ class OllamaClinicalFeatureExtractor:
             '  "red_flags_present": ["normalized red flag"],\n'
             '  "red_flags_denied": ["normalized denied warning sign"],\n'
             '  "risk_factors": ["risk factor"],\n'
-            '  "missing_critical_details": ["missing detail that could change urgency or routing"]\n'
+            '  "missing_critical_details": ['
+            '"missing detail that could change urgency or routing"]\n'
             "}\n\n"
             "Rules:\n"
             "- Extract features from meaning, not exact keyword matching.\n"
             "- The format template is only a shape guide. Never copy its values.\n"
             "- Use everyday normalized symptom names such as 'breathing difficulty', "
             "'abdominal pain', 'chest discomfort', 'back pain', 'weakness'.\n"
-            "- Preserve denied symptoms or warning signs ONLY when the patient clearly denies them.\n"
-            "- If chest pain is not mentioned, do not place chest pain in red_flags_denied.\n"
+            "- Preserve denied symptoms or warning signs ONLY when the patient "
+            "clearly denies them.\n"
+            "- If chest pain is not mentioned, do not place chest pain in "
+            "red_flags_denied.\n"
             "- If duration is not stated, set duration to null.\n"
             "- If worsening or improvement is not stated, set progression to unknown.\n"
-            "- If severity is not stated or strongly implied, set severity to unknown.\n"
-            "- Do not invent symptoms, timing, severity, denied symptoms, risk factors, or red flags.\n"
-            "- If a local safety feature below contains an obvious emergency sign, keep it.\n"
+            "- If severity is not stated or strongly implied, set severity to "
+            "unknown.\n"
+            "- Do not invent symptoms, timing, severity, denied symptoms, risk "
+            "factors, or red flags.\n"
+            "- If a local safety feature below contains an obvious emergency "
+            "sign, keep it.\n"
             "- Keep missing_critical_details focused; ask only for details that would "
             "change urgency, likely condition, or specialty.\n"
             "- Avoid medical jargon in free-text values.\n\n"
-            f"Format template JSON, not case content:\n{json.dumps(example, indent=2)}\n\n"
+            "Format template JSON, not case content:\n"
+            f"{json.dumps(example, indent=2)}\n\n"
             f"Patient text:\n{query}\n\n"
             "Local rule-based safety extraction, for backup context only:\n"
             f"{local_features.model_dump_json(indent=2)}\n\n"

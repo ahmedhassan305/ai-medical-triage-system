@@ -19,14 +19,14 @@ from app.schemas.triage import (
     TriageLevel,
     TriageResponse,
 )
+from app.services.clarification_service import (
+    get_clarification_questions,
+    needs_clarification,
+)
 from app.services.clinical_feature_extractor import (
     ClinicalFeatureExtractor,
     OllamaClinicalFeatureExtractor,
     StubClinicalFeatureExtractor,
-)
-from app.services.clarification_service import (
-    get_clarification_questions,
-    needs_clarification,
 )
 from app.services.clinical_features import (
     assess_urgency_from_features,
@@ -35,14 +35,14 @@ from app.services.clinical_features import (
 )
 from app.services.exceptions import TriageSystemUnavailable
 from app.services.patient_context import PatientContextProvider
+from app.services.specialties import (
+    TRIAGE_SPECIALTIES,
+    canonicalize_specialty,
+)
 from app.services.specialty_adjudicator import (
     OllamaSpecialtyAdjudicator,
     SpecialtyAdjudicator,
     StubSpecialtyAdjudicator,
-)
-from app.services.specialties import (
-    TRIAGE_SPECIALTIES,
-    canonicalize_specialty,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,6 +266,9 @@ def _specialty_from_body_systems(
 ) -> str | None:
     systems = set(body_systems)
     red_flags = set(red_flags_present or [])
+
+    if "possible heart emergency" in red_flags:
+        return "Cardiology"
 
     if "respiratory" in systems and "cardiac" in systems:
         if "possible heart emergency" in red_flags:
@@ -849,7 +852,10 @@ def triage(
     specialty_reason = (
         specialty_adjudication.reasoning.strip()
         if specialty_adjudication.reasoning
-        else f"Recommended after reviewing the clinical picture: {recommended_specialty}."
+        else (
+            "Recommended after reviewing the clinical picture: "
+            f"{recommended_specialty}."
+        )
     )
     rag_context_str = " ".join(
         f"{getattr(c, 'title', '')} {getattr(c, 'text', '')[:200]}".strip()

@@ -8,7 +8,12 @@ from typing import Protocol
 import httpx
 
 from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
-from app.schemas.triage import ClinicalFeatures, ReasonerCondition, StructuredReasoningOutput, TriageLevel
+from app.schemas.triage import (
+    ClinicalFeatures,
+    ReasonerCondition,
+    StructuredReasoningOutput,
+    TriageLevel,
+)
 from app.services.clinical_features import extract_clinical_features
 from app.services.exceptions import TriageSystemUnavailable
 from app.services.specialties import allowed_specialties_prompt, canonicalize_specialty
@@ -145,7 +150,8 @@ class OllamaReasoner:
                 return parsed
             logger.warning("reasoner_parse_failed raw=%s", generated[:1000])
             raise TriageSystemUnavailable(
-                "The triage AI system is unresponsive right now. Please try again shortly."
+                "The triage AI system is unresponsive right now. "
+                "Please try again shortly."
             )
         except TriageSystemUnavailable:
             raise
@@ -329,6 +335,7 @@ class OllamaReasoner:
             f"Symptoms: {query}\n"
             f"Safety baseline urgency: {triage_level}\n\n"
             f"Patient context:\n{patient_block}\n\n"
+            f"Pre-extracted clinical features:\n{feature_block}\n\n"
             f"Retrieved medical evidence:\n{context_text}\n"
             "Note: Do NOT mention scores, percentages, or source rankings in "
             "your response. Do not copy the example explanation verbatim.\n"

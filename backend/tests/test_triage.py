@@ -3,7 +3,11 @@ from fastapi.testclient import TestClient
 
 from app.db.models import Visit
 from app.db.session import SessionLocal
-from app.schemas.triage import ClinicalFeatures, ReasonerCondition, StructuredReasoningOutput
+from app.schemas.triage import (
+    ClinicalFeatures,
+    ReasonerCondition,
+    StructuredReasoningOutput,
+)
 from app.services.triage_service import VALID_SPECIALTIES
 
 
@@ -277,7 +281,9 @@ def test_reasoner_watch_for_red_flags_do_not_support_high_urgency(
         def reason(self, *args, **kwargs) -> StructuredReasoningOutput:
             return StructuredReasoningOutput(
                 urgency_level="high",
-                clinical_summary="Fever, cough, and mild breathing trouble may fit infection.",
+                clinical_summary=(
+                    "Fever, cough, and mild breathing trouble may fit infection."
+                ),
                 patient_friendly_explanation="You should be checked soon.",
                 possible_conditions=[
                     ReasonerCondition(
@@ -409,11 +415,15 @@ def test_respiratory_evidence_overrides_reasoner_cardiology_drift(
                 clinical_summary=(
                     "Chest tightness with breathing trouble may reflect a lung problem."
                 ),
-                patient_friendly_explanation="This breathing trouble needs prompt care.",
+                patient_friendly_explanation=(
+                    "This breathing trouble needs prompt care."
+                ),
                 possible_conditions=[
                     ReasonerCondition(
                         name="Pleurisy",
-                        explanation="Pain or tightness with breathing can fit pleurisy.",
+                        explanation=(
+                            "Pain or tightness with breathing can fit pleurisy."
+                        ),
                     ),
                     ReasonerCondition(
                         name="Asthma exacerbation",
@@ -452,7 +462,9 @@ def test_true_heart_pattern_still_routes_to_cardiology(
         def reason(self, *args, **kwargs) -> StructuredReasoningOutput:
             return StructuredReasoningOutput(
                 urgency_level="high",
-                clinical_summary="Chest pressure with sweating may be a heart emergency.",
+                clinical_summary=(
+                    "Chest pressure with sweating may be a heart emergency."
+                ),
                 patient_friendly_explanation="This could be serious.",
                 possible_conditions=[
                     ReasonerCondition(
@@ -492,7 +504,9 @@ def test_musculoskeletal_back_pain_overrides_internal_medicine(
         def reason(self, *args, **kwargs) -> StructuredReasoningOutput:
             return StructuredReasoningOutput(
                 urgency_level="low",
-                clinical_summary="Back pain after strain most likely fits muscle strain.",
+                clinical_summary=(
+                    "Back pain after strain most likely fits muscle strain."
+                ),
                 patient_friendly_explanation="This sounds like a back strain.",
                 possible_conditions=[
                     ReasonerCondition(
@@ -544,7 +558,9 @@ def test_llm_feature_extractor_context_can_guide_specialty_adjudication(
             return StructuredReasoningOutput(
                 urgency_level="medium",
                 clinical_summary="Breathing symptoms may reflect a lung condition.",
-                patient_friendly_explanation="Your breathing symptoms should be checked.",
+                patient_friendly_explanation=(
+                    "Your breathing symptoms should be checked."
+                ),
                 possible_conditions=[
                     ReasonerCondition(
                         name="Bronchitis",
@@ -582,7 +598,9 @@ def test_specialty_adjudicator_fast_path_skips_matching_body_system_case(
         def reason(self, *args, **kwargs) -> StructuredReasoningOutput:
             return StructuredReasoningOutput(
                 urgency_level="medium",
-                clinical_summary="Cough and breathing difficulty fit a respiratory illness.",
+                clinical_summary=(
+                    "Cough and breathing difficulty fit a respiratory illness."
+                ),
                 patient_friendly_explanation="This may be a breathing infection.",
                 possible_conditions=[
                     ReasonerCondition(
