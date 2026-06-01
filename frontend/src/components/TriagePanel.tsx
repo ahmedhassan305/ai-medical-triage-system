@@ -16,6 +16,7 @@ import ClarificationPanel from "./ClarificationPanel";
 import DoctorCard from "./DoctorCard";
 import SectionPanel from "./SectionPanel";
 import TriageForm from "./TriageForm";
+import CustomSelect from "./CustomSelect";
 
 type TriagePanelProps = {
   role: RoleType;
@@ -334,20 +335,21 @@ function StaffPatientLookup({
 
             <div className="field">
               <label htmlFor="triage-create-sex">{t("gender")}</label>
-              <select
+              <CustomSelect
                 id="triage-create-sex"
                 value={createForm.sex}
-                onChange={(event) =>
+                onChange={(value) =>
                   setCreateForm((current) => ({
                     ...current,
-                    sex: event.target.value as ManagedPatientFormState["sex"],
+                    sex: value as ManagedPatientFormState["sex"],
                   }))
                 }
-              >
-                <option value="">{t("selectGender")}</option>
-                <option value="Male">{t("male")}</option>
-                <option value="Female">{t("female")}</option>
-              </select>
+                options={[
+                  { value: "", label: t("selectGender") },
+                  { value: "Male", label: t("male") },
+                  { value: "Female", label: t("female") },
+                ]}
+              />
             </div>
 
             <div className="field">

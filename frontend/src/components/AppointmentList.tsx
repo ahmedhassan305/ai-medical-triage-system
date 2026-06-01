@@ -10,6 +10,7 @@ import {
   type AppointmentWithStatus,
 } from "../lib/appointmentFilters";
 import { StatusBadge, StatusGroupHeader } from "./StatusBadge";
+import CustomSelect from "./CustomSelect";
 
 export type AppointmentListProps = {
   appointments: AppointmentResponseDto[];
@@ -150,22 +151,22 @@ export function AppointmentList({
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <CustomSelect
           value={filter.statusGroup}
           onChange={(e) =>
             setFilter({
               ...filter,
-              statusGroup: e.target.value as FilterState["statusGroup"],
+              statusGroup: e as FilterState["statusGroup"],
             })
           }
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Status</option>
-          <option value="active_upcoming">Active & Upcoming</option>
-          <option value="pending">Pending</option>
-          <option value="completed">Completed</option>
-          <option value="rejected_cancelled">Rejected/Cancelled</option>
-        </select>
+          options={[
+            { value: "all", label: "All Status" },
+            { value: "active_upcoming", label: "Active & Upcoming" },
+            { value: "pending", label: "Pending" },
+            { value: "completed", label: "Completed" },
+            { value: "rejected_cancelled", label: "Rejected/Cancelled" },
+          ]}
+        />
       </div>
 
       {/* Statistics bar */}

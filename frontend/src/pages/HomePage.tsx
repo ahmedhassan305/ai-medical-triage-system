@@ -767,7 +767,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="page-shell">
+    <div className={`page-shell ${currentUser.role === "patient" ? "role-patient" : ""}`}>
       <div className="dashboard-shell">
         <DashboardNav
           user={currentUser}
@@ -784,11 +784,6 @@ export default function HomePage() {
               <p className="dashboard-main__copy">
                 {tabMeta[selectedTab].description}
               </p>
-            </div>
-
-            <div className="status-bubble">
-              <span>{currentUser.role.toUpperCase()}</span>
-              <strong>{t("apiConnected")}</strong>
             </div>
           </header>
 

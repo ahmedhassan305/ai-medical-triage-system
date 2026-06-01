@@ -7,6 +7,7 @@ import type {
 } from "../api/dto";
 import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type VisitsPanelProps = {
   role: RoleType;
@@ -105,22 +106,24 @@ export default function VisitsPanel({
               </div>
               <div className="field">
                 <label htmlFor="visit-patient">{t("patient")}</label>
-                <select
+                <CustomSelect
                   id="visit-patient"
                   value={patientId}
-                  onChange={(event) => {
-                    const nextValue = event.target.value ? Number(event.target.value) : null;
+                  onChange={(value) => {
+                    const nextValue = value ? Number(value) : null;
                     setPatientId(nextValue ?? "");
                     onSelectPatient(nextValue);
                   }}
-                >
-                  <option value="">{t("selectPatient")}</option>
-                  {filteredPatientOptions.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: t("selectPatient") },
+                    ...filteredPatientOptions.map((patient) => ({
+                      value: String(patient.id),
+                      label: patient.national_id
+                        ? `${patient.national_id} — ${patient.full_name}`
+                        : `#${patient.id} — ${patient.full_name}`,
+                    })),
+                  ]}
+                />
               </div>
 
               <div className="field field--full">
@@ -281,4 +284,3 @@ export default function VisitsPanel({
     </SectionPanel>
   );
 }
-

@@ -37,6 +37,7 @@ import {
 } from "../lib/medicalSpecialties";
 import type { DashboardTab } from "./DashboardNav";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type ProfilePanelProps = {
   role: RoleType;
@@ -817,30 +818,25 @@ function AdminOperationsPanel({
                   <form className="form-grid" onSubmit={submitDoctorSchedule}>
                     <div className="field">
                       <label htmlFor="schedule-day">{t("dayOfWeek")}</label>
-                      <select
+                      <CustomSelect
                         id="schedule-day"
                         value={scheduleForm.day_of_week}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           setScheduleForm((current) => ({
                             ...current,
-                            day_of_week: event.target.value,
+                            day_of_week: value,
                           }))
                         }
-                      >
-                        {[
-                          "sunday",
-                          "monday",
-                          "tuesday",
-                          "wednesday",
-                          "thursday",
-                          "friday",
-                          "saturday",
-                        ].map((day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: "sunday", label: "sunday" },
+                          { value: "monday", label: "monday" },
+                          { value: "tuesday", label: "tuesday" },
+                          { value: "wednesday", label: "wednesday" },
+                          { value: "thursday", label: "thursday" },
+                          { value: "friday", label: "friday" },
+                          { value: "saturday", label: "saturday" },
+                        ]}
+                      />
                     </div>
                     <div className="field">
                       <label htmlFor="schedule-start">{t("startTime")}</label>
@@ -1347,20 +1343,21 @@ export default function ProfilePanel({
 
             <div className="field">
               <label htmlFor="patient-sex">Gender</label>
-              <select
+              <CustomSelect
                 id="patient-sex"
                 value={patientForm.sex}
-                onChange={(event) =>
+                onChange={(value) =>
                   setPatientForm((current) => ({
                     ...current,
-                    sex: event.target.value as PatientProfileFormState["sex"],
+                    sex: value as PatientProfileFormState["sex"],
                   }))
                 }
-              >
-                <option value="">{t("selectGender")}</option>
-                <option value="Male">{t("male")}</option>
-                <option value="Female">{t("female")}</option>
-              </select>
+                options={[
+                  { value: "", label: t("selectGender") },
+                  { value: "Male", label: t("male") },
+                  { value: "Female", label: t("female") },
+                ]}
+              />
             </div>
 
             <div className="field">
@@ -1516,20 +1513,21 @@ export default function ProfilePanel({
           <form className="form-grid" onSubmit={submitMedicalHistoryEntry}>
             <div className="field">
               <label htmlFor="history-category">{t("status")}</label>
-              <select
+              <CustomSelect
                 id="history-category"
                 value={historyCategory}
-                onChange={(event) => setHistoryCategory(event.target.value)}
-              >
-                <option value="diagnosed_condition">Diagnosed condition</option>
-                <option value="injury">Injury</option>
-                <option value="surgery">Surgery</option>
-                <option value="allergy">Allergy</option>
-                <option value="medication">Current medication</option>
-                <option value="hospitalization">Past hospitalization</option>
-                <option value="family_history">Family history</option>
-                <option value="note">Important note</option>
-              </select>
+                onChange={(value) => setHistoryCategory(value)}
+                options={[
+                  { value: "diagnosed_condition", label: "Diagnosed condition" },
+                  { value: "injury", label: "Injury" },
+                  { value: "surgery", label: "Surgery" },
+                  { value: "allergy", label: "Allergy" },
+                  { value: "medication", label: "Current medication" },
+                  { value: "hospitalization", label: "Past hospitalization" },
+                  { value: "family_history", label: "Family history" },
+                  { value: "note", label: "Important note" },
+                ]}
+              />
             </div>
 
             <div className="field">
@@ -1617,26 +1615,25 @@ export default function ProfilePanel({
 
             <div className="field">
               <label htmlFor="doctor-primary-specialty">{t("primarySpecialty")}</label>
-              <select
+              <CustomSelect
                 id="doctor-primary-specialty"
                 value={doctorPrimarySpecialty}
-                onChange={(event) => {
-                  const nextPrimary = event.target.value;
-                  setDoctorPrimarySpecialty(nextPrimary);
+                onChange={(value) => {
+                  setDoctorPrimarySpecialty(value);
                   setDoctorSpecialtyScope("");
                   setDoctorForm((current) => ({
                     ...current,
-                    specialty: nextPrimary,
+                    specialty: value,
                   }));
                 }}
-              >
-                <option value="">{t("selectSpecialty")}</option>
-                {MEDICAL_SPECIALTY_GROUPS.map((option) => (
-                  <option key={option.label} value={option.label}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: t("selectSpecialty") },
+                  ...MEDICAL_SPECIALTY_GROUPS.map((option) => ({
+                    value: option.label,
+                    label: option.label,
+                  })),
+                ]}
+              />
             </div>
 
             <div className="field">
