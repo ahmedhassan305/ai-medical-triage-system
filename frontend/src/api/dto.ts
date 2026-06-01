@@ -72,6 +72,8 @@ export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
   id: number;
   user_id: number | null;
   department_id?: number | null;
+  rating?: number | null;
+  review_count?: number;
   source_name?: string | null;
   source_url?: string | null;
   booking_url?: string | null;
@@ -90,10 +92,10 @@ export type ClinicDto = {
 
 export type AppointmentSlotDto = {
   id: number;
-  doctor_id: number;
-  clinic_id?: number | null;
-  starts_at: string;
-  ends_at: string;
+  doctor_clinic_id: number;
+  schedule_id?: number | null;
+  start_at: string;
+  end_at: string;
   status: string;
   clinic?: ClinicDto | null;
 };
@@ -104,6 +106,7 @@ export type AppointmentCreateDto = {
   reason: string;
   notes?: string | null;
   scheduled_for?: string | null;
+  clinic_id?: number | null;
   slot_id?: number | null;
 };
 
@@ -146,6 +149,58 @@ export type RecordsImportResultDto = {
 export type TriageRequestDto = {
   query: string;
   patient_id?: number;
+  lab_values?: LabValueDto[];
+  language?: "en" | "ar";
+};
+
+export type DoctorScheduleDto = {
+  id: number;
+  doctor_id: number;
+  doctor_clinic_id?: number | null;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  slot_minutes: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  location_label?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DoctorScheduleCreateDto = Omit<
+  DoctorScheduleDto,
+  "id" | "doctor_id" | "created_at" | "updated_at"
+>;
+
+export type PatientMedicalHistoryEntryCreateDto = {
+  category: string;
+  title: string;
+  occurred_on?: string | null;
+  status?: string | null;
+  notes?: string | null;
+};
+
+export type PatientMedicalHistoryEntryResponseDto =
+  PatientMedicalHistoryEntryCreateDto & {
+    id: number;
+    patient_id: number;
+    created_at: string;
+    updated_at: string;
+  };
+
+export type LabValueDto = {
+  lab_name: string;
+  value: string;
+  unit?: string | null;
+  reference_range?: string | null;
+};
+
+export type LabPdfExtractionResponseDto = {
+  filename: string;
+  values: LabValueDto[];
+  warning: string;
 };
 
 export type DoctorSuggestionDto = {
@@ -161,9 +216,27 @@ export type DoctorSuggestionDto = {
   source_url?: string | null;
   booking_url?: string | null;
   rating?: number | null;
+  review_count?: number;
   recommendation_reason?: string | null;
   distance_km?: number | null;
   specialty_match_reason?: string | null;
+};
+
+export type DoctorReviewCreateDto = {
+  doctor_id: number;
+  rating: number;
+  comment?: string | null;
+  appointment_id?: number | null;
+  visit_id?: number | null;
+};
+
+export type DoctorReviewResponseDto = DoctorReviewCreateDto & {
+  id: number;
+  patient_id: number;
+  appointment_id?: number | null;
+  visit_id?: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ClarificationQuestionDto = {

@@ -14,10 +14,15 @@ backend_dir = project_root / "backend"
 os.chdir(backend_dir)
 sys.path.insert(0, str(backend_dir))
 
+from app.db.models import AppointmentSlot, DoctorProfile  # noqa: E402
 from app.db.session import engine  # noqa: E402
 from app.services.doctor_seed_importer import (  # noqa: E402
     import_seed_records,
     load_seed_records,
+)
+from app.services.slot_booking import (  # noqa: E402
+    ensure_demo_availability_for_all_doctors,
+    generate_slots_for_doctor,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -64,6 +69,17 @@ def main() -> int:
             records,
             clean_legacy=not args.skip_clean_legacy,
         )
+        schedules_created = ensure_demo_availability_for_all_doctors(db)
+        before_slots = db.query(AppointmentSlot).count()
+        doctor_ids = [
+            doctor_id
+            for (doctor_id,) in db.query(DoctorProfile.id)
+            .order_by(DoctorProfile.id.asc())
+            .all()
+        ]
+        for doctor_id in doctor_ids:
+            generate_slots_for_doctor(db, doctor_id)
+        after_slots = db.query(AppointmentSlot).count()
 
     logger.info(
         (
@@ -74,6 +90,18 @@ def main() -> int:
         result.updated,
         result.removed_legacy,
         result.total_seed_records,
+    )
+    logger.info(
+        "Doctor availability seed complete: schedules_created=%s", schedules_created
+    )
+    logger.info(
+        (
+            "Doctor slot seed complete: doctors=%s "
+            "inserted_or_existing_slots=%s new_slots=%s"
+        ),
+        len(doctor_ids),
+        after_slots,
+        after_slots - before_slots,
     )
     return 0
 

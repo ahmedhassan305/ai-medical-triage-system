@@ -9,22 +9,41 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.models import DoctorProfile, PatientProfile
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
-from app.patient_symptoms import PATIENT_SYMPTOM_KEYWORDS
 from app.rag.embedding_retriever import EmbeddingRetriever
 from app.rag.reranker import rerank_retrieved_chunks
 from app.rag.retriever import Retriever, StubRetriever
 from app.rag.tfidf_retriever import TfidfRetriever
-from app.schemas.triage import DoctorSuggestion, TriageLevel, TriageResponse
+from app.schemas.triage import (
+    DoctorSuggestion,
+    SpecialtyAdjudicationOutput,
+    TriageLevel,
+    TriageResponse,
+)
 from app.services.clarification_service import (
     get_clarification_questions,
     needs_clarification,
+)
+from app.services.clinical_feature_extractor import (
+    ClinicalFeatureExtractor,
+    OllamaClinicalFeatureExtractor,
+    StubClinicalFeatureExtractor,
 )
 from app.services.clinical_features import (
     assess_urgency_from_features,
     extract_clinical_features,
     merge_clinical_features,
 )
+from app.services.exceptions import TriageSystemUnavailable
 from app.services.patient_context import PatientContextProvider
+from app.services.specialties import (
+    TRIAGE_SPECIALTIES,
+    canonicalize_specialty,
+)
+from app.services.specialty_adjudicator import (
+    OllamaSpecialtyAdjudicator,
+    SpecialtyAdjudicator,
+    StubSpecialtyAdjudicator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,81 +52,41 @@ MIN_REASONER_RAG_SCORE = 0.48
 MIN_SUPPORTING_REFERENCE_SCORE = 0.5
 RAG_CANDIDATE_MULTIPLIER = 6
 REASONER_RAG_LIMIT = 5
-VALID_SPECIALTIES = (
-    "Cardiology",
-    "Neurology",
-    "Neurosurgery",
-    "Internal Medicine",
-    "Gastroenterology",
-    "Dermatology",
-    "Psychiatry",
-    "Ophthalmology",
-    "Orthopedics",
-    "ENT",
-    "Pediatrics",
-    "Family Medicine",
-)
-SPECIALTY_ALIASES = {
-    "pulmonology": "Internal Medicine",
-    "pulmonary": "Internal Medicine",
-    "respiratory": "Internal Medicine",
-    "general practice": "Family Medicine",
-    "primary care": "Family Medicine",
-    "otolaryngology": "ENT",
-    "ear nose throat": "ENT",
-    "orthopedic": "Orthopedics",
-    "orthopaedic": "Orthopedics",
-    "cardiac": "Cardiology",
-}
+VALID_SPECIALTIES = TRIAGE_SPECIALTIES
 
 HIGH_RISK_KEYWORDS: tuple[str, ...] = (
-    "chest pain",
-    "shortness of breath",
-    "difficulty breathing",
+    # Minimal deterministic safety floor: only obvious emergency phrases.
+    # Broader urgency reasoning should come from structured features + LLM.
     "can't breathe",
     "cannot breathe",
-    "suffocating",
-    "suffocation",
-    "choking",
-    "pass out",
-    "passing out",
-    "blacked out",
-    "fainted",
-    "fainting",
-    "stroke",
+    "not breathing",
+    "barely speak",
+    "blue lips",
+    "blue fingertips",
+    "chest pain with shortness of breath",
+    "chest pain and shortness of breath",
+    "chest pressure with sweating",
+    "crushing chest pain",
+    "pain spreading to jaw",
+    "pain spreading to arm",
+    "heart attack",
+    "face drooping",
+    "slurred speech",
+    "one-sided weakness",
     "seizure",
     "unconscious",
     "unresponsive",
     "severe bleeding",
+    "bleeding a lot",
+    "won't stop bleeding",
     "overdose",
     "suicidal",
-    "heart attack",
-    "not breathing",
-)
-
-MEDIUM_RISK_KEYWORDS: tuple[str, ...] = (
-    "fever",
-    "vomiting",
-    "dehydration",
-    "fracture",
-    "burn",
-    "infection",
-    "migraine",
-)
-
-HIGH_RISK_SUPPORT_TERMS: tuple[str, ...] = (
-    *HIGH_RISK_KEYWORDS,
-    "blue lips",
-    "face drooping",
-    "slurred speech",
-    "trouble speaking",
-    "one-sided weakness",
-    "worst headache",
-    "sudden severe headache",
-    "vision loss",
+    "want to hurt myself",
     "throat closing",
     "tongue swelling",
 )
+
+MEDIUM_RISK_KEYWORDS: tuple[str, ...] = ()
 
 HIGH_RISK_FEATURE_FLAGS: frozenset[str] = frozenset(
     {
@@ -154,8 +133,11 @@ def _reasoner_high_is_supported(
     if HIGH_RISK_FEATURE_FLAGS.intersection(trusted_features.red_flags_present):
         return True
 
-    reasoner_red_flags = " ".join(getattr(summary, "red_flags", []) or []).lower()
-    return _match_any(reasoner_red_flags, HIGH_RISK_SUPPORT_TERMS)
+    summary_features = getattr(summary, "clinical_features", None)
+    summary_red_flags_present = set(
+        getattr(summary_features, "red_flags_present", []) or []
+    )
+    return bool(HIGH_RISK_FEATURE_FLAGS.intersection(summary_red_flags_present))
 
 
 def _reconcile_reasoner_urgency(
@@ -244,128 +226,57 @@ def _normalize_recommended_specialty(
     *,
     possible_conditions: list[str] | None = None,
     body_systems: list[str] | None = None,
+    red_flags_present: list[str] | None = None,
 ) -> str:
+    """Final fallback only.
+
+    The production specialty decision is made by SpecialtyAdjudicator. This
+    function deliberately avoids large condition/symptom keyword maps and only
+    keeps enough broad routing to return a safe valid specialty if the LLM
+    adjudicator is unavailable or returns an invalid value.
+    """
     if specialty:
         import re as _re
 
         candidate = _re.split(r" or |and/or|/|,|;", specialty, maxsplit=1)[0].strip()
         candidate = candidate.split("(")[0].strip()
-        if candidate in VALID_SPECIALTIES:
-            return "Internal Medicine" if candidate == "Family Medicine" else candidate
+        normalized = canonicalize_specialty(candidate)
+        if normalized:
+            return normalized
 
-        lower_candidate = candidate.lower()
-        for alias, normalized in SPECIALTY_ALIASES.items():
-            if alias in lower_candidate:
-                return (
-                    "Internal Medicine"
-                    if normalized == "Family Medicine"
-                    else normalized
-                )
-
-    condition_led = _specialty_from_conditions(possible_conditions or [])
-    if condition_led:
-        return condition_led
-
-    system_led = _specialty_from_body_systems(body_systems or [])
+    system_led = _specialty_from_body_systems(
+        body_systems or [],
+        red_flags_present=red_flags_present or [],
+    )
     if system_led:
         return system_led
 
     lowered_query = query.lower()
-    if triage_level == "high" and (
-        "chest pain" in lowered_query
-        or "heart attack" in lowered_query
-        or "shortness of breath" in lowered_query
-    ):
+    if "heart attack" in lowered_query:
         return "Cardiology"
     if any(term in lowered_query for term in ("baby", "child", "toddler", "infant")):
         return "Pediatrics"
     return "Internal Medicine"
 
 
-def _specialty_from_conditions(condition_names: list[str]) -> str | None:
-    lowered = " ".join(condition_names).lower()
-    if not lowered:
-        return None
-
-    specialty_markers: tuple[tuple[str, tuple[str, ...]], ...] = (
-        (
-            "Cardiology",
-            (
-                "myocardial infarction",
-                "acute coronary",
-                "coronary",
-                "arrhythmia",
-                "heart failure",
-                "angina",
-            ),
-        ),
-        (
-            "Neurology",
-            (
-                "migraine",
-                "stroke",
-                "seizure",
-                "meningitis",
-                "neuropathy",
-                "vertigo",
-            ),
-        ),
-        (
-            "Orthopedics",
-            (
-                "fracture",
-                "sprain",
-                "strain",
-                "arthritis",
-                "meniscal",
-                "sciatica",
-                "herniated disc",
-            ),
-        ),
-        (
-            "Gastroenterology",
-            (
-                "appendicitis",
-                "peritonitis",
-                "bowel obstruction",
-                "ibd",
-                "ulcerative colitis",
-                "crohn",
-                "hepatitis",
-                "cholecystitis",
-                "gi bleed",
-            ),
-        ),
-        (
-            "Dermatology",
-            ("eczema", "dermatitis", "urticaria", "psoriasis", "acne"),
-        ),
-        (
-            "Psychiatry",
-            ("panic disorder", "anxiety", "depression", "suicidal ideation"),
-        ),
-        (
-            "Ophthalmology",
-            ("glaucoma", "retinal", "conjunctivitis", "vision loss"),
-        ),
-        (
-            "ENT",
-            ("otitis", "sinusitis", "tonsillitis", "pharyngitis"),
-        ),
-        (
-            "Pediatrics",
-            ("croup", "bronchiolitis"),
-        ),
-    )
-    for specialty, markers in specialty_markers:
-        if any(marker in lowered for marker in markers):
-            return specialty
-
-    return None
-
-
-def _specialty_from_body_systems(body_systems: list[str]) -> str | None:
+def _specialty_from_body_systems(
+    body_systems: list[str],
+    *,
+    red_flags_present: list[str] | None = None,
+) -> str | None:
     systems = set(body_systems)
+    red_flags = set(red_flags_present or [])
+
+    if "possible heart emergency" in red_flags:
+        return "Cardiology"
+
+    if "respiratory" in systems and "cardiac" in systems:
+        if "possible heart emergency" in red_flags:
+            return "Cardiology"
+        return "Pulmonology"
+
+    if "respiratory" in systems:
+        return "Pulmonology"
     if "cardiac" in systems:
         return "Cardiology"
     if "neurologic" in systems:
@@ -381,10 +292,51 @@ def _specialty_from_body_systems(body_systems: list[str]) -> str | None:
     if "ent" in systems:
         return "ENT"
     if "gastrointestinal" in systems:
-        return "Internal Medicine"
-    if "respiratory" in systems:
-        return "Internal Medicine"
+        return "Gastroenterology"
     return None
+
+
+def _adjudication_fast_path(
+    *,
+    reasoner_specialty: str | None,
+    clinical_features,
+) -> SpecialtyAdjudicationOutput | None:
+    """Skip expensive LLM adjudication when specialty evidence is coherent.
+
+    This is intentionally conservative: it only accepts the reasoner's specialty
+    when it is allowed and agrees with the broad structured body-system route.
+    Ambiguous or conflict-prone presentations still go to the adjudicator.
+    """
+    normalized = canonicalize_specialty(reasoner_specialty)
+    if not normalized:
+        return None
+
+    body_system_specialty = _specialty_from_body_systems(
+        clinical_features.body_systems,
+        red_flags_present=clinical_features.red_flags_present,
+    )
+    if body_system_specialty != normalized:
+        return None
+
+    systems = set(clinical_features.body_systems)
+    red_flags = set(clinical_features.red_flags_present)
+
+    # Keep heart/lung overlap under adjudication unless there is confirmed
+    # heart-emergency evidence. This protects the Cardiology/Pulmonology edge.
+    if {"respiratory", "cardiac"}.issubset(systems):
+        if normalized != "Cardiology" or "possible heart emergency" not in red_flags:
+            return None
+
+    return SpecialtyAdjudicationOutput(
+        final_specialty=normalized,
+        confidence=0.78,
+        reasoning=(
+            "Skipped specialty adjudicator: the initial LLM specialty agrees "
+            "with structured clinical body-system evidence."
+        ),
+        rejected_specialties=[],
+        relevant_reference_titles=[],
+    )
 
 
 def _build_retriever() -> Retriever:
@@ -456,13 +408,8 @@ def _build_reasoner() -> Reasoner:
             )
             return reasoner
 
-        if settings.strict_reasoner:
-            raise RuntimeError(
-                f"Ollama reasoner is required but unreachable at {settings.ollama_host}"
-            )
-
-        logger.warning("reasoner_fallback_to_stub reason=ollama_unreachable")
-        return StubReasoner()
+        logger.error("reasoner_unavailable mode=ollama host=%s", settings.ollama_host)
+        raise TriageSystemUnavailable()
 
     logger.warning("reasoner_mode_unknown value=%s fallback=stub", mode)
     logger.info("reasoner_initialized mode=stub model=none")
@@ -472,6 +419,70 @@ def _build_reasoner() -> Reasoner:
 @lru_cache
 def get_reasoner() -> Reasoner:
     return _build_reasoner()
+
+
+def _build_clinical_feature_extractor() -> ClinicalFeatureExtractor:
+    settings = get_settings()
+    mode = settings.reasoner_mode
+
+    if mode == "ollama":
+        extractor = OllamaClinicalFeatureExtractor(
+            host=settings.ollama_host,
+            model=settings.ollama_model,
+        )
+        if extractor.ping():
+            logger.info(
+                "clinical_feature_extractor_initialized mode=ollama model=%s host=%s",
+                settings.ollama_model,
+                settings.ollama_host,
+            )
+            return extractor
+
+        logger.error(
+            "clinical_feature_extractor_unavailable mode=ollama host=%s",
+            settings.ollama_host,
+        )
+        raise TriageSystemUnavailable()
+
+    logger.info("clinical_feature_extractor_initialized mode=stub")
+    return StubClinicalFeatureExtractor()
+
+
+@lru_cache
+def get_clinical_feature_extractor() -> ClinicalFeatureExtractor:
+    return _build_clinical_feature_extractor()
+
+
+def _build_specialty_adjudicator() -> SpecialtyAdjudicator:
+    settings = get_settings()
+    mode = settings.reasoner_mode
+
+    if mode == "ollama":
+        adjudicator = OllamaSpecialtyAdjudicator(
+            host=settings.ollama_host,
+            model=settings.ollama_model,
+        )
+        if adjudicator.ping():
+            logger.info(
+                "specialty_adjudicator_initialized mode=ollama model=%s host=%s",
+                settings.ollama_model,
+                settings.ollama_host,
+            )
+            return adjudicator
+
+        logger.error(
+            "specialty_adjudicator_unavailable mode=ollama host=%s",
+            settings.ollama_host,
+        )
+        raise TriageSystemUnavailable()
+
+    logger.info("specialty_adjudicator_initialized mode=stub")
+    return StubSpecialtyAdjudicator()
+
+
+@lru_cache
+def get_specialty_adjudicator() -> SpecialtyAdjudicator:
+    return _build_specialty_adjudicator()
 
 
 def _preload_model() -> None:
@@ -502,6 +513,8 @@ def _preload_model() -> None:
 def clear_runtime_state() -> None:
     get_retriever.cache_clear()
     get_reasoner.cache_clear()
+    get_clinical_feature_extractor.cache_clear()
+    get_specialty_adjudicator.cache_clear()
 
 
 def simplify_reasoning(text: str) -> str:
@@ -552,194 +565,29 @@ def simplify_reasoning(text: str) -> str:
     return result
 
 
-def get_recommended_specialty(query: str, summary: str) -> str:
-    """Extract recommended medical specialty from query and summary."""
-    specialty_keywords = {
-        # Emergency
-        "suffocating": "Emergency Medicine",
-        "pass out": "Emergency Medicine",
-        "passing out": "Emergency Medicine",
-        "fainting": "Emergency Medicine",
-        "can't breathe": "Emergency Medicine",
-        "cannot breathe": "Emergency Medicine",
-        "heart attack": "Emergency Medicine",
-        # Cardiology
-        "cardio": "Cardiology",
-        "heart": "Cardiology",
-        "chest pain": "Cardiology",
-        "blood pressure": "Cardiology",
-        "arrhythmia": "Cardiology",
-        "palpitations": "Cardiology",
-        # Pulmonology
-        "respir": "Pulmonology",
-        "lung": "Pulmonology",
-        "breathing": "Pulmonology",
-        "asthma": "Pulmonology",
-        "cough": "Pulmonology",
-        "pneumonia": "Pulmonology",
-        "bronch": "Pulmonology",
-        # Gastroenterology
-        "stomach": "Gastroenterology",
-        "digestive": "Gastroenterology",
-        "abdominal": "Gastroenterology",
-        "nausea": "Gastroenterology",
-        "vomit": "Gastroenterology",
-        "diarrhea": "Gastroenterology",
-        "constipation": "Gastroenterology",
-        "bowel": "Gastroenterology",
-        "gastritis": "Gastroenterology",
-        # Neurology
-        "neurolog": "Neurology",
-        "brain": "Neurology",
-        "migraine": "Neurology",
-        "headache": "Neurology",
-        "seizure": "Neurology",
-        "stroke": "Neurology",
-        "parkinson": "Neurology",
-        # Dermatology
-        "dermat": "Dermatology",
-        "skin": "Dermatology",
-        "rash": "Dermatology",
-        "acne": "Dermatology",
-        "eczema": "Dermatology",
-        # Orthopedics
-        "bone": "Orthopedics",
-        "fracture": "Orthopedics",
-        "broke": "Orthopedics",
-        "break": "Orthopedics",
-        "joint": "Orthopedics",
-        "sprain": "Orthopedics",
-        "strain": "Orthopedics",
-        "arthritis": "Orthopedics",
-        "tendon": "Orthopedics",
-        "ligament": "Orthopedics",
-        "dislocation": "Orthopedics",
-        "knee pain": "Orthopedics",
-        "back pain": "Orthopedics",
-        "neck pain": "Orthopedics",
-        # Internal Medicine
-        "infection": "Internal Medicine",
-        "fever": "Internal Medicine",
-        "flu": "Internal Medicine",
-        "diabetes": "Internal Medicine",
-        "hypertension": "Internal Medicine",
-        # Other specialties
-        "kidney": "Nephrology",
-        "liver": "Hepatology",
-        "eye": "Ophthalmology",
-        "vision": "Ophthalmology",
-        "ear": "Otolaryngology",
-        "throat": "Otolaryngology",
-        "psychiatric": "Psychiatry",
-        "mental": "Psychiatry",
-        "depression": "Psychiatry",
-        "anxiety": "Psychiatry",
-        "panic": "Psychiatry",
-        "women": "Gynecology",
-        "pregnancy": "Gynecology",
-        "child": "Pediatrics",
-    }
-
-    combined_text = (query + " " + summary).lower()
-    for keyword, specialty in specialty_keywords.items():
-        if keyword in combined_text:
-            return specialty
-
-    return "General Practice"
-
-
 def get_suspected_condition(
     query: str,
     summary: str,
     rag_context: str = "",
     reasoner_output: object | None = None,
 ) -> str:
-    """
-    Detect the underlying medical condition from query and summary.
-    Uses RAG context (medical articles) and reasoner output when available.
-    Falls back to keyword matching for robustness.
+    """Return the LLM's top supported condition, without keyword diagnosis.
+
+    Production condition display should come from the reasoner's explicit
+    differential. Keyword scanning is intentionally not used here because it can
+    turn incidental words from the query, summary, or RAG references into a
+    patient-facing suspected condition.
     """
     if reasoner_output is not None and hasattr(reasoner_output, "possible_conditions"):
-        possible_conditions = reasoner_output.possible_conditions
-        if possible_conditions:
-            first = possible_conditions[0]
-            if isinstance(first, dict):
-                return first.get("name", "Unknown condition")
-            return getattr(first, "name", "Unknown condition")
-
-    combined_text = (query + " " + summary + " " + rag_context).lower()
-
-    conditions_to_check = [
-        ("myocardial infarction", "Myocardial infarction/Coronary artery disease"),
-        ("acute coronary syndrome", "Myocardial infarction/Coronary artery disease"),
-        ("coronary artery disease", "Myocardial infarction/Coronary artery disease"),
-        ("heart attack", "Myocardial infarction/Coronary artery disease"),
-        ("meningitis", "Meningitis"),
-        ("pneumonia", "Pneumonia"),
-        ("tuberculosis", "Tuberculosis"),
-        ("asthma", "Asthma"),
-        ("copd", "COPD"),
-        ("stroke", "Stroke"),
-        ("gastritis", "Gastritis/GERD/IBS"),
-        ("gerd", "Gastritis/GERD/IBS"),
-        ("ibs", "Gastritis/GERD/IBS"),
-        ("appendicitis", "Appendicitis"),
-        ("panic disorder", "Panic disorder"),
-        ("anxiety", "Anxiety disorder"),
-        ("depression", "Major depressive disorder"),
-        ("migraine", "Migraine"),
-        ("vertigo", "Vertigo"),
-        ("neuropathy", "Neuropathy"),
-        ("sepsis", "Sepsis"),
-        ("malaria", "Malaria"),
-        ("dengue", "Dengue fever"),
-        ("influenza", "Influenza"),
-        ("covid", "COVID-19"),
-        ("coronavirus", "COVID-19"),
-        ("cholecystitis", "Cholecystitis"),
-    ]
-
-    summary_lower = summary.lower()
-    for condition_keyword, condition_name in conditions_to_check:
-        if condition_keyword in summary_lower:
-            logger.info(
-                "condition_detected from_summary condition=%s",
-                condition_name,
+        for condition in reasoner_output.possible_conditions or []:
+            name = (
+                condition.get("name", "")
+                if isinstance(condition, dict)
+                else getattr(condition, "name", "")
             )
-            return condition_name
-
-    priority_combinations = [
-        (["chest pain", "left arm"], "Myocardial infarction/Coronary artery disease"),
-        (["chest pain", "jaw pain"], "Myocardial infarction/Coronary artery disease"),
-        (["chest pain", "radiates"], "Myocardial infarction/Coronary artery disease"),
-        (["severe headache", "stiff neck"], "Meningitis"),
-        (["high fever", "stiff neck"], "Meningitis"),
-        (["stiff neck", "fever"], "Meningitis"),
-        (["panic", "anxiety"], "Panic disorder"),
-        (["panic attack"], "Panic disorder"),
-        (["severe panic"], "Panic disorder"),
-    ]
-
-    for symptoms, condition in priority_combinations:
-        if all(symptom in combined_text for symptom in symptoms):
-            logger.info(
-                "condition_detected combination=%s condition=%s",
-                symptoms,
-                condition,
-            )
-            return condition
-
-    disease_keywords = PATIENT_SYMPTOM_KEYWORDS
-    sorted_keywords = sorted(disease_keywords, key=lambda x: len(x[0]), reverse=True)
-
-    for keyword, condition in sorted_keywords:
-        if keyword in combined_text:
-            logger.info(
-                "condition_detected keyword=%s condition=%s",
-                keyword,
-                condition,
-            )
-            return condition
+            name = str(name or "").strip()
+            if name:
+                return name
 
     return "Unknown condition"
 
@@ -825,7 +673,7 @@ def get_suggested_doctors(
     try:
         doctors = (
             db.query(DoctorProfile)
-            .filter(DoctorProfile.specialty.ilike(f"%{specialty.split()[0]}%"))
+            .filter(DoctorProfile.specialty == specialty)
             .limit(limit)
             .all()
         )
@@ -849,6 +697,7 @@ def triage(
     patient_id: int | None = None,
     db: Session | None = None,
     age: int | None = None,
+    lab_values: list[dict[str, str | None]] | None = None,
 ) -> TriageResponse:
     normalized_query = query.strip()
     if age is None and patient_id is not None and db is not None:
@@ -857,9 +706,10 @@ def triage(
         )
         age = patient.age if patient is not None else None
     base_features = extract_clinical_features(normalized_query, age=age)
+    local_feature_level = assess_urgency_from_features(base_features, age=age)
     safety_level = _max_triage_level(
         _safety_floor(normalized_query, age),
-        assess_urgency_from_features(base_features, age=age),
+        local_feature_level,
     )
     triage_level = safety_level
     if {"back pain", "neck pain"}.intersection(base_features.symptoms) and {
@@ -912,17 +762,52 @@ def triage(
         patient_context = f"Patient ID {patient_id} was provided."
         history_used = True
 
+    if lab_values:
+        lab_lines = [
+            (
+                f"- {value.get('lab_name')}: {value.get('value')}"
+                f" {value.get('unit') or ''}".strip()
+            )
+            for value in lab_values
+            if value.get("lab_name") and value.get("value")
+        ]
+        if lab_lines:
+            lab_context = (
+                "=== UPLOADED BLOODWORK / LAB VALUES ===\n"
+                "Use these confirmed extracted lab values as supporting context. "
+                "Do not diagnose from labs alone.\n" + "\n".join(lab_lines)
+            )
+            patient_context = (
+                f"{patient_context}\n\n{lab_context}"
+                if patient_context
+                else lab_context
+            )
+            history_used = True
+
+    extracted_features = get_clinical_feature_extractor().extract(
+        query=normalized_query,
+        local_features=base_features,
+        patient_context=patient_context,
+    )
+    pre_reasoner_features = merge_clinical_features(base_features, extracted_features)
+    pre_reasoner_feature_level = assess_urgency_from_features(
+        pre_reasoner_features,
+        age=age,
+    )
+    triage_level = _max_triage_level(triage_level, pre_reasoner_feature_level)
+
     summary = get_reasoner().reason(
         normalized_query,
         contexts,
         triage_level,
         patient_context=patient_context,
+        clinical_features=pre_reasoner_features,
     )
     clinical_features = merge_clinical_features(
-        base_features,
+        pre_reasoner_features,
         getattr(summary, "clinical_features", None),
     )
-    feature_level = assess_urgency_from_features(base_features, age=age)
+    feature_level = assess_urgency_from_features(clinical_features, age=age)
     triage_level, unsupported_reasoner_high = _reconcile_reasoner_urgency(
         safety_level=safety_level,
         feature_level=feature_level,
@@ -938,7 +823,22 @@ def triage(
         else str(summary)
     )
     simple_reasoning = simplify_reasoning(summary_text)
-    recommended_specialty = _normalize_recommended_specialty(
+    specialty_adjudication = _adjudication_fast_path(
+        reasoner_specialty=getattr(summary, "recommended_specialty", None),
+        clinical_features=clinical_features,
+    )
+    if specialty_adjudication is None:
+        specialty_adjudication = get_specialty_adjudicator().adjudicate(
+            query=normalized_query,
+            triage_level=triage_level,
+            reasoning=summary,
+            clinical_features=clinical_features,
+            reference_contexts=contexts,
+            patient_context=patient_context,
+        )
+    recommended_specialty = canonicalize_specialty(
+        specialty_adjudication.final_specialty
+    ) or _normalize_recommended_specialty(
         (
             summary.recommended_specialty
             if hasattr(summary, "recommended_specialty")
@@ -946,11 +846,16 @@ def triage(
         ),
         normalized_query,
         triage_level,
-        possible_conditions=[
-            str(getattr(condition, "name", "") or "")
-            for condition in getattr(summary, "possible_conditions", [])
-        ],
         body_systems=clinical_features.body_systems,
+        red_flags_present=clinical_features.red_flags_present,
+    )
+    specialty_reason = (
+        specialty_adjudication.reasoning.strip()
+        if specialty_adjudication.reasoning
+        else (
+            "Recommended after reviewing the clinical picture: "
+            f"{recommended_specialty}."
+        )
     )
     rag_context_str = " ".join(
         f"{getattr(c, 'title', '')} {getattr(c, 'text', '')[:200]}".strip()
@@ -996,10 +901,24 @@ def triage(
     supporting_reference_chunks = _filter_supporting_reference_chunks(reasoner_chunks)
     if not supporting_reference_chunks:
         supporting_reference_chunks = chunks
+    if specialty_adjudication.relevant_reference_titles:
+        selected_titles = {
+            title.strip().lower()
+            for title in specialty_adjudication.relevant_reference_titles
+            if title.strip()
+        }
+        adjudicated_reference_chunks = [
+            chunk
+            for chunk in supporting_reference_chunks
+            if getattr(chunk, "title", "").strip().lower() in selected_titles
+        ]
+        if adjudicated_reference_chunks:
+            supporting_reference_chunks = adjudicated_reference_chunks
 
     logger.info(
         "triage_completed triage_level=%s query_length=%s contexts=%s "
-        "specialty=%s condition=%s confidence=%s unsupported_reasoner_high=%s",
+        "specialty=%s condition=%s confidence=%s unsupported_reasoner_high=%s "
+        "specialty_adjudication_confidence=%s",
         triage_level,
         len(normalized_query),
         len(contexts),
@@ -1007,6 +926,7 @@ def triage(
         suspected_condition,
         confidence_score,
         unsupported_reasoner_high,
+        specialty_adjudication.confidence,
     )
 
     urgency_reason = (
@@ -1067,11 +987,7 @@ def triage(
         recommended_actions=recommended_actions,
         red_flags=response_red_flags,
         recommended_specialty=recommended_specialty,
-        specialty_reason=(
-            f"Recommended based on the most likely condition: {recommended_specialty}."
-            if recommended_specialty
-            else "Recommended based on your symptoms and clinical assessment"
-        ),
+        specialty_reason=specialty_reason,
         suspected_condition=suspected_condition,
         suspected_conditions=[
             {

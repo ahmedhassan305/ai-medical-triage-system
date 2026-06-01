@@ -138,6 +138,38 @@ def test_doctor_slots_are_generated_from_schedule(client: TestClient) -> None:
     assert payload[0]["status"] == "open"
 
 
+def test_doctor_slots_use_deterministic_demo_fallback_when_no_schedule(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="fallback-slot-doctor@example.com",
+        role="doctor",
+    )
+    doctor = _create_doctor_profile(client, doctor_headers, specialty="Pediatrics")
+    target_date = date(2026, 5, 18)
+
+    patient_headers = _register_and_login(
+        client,
+        email="fallback-slot-patient@example.com",
+        role="patient",
+    )
+    response = client.get(
+        f"/api/v1/doctors/{doctor['id']}/slots",
+        headers=patient_headers,
+        params={
+            "start_date": target_date.isoformat(),
+            "end_date": target_date.isoformat(),
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 16
+    assert payload[0]["start_at"] == "2026-05-18T09:00:00"
+    assert payload[-1]["end_at"] == "2026-05-18T17:00:00"
+
+
 def test_slot_booking_reserves_slot_and_blocks_double_booking(
     client: TestClient,
 ) -> None:
@@ -219,6 +251,79 @@ def test_slot_booking_reserves_slot_and_blocks_double_booking(
     )
     assert approval_response.status_code == 200
     assert approval_response.json()["slot"]["status"] == "booked"
+
+
+def test_booking_slot_rejects_wrong_clinic(client: TestClient) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="wrong-clinic-slot-doctor@example.com",
+        role="doctor",
+    )
+    doctor = _create_doctor_profile(client, doctor_headers, specialty="ENT")
+    target_date = date.today()
+    _configure_schedule(doctor["id"], target_date=target_date)
+
+    patient_headers = _register_and_login(
+        client,
+        email="wrong-clinic-slot-patient@example.com",
+        role="patient",
+    )
+    patient = _get_my_patient_profile(client, patient_headers)
+    slots_response = client.get(
+        f"/api/v1/doctors/{doctor['id']}/slots",
+        headers=patient_headers,
+        params={
+            "start_date": target_date.isoformat(),
+            "end_date": target_date.isoformat(),
+        },
+    )
+    assert slots_response.status_code == 200
+    slot = slots_response.json()[0]
+
+    booking_response = client.post(
+        "/api/v1/appointments/",
+        headers=patient_headers,
+        json={
+            "patient_id": patient["id"],
+            "doctor_id": doctor["id"],
+            "clinic_id": slot["clinic"]["id"] + 999,
+            "reason": "Need ENT review",
+            "slot_id": slot["id"],
+        },
+    )
+    assert booking_response.status_code == 422
+
+
+def test_legacy_booking_rejects_time_outside_doctor_availability(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="outside-availability-doctor@example.com",
+        role="doctor",
+    )
+    doctor = _create_doctor_profile(client, doctor_headers, specialty="Cardiology")
+    target_date = date.today()
+    _configure_schedule(doctor["id"], target_date=target_date)
+
+    patient_headers = _register_and_login(
+        client,
+        email="outside-availability-patient@example.com",
+        role="patient",
+    )
+    patient = _get_my_patient_profile(client, patient_headers)
+    response = client.post(
+        "/api/v1/appointments/",
+        headers=patient_headers,
+        json={
+            "patient_id": patient["id"],
+            "doctor_id": doctor["id"],
+            "reason": "Need review outside hours",
+            "scheduled_for": f"{target_date.isoformat()}T11:00:00",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_legacy_appointment_creation_keeps_working_and_includes_clinic_info(

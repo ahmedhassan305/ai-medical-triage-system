@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,3 +61,24 @@ class AppointmentSlotResponse(BaseModel):
     end_at: datetime
     status: str
     clinic: ClinicResponse
+
+
+class DoctorScheduleCreate(BaseModel):
+    doctor_clinic_id: int | None = None
+    day_of_week: str = Field(min_length=1, max_length=20)
+    start_time: time
+    end_time: time
+    slot_minutes: int = Field(default=30, ge=5, le=240)
+    valid_from: date | None = None
+    valid_to: date | None = None
+    location_label: str | None = Field(default=None, max_length=200)
+    is_active: bool = True
+
+
+class DoctorScheduleResponse(DoctorScheduleCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    doctor_id: int
+    created_at: datetime
+    updated_at: datetime

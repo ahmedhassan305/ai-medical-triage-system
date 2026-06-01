@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aimts.local/schemas/triage_eval_case.schema.json",
+  "title": "Triage Evaluation Case",
+  "description": "One JSONL row for evaluating specialty routing, urgency, clarification, grounding, history use, or robustness in the triage system.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "case_type",
+    "query",
+    "expected",
+    "patient_context",
+    "clarification",
+    "grounding",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_\\-]*$"
+    },
+    "case_type": {
+      "type": "string",
+      "enum": [
+        "specialty",
+        "urgency",
+        "clarification",
+        "grounding",
+        "history",
+        "robustness"
+      ]
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected": {
+      "$ref": "#/$defs/expected_result"
+    },
+    "patient_context": {
+      "$ref": "#/$defs/patient_context"
+    },
+    "clarification": {
+      "$ref": "#/$defs/clarification"
+    },
+    "grounding": {
+      "$ref": "#/$defs/grounding"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    }
+  },
+  "$defs": {
+    "specialty": {
+      "type": "string",
+      "enum": [
+        "Cardiology",
+        "Neurology",
+        "Neurosurgery",
+        "Internal Medicine",
+        "Gastroenterology",
+        "Dermatology",
+        "Psychiatry",
+        "Ophthalmology",
+        "Orthopedics",
+        "ENT",
+        "Pediatrics",
+        "Family Medicine",
+        "Pulmonology"
+      ]
+    },
+    "triage_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "expected_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specialty",
+        "acceptable_specialties",
+        "urgency",
+        "needs_clarification"
+      ],
+      "properties": {
+        "specialty": {
+          "$ref": "#/$defs/specialty"
+        },
+        "acceptable_specialties": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/specialty"
+          }
+        },
+        "urgency": {
+          "$ref": "#/$defs/triage_level"
+        },
+        "needs_clarification": {
+          "type": "boolean"
+        }
+      }
+    },
+    "patient_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "age",
+        "sex",
+        "smoker",
+        "alcoholic",
+        "chronic_conditions",
+        "history"
+      ],
+      "properties": {
+        "age": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 130
+        },
+        "sex": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Male",
+            "Female",
+            null
+          ]
+        },
+        "smoker": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "alcoholic": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "chronic_conditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/history_entry"
+          }
+        }
+      }
+    },
+    "history_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symptoms",
+        "diagnosis",
+        "notes"
+      ],
+      "properties": {
+        "symptoms": {
+          "type": "string",
+          "minLength": 1
+        },
+        "diagnosis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_questions",
+        "answers",
+        "expected_after_answers"
+      ],
+      "properties": {
+        "expected_questions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/clarification_answer"
+          }
+        },
+        "expected_after_answers": {
+          "$ref": "#/$defs/nullable_expected_result"
+        }
+      }
+    },
+    "clarification_answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_id",
+        "answer"
+      ],
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "nullable_expected_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specialty",
+        "acceptable_specialties",
+        "urgency",
+        "needs_clarification"
+      ],
+      "properties": {
+        "specialty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/specialty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptable_specialties": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/specialty"
+          }
+        },
+        "urgency": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/triage_level"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "needs_clarification": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "grounding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "facts_present",
+        "facts_absent",
+        "must_not_invent"
+      ],
+      "properties": {
+        "facts_present": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "facts_absent": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "must_not_invent": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_specialty_group",
+        "difficulty",
+        "language_style",
+        "tags",
+        "rationale"
+      ],
+      "properties": {
+        "primary_specialty_group": {
+          "$ref": "#/$defs/specialty"
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": [
+            "easy",
+            "medium",
+            "hard",
+            "controversial"
+          ]
+        },
+        "language_style": {
+          "type": "string",
+          "enum": [
+            "clinical",
+            "common_language",
+            "noisy",
+            "typo_heavy"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

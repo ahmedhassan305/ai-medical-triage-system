@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.models import (
     Appointment,
     AppointmentSlot,
+    Clinic,
     DoctorClinic,
     DoctorProfile,
     DoctorSchedule,
@@ -17,9 +18,17 @@ from app.db.models import (
 
 DEFAULT_SLOT_WINDOW_DAYS = 14
 DEFAULT_SLOT_MINUTES = 30
+DEFAULT_DEMO_WEEKDAYS = {"sunday", "monday", "tuesday", "wednesday", "thursday"}
+DEFAULT_DEMO_START_TIME = time(9, 0)
+DEFAULT_DEMO_END_TIME = time(17, 0)
 OPEN_SLOT_STATUSES = {"open"}
 RESERVED_SLOT_STATUS = "reserved"
 BOOKED_SLOT_STATUS = "booked"
+DEFAULT_WORKING_DAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday")
+DEFAULT_START_TIME = time(9, 0)
+DEFAULT_BREAK_START = time(13, 0)
+DEFAULT_BREAK_END = time(14, 0)
+DEFAULT_END_TIME = time(17, 0)
 
 
 class SlotBookingError(Exception):
@@ -89,6 +98,74 @@ def _load_doctor_schedules(
     )
 
 
+def _ensure_demo_doctor_clinic(db: Session, doctor_id: int) -> DoctorClinic | None:
+    primary = get_primary_doctor_clinic(db, doctor_id)
+    if primary is not None:
+        return primary
+
+    doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
+    if doctor is None:
+        return None
+
+    clinic_name = doctor.clinic or "Demo Clinic"
+    stored_clinic = Clinic(
+        name=clinic_name,
+        area=doctor.area,
+        city=doctor.city,
+        is_active=True,
+    )
+    db.add(stored_clinic)
+    db.flush()
+    clinic = DoctorClinic(
+        doctor_id=doctor.id,
+        clinic_id=stored_clinic.id,
+        is_primary=True,
+        is_active=True,
+    )
+    db.add(clinic)
+    db.flush()
+    return clinic
+
+
+def _build_demo_schedules(
+    db: Session,
+    doctor_id: int,
+    window: SlotWindow,
+) -> list[DoctorSchedule]:
+    doctor_clinic = _ensure_demo_doctor_clinic(db, doctor_id)
+    if doctor_clinic is None:
+        return []
+
+    schedules: list[DoctorSchedule] = []
+    for weekday in sorted(DEFAULT_DEMO_WEEKDAYS):
+        schedules.append(
+            DoctorSchedule(
+                doctor_id=doctor_id,
+                doctor_clinic_id=doctor_clinic.id,
+                day_of_week=weekday,
+                start_time=DEFAULT_DEMO_START_TIME,
+                end_time=DEFAULT_DEMO_END_TIME,
+                slot_minutes=DEFAULT_SLOT_MINUTES,
+                valid_from=window.start_date,
+                valid_to=window.end_date,
+                location_label=doctor_clinic.clinic.name,
+                is_active=True,
+            )
+        )
+    return schedules
+
+
+def _get_applicable_schedules(
+    db: Session,
+    doctor_id: int,
+    window: SlotWindow,
+) -> list[DoctorSchedule]:
+    schedules = _load_doctor_schedules(db, doctor_id)
+    if schedules:
+        return schedules
+    return _build_demo_schedules(db, doctor_id, window)
+
+
 def _load_existing_slots(
     db: Session,
     doctor_id: int,
@@ -112,6 +189,75 @@ def _load_existing_slots(
     return {(slot.doctor_clinic_id, slot.start_at, slot.end_at): slot for slot in slots}
 
 
+def ensure_primary_doctor_clinic(db: Session, doctor: DoctorProfile) -> DoctorClinic:
+    existing = get_primary_doctor_clinic(db, doctor.id)
+    if existing is not None:
+        return existing
+    clinic = Clinic(
+        name=doctor.clinic or f"{doctor.full_name} Clinic",
+        area=doctor.area,
+        city=doctor.city,
+        is_active=True,
+    )
+    db.add(clinic)
+    db.flush()
+    link = DoctorClinic(
+        doctor_id=doctor.id,
+        clinic_id=clinic.id,
+        is_primary=True,
+        is_active=True,
+    )
+    db.add(link)
+    db.flush()
+    return link
+
+
+def ensure_demo_availability_for_doctor(db: Session, doctor: DoctorProfile) -> int:
+    doctor_clinic = ensure_primary_doctor_clinic(db, doctor)
+    existing_schedules = (
+        db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == doctor.id).all()
+    )
+    backfilled = 0
+    for schedule in existing_schedules:
+        if schedule.doctor_clinic_id is None:
+            schedule.doctor_clinic_id = doctor_clinic.id
+            schedule.location_label = (
+                schedule.location_label or doctor_clinic.clinic.name
+            )
+            backfilled += 1
+    if existing_schedules:
+        return backfilled
+
+    created = 0
+    for day in DEFAULT_WORKING_DAYS:
+        for start_time, end_time in (
+            (DEFAULT_START_TIME, DEFAULT_BREAK_START),
+            (DEFAULT_BREAK_END, DEFAULT_END_TIME),
+        ):
+            db.add(
+                DoctorSchedule(
+                    doctor_id=doctor.id,
+                    doctor_clinic_id=doctor_clinic.id,
+                    day_of_week=day,
+                    start_time=start_time,
+                    end_time=end_time,
+                    slot_minutes=DEFAULT_SLOT_MINUTES,
+                    location_label=doctor_clinic.clinic.name,
+                    is_active=True,
+                )
+            )
+            created += 1
+    return created
+
+
+def ensure_demo_availability_for_all_doctors(db: Session) -> int:
+    created = 0
+    for doctor in db.query(DoctorProfile).order_by(DoctorProfile.id.asc()).all():
+        created += ensure_demo_availability_for_doctor(db, doctor)
+    db.commit()
+    return created
+
+
 def generate_slots_for_doctor(
     db: Session,
     doctor_id: int,
@@ -120,7 +266,7 @@ def generate_slots_for_doctor(
     end_date: date | None = None,
 ) -> list[AppointmentSlot]:
     window = resolve_slot_window(start_date, end_date)
-    schedules = _load_doctor_schedules(db, doctor_id)
+    schedules = _get_applicable_schedules(db, doctor_id, window)
     if not schedules:
         return []
 
@@ -180,6 +326,7 @@ def reserve_slot_for_appointment(
     reason: str,
     notes: str | None,
     slot_id: int,
+    clinic_id: int | None = None,
 ) -> Appointment:
     slot = (
         db.query(AppointmentSlot)
@@ -198,6 +345,10 @@ def reserve_slot_for_appointment(
     if slot.doctor_clinic.doctor_id != doctor_id:
         raise SlotBookingValidationError(
             "Selected slot does not belong to the requested doctor."
+        )
+    if clinic_id is not None and slot.doctor_clinic.clinic_id != clinic_id:
+        raise SlotBookingValidationError(
+            "Selected slot does not belong to the requested clinic."
         )
 
     appointment = Appointment(
@@ -244,6 +395,26 @@ def sync_slot_status_for_appointment(db: Session, appointment: Appointment) -> N
         appointment.slot_id = None
 
     db.flush()
+
+
+def scheduled_time_is_available(
+    db: Session,
+    *,
+    doctor_id: int,
+    scheduled_for: datetime,
+    clinic_id: int | None = None,
+) -> bool:
+    slots = generate_slots_for_doctor(
+        db,
+        doctor_id,
+        start_date=scheduled_for.date(),
+        end_date=scheduled_for.date(),
+    )
+    return any(
+        slot.start_at == scheduled_for
+        and (clinic_id is None or slot.doctor_clinic.clinic_id == clinic_id)
+        for slot in slots
+    )
 
 
 def load_appointments_with_relations(query):

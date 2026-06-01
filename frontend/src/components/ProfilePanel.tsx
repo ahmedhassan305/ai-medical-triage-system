@@ -1,15 +1,35 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
+  AppointmentSlotDto,
   AppointmentResponseDto,
   DoctorProfileResponseDto,
+  DoctorScheduleCreateDto,
+  DoctorScheduleDto,
   DoctorProfileUpsertDto,
+  PatientMedicalHistoryEntryResponseDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
   RoleType,
   VisitResponseDto,
 } from "../api/dto";
+import {
+  createDoctorSchedule,
+  listDoctorSchedules,
+  listDoctorSlots,
+  updateDoctorProfile,
+  updateDoctorSchedule,
+} from "../api/doctors";
+import {
+  createPatientMedicalHistoryEntry,
+  listPatientMedicalHistory,
+} from "../api/patients";
+import { useLanguage } from "../i18n/useLanguage";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import {
+  localizeAppointmentStatus,
+  localizeSlotStatus,
+} from "../lib/localizedDisplay";
 import {
   composeDoctorSpecialty,
   MEDICAL_SPECIALTY_GROUPS,
@@ -46,6 +66,21 @@ const EMPTY_PATIENT_FORM: PatientProfileFormState = {
   smoker: false,
   alcoholic: false,
   chronic_conditions: [],
+};
+
+const ADMIN_PROFILE_PAGE_SIZE = 8;
+const ADMIN_RELATED_RECORD_LIMIT = 5;
+
+const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
+  doctor_clinic_id: null,
+  day_of_week: "sunday",
+  start_time: "09:00:00",
+  end_time: "17:00:00",
+  slot_minutes: 30,
+  valid_from: null,
+  valid_to: null,
+  location_label: "",
+  is_active: true,
 };
 
 function formatDateTime(dateValue?: string | null): string {
@@ -93,6 +128,18 @@ function AdminOperationsPanel({
   const [doctorSearch, setDoctorSearch] = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null);
+  const [patientPage, setPatientPage] = useState(1);
+  const [doctorPage, setDoctorPage] = useState(1);
+  const [doctorEditForm, setDoctorEditForm] =
+    useState<DoctorProfileUpsertDto | null>(null);
+  const [doctorSchedules, setDoctorSchedules] = useState<DoctorScheduleDto[]>([]);
+  const [doctorSlots, setDoctorSlots] = useState<AppointmentSlotDto[]>([]);
+  const [scheduleForm, setScheduleForm] =
+    useState<DoctorScheduleCreateDto>(EMPTY_SCHEDULE_FORM);
+  const [doctorManagementMessage, setDoctorManagementMessage] = useState<
+    string | null
+  >(null);
+  const [doctorManagementLoading, setDoctorManagementLoading] = useState(false);
 
   const completedAppointments = appointments.filter(
     (appointment) =>
@@ -128,6 +175,7 @@ function AdminOperationsPanel({
   const selectedDoctor = selectedDoctorId
     ? doctors.find((d) => d.id === selectedDoctorId)
     : null;
+  const { t } = useLanguage();
 
   const patientAppointments = selectedPatient
     ? appointments.filter((a) => a.patient_id === selectedPatient.id)
@@ -139,36 +187,206 @@ function AdminOperationsPanel({
     ? appointments.filter((a) => a.doctor_id === selectedDoctor.id)
     : [];
 
+  useEffect(() => {
+    if (!selectedDoctor) {
+      setDoctorEditForm(null);
+      setDoctorSchedules([]);
+      setDoctorSlots([]);
+      setDoctorManagementMessage(null);
+      return;
+    }
+
+    setDoctorEditForm({
+      full_name: selectedDoctor.full_name,
+      specialty: selectedDoctor.specialty,
+      clinic: selectedDoctor.clinic,
+      area: selectedDoctor.area ?? "",
+      city: selectedDoctor.city ?? "",
+    });
+    setScheduleForm({
+      ...EMPTY_SCHEDULE_FORM,
+      location_label: selectedDoctor.clinic,
+    });
+    setDoctorManagementLoading(true);
+    setDoctorManagementMessage(null);
+    Promise.all([
+      listDoctorSchedules(selectedDoctor.id),
+      listDoctorSlots(selectedDoctor.id),
+    ])
+      .then(([schedules, slots]) => {
+        setDoctorSchedules(schedules);
+        setDoctorSlots(slots);
+      })
+      .catch(() => {
+        setDoctorSchedules([]);
+        setDoctorSlots([]);
+        setDoctorManagementMessage("Could not load schedules or slots.");
+      })
+      .finally(() => setDoctorManagementLoading(false));
+  }, [selectedDoctor]);
+
+  async function refreshDoctorScheduleWorkspace(doctorId: number) {
+    const [schedules, slots] = await Promise.all([
+      listDoctorSchedules(doctorId),
+      listDoctorSlots(doctorId),
+    ]);
+    setDoctorSchedules(schedules);
+    setDoctorSlots(slots);
+  }
+
+  async function submitDoctorAdminUpdate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDoctor || !doctorEditForm) {
+      return;
+    }
+    setDoctorManagementLoading(true);
+    setDoctorManagementMessage(null);
+    try {
+      await updateDoctorProfile(selectedDoctor.id, {
+        ...doctorEditForm,
+        area: doctorEditForm.area?.trim() || null,
+        city: doctorEditForm.city?.trim() || null,
+      });
+      setDoctorManagementMessage("Doctor details saved.");
+    } catch {
+      setDoctorManagementMessage("Could not save doctor details.");
+    } finally {
+      setDoctorManagementLoading(false);
+    }
+  }
+
+  async function submitDoctorSchedule(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDoctor) {
+      return;
+    }
+    setDoctorManagementLoading(true);
+    setDoctorManagementMessage(null);
+    try {
+      await createDoctorSchedule(selectedDoctor.id, {
+        ...scheduleForm,
+        location_label: scheduleForm.location_label || selectedDoctor.clinic,
+      });
+      await refreshDoctorScheduleWorkspace(selectedDoctor.id);
+      setScheduleForm({
+        ...EMPTY_SCHEDULE_FORM,
+        location_label: selectedDoctor.clinic,
+      });
+      setDoctorManagementMessage("Schedule rule added and slots refreshed.");
+    } catch {
+      setDoctorManagementMessage("Could not add schedule rule.");
+    } finally {
+      setDoctorManagementLoading(false);
+    }
+  }
+
+  async function toggleSchedule(schedule: DoctorScheduleDto, isActive: boolean) {
+    if (!selectedDoctor) {
+      return;
+    }
+    setDoctorManagementLoading(true);
+    setDoctorManagementMessage(null);
+    try {
+      await updateDoctorSchedule(selectedDoctor.id, schedule.id, {
+        doctor_clinic_id: schedule.doctor_clinic_id ?? null,
+        day_of_week: schedule.day_of_week,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        slot_minutes: schedule.slot_minutes,
+        valid_from: schedule.valid_from ?? null,
+        valid_to: schedule.valid_to ?? null,
+        location_label: schedule.location_label ?? selectedDoctor.clinic,
+        is_active: isActive,
+      });
+      await refreshDoctorScheduleWorkspace(selectedDoctor.id);
+      setDoctorManagementMessage(
+        isActive ? "Schedule activated." : "Schedule deactivated.",
+      );
+    } catch {
+      setDoctorManagementMessage("Could not update schedule status.");
+    } finally {
+      setDoctorManagementLoading(false);
+    }
+  }
+
+  function paginate<T>(items: T[], page: number): T[] {
+    const start = (page - 1) * ADMIN_PROFILE_PAGE_SIZE;
+    return items.slice(start, start + ADMIN_PROFILE_PAGE_SIZE);
+  }
+
+  function renderPagination(
+    items: unknown[],
+    page: number,
+    setPage: (page: number) => void,
+  ) {
+    if (items.length <= ADMIN_PROFILE_PAGE_SIZE) {
+      return null;
+    }
+    const pageCount = Math.ceil(items.length / ADMIN_PROFILE_PAGE_SIZE);
+    const safePage = Math.min(page, pageCount);
+    const startItem = (safePage - 1) * ADMIN_PROFILE_PAGE_SIZE + 1;
+    const endItem = Math.min(safePage * ADMIN_PROFILE_PAGE_SIZE, items.length);
+
+    return (
+      <div className="pagination-strip">
+        <span>
+          Showing {startItem}-{endItem} of {items.length}
+        </span>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === 1}
+            onClick={() => setPage(Math.max(1, safePage - 1))}
+          >
+            Previous
+          </button>
+          <span className="pagination-strip__page">
+            Page {safePage} / {pageCount}
+          </span>
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === pageCount}
+            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="stack-lg">
       <SectionPanel
-        eyebrow="Admin records"
-        title="Operational records center"
+        eyebrow={t("recordsTitle")}
+        title={t("adminRecordsCenter")}
         description="Review all patient profiles, doctor profiles, appointments, and recent medical history without patient-facing demographic forms."
       >
         <div className="admin-metric-grid">
           <article className="metric-card">
-            <span>Patients on record</span>
+            <span>{t("patientProfiles")}</span>
             <strong>{patients.length}</strong>
           </article>
           <article className="metric-card">
-            <span>Doctors on record</span>
+            <span>{t("doctorProfiles")}</span>
             <strong>{doctors.length}</strong>
           </article>
           <article className="metric-card">
-            <span>Future appointments</span>
+            <span>{t("upcomingAppointments")}</span>
             <strong>{futureAppointments.length}</strong>
           </article>
           <article className="metric-card">
-            <span>Completed appointments</span>
+            <span>{t("completed")}</span>
             <strong>{completedAppointments.length}</strong>
           </article>
           <article className="metric-card">
-            <span>Recent visits</span>
+            <span>{t("recentVisits")}</span>
             <strong>{recentVisits.length}</strong>
           </article>
           <article className="metric-card">
-            <span>Pending approvals</span>
+            <span>{t("pendingApprovals")}</span>
             <strong>
               {
                 appointments.filter((appointment) => appointment.status === "requested")
@@ -184,15 +402,15 @@ function AdminOperationsPanel({
             className="action-shortcut"
             onClick={() => onNavigate("appointments")}
           >
-            <strong>Review appointments</strong>
-            <span>Open future and previous bookings in one scheduling workspace.</span>
+            <strong>{t("reviewAppointments")}</strong>
+            <span>{t("appointmentsDescription")}</span>
           </button>
           <button
             type="button"
             className="action-shortcut action-shortcut--ghost"
             onClick={() => onNavigate("visits")}
           >
-            <strong>Open medical history</strong>
+            <strong>{t("medicalHistory")}</strong>
             <span>Inspect recent visits and add clinician records when needed.</span>
           </button>
           <button
@@ -200,7 +418,7 @@ function AdminOperationsPanel({
             className="action-shortcut action-shortcut--ghost"
             onClick={() => onNavigate("profile")}
           >
-            <strong>Review profiles</strong>
+            <strong>{t("reviewProfiles")}</strong>
             <span>Filter patient and doctor records from one compact admin view.</span>
           </button>
           <button
@@ -208,15 +426,15 @@ function AdminOperationsPanel({
             className="action-shortcut action-shortcut--ghost"
             onClick={() => onNavigate("records")}
           >
-            <strong>Manage record imports</strong>
+            <strong>{t("importRecords")}</strong>
             <span>Import structured medical records into the visit history.</span>
           </button>
         </div>
       </SectionPanel>
 
       <SectionPanel
-        eyebrow="Management"
-        title="Profiles and records"
+        eyebrow={t("adminActions")}
+        title={t("reviewProfiles")}
         description="Search and view detailed patient and doctor profiles with their appointments and medical history."
       >
         <div className="segmented-control">
@@ -245,11 +463,14 @@ function AdminOperationsPanel({
         {activeTab === "patients" ? (
           <div className="stack-md">
             <div className="field">
-              <label htmlFor="patient-search">Search by national ID</label>
+              <label htmlFor="patient-search">{t("patientNationalId")}</label>
               <input
                 id="patient-search"
                 value={patientSearch}
-                onChange={(event) => setPatientSearch(event.target.value)}
+                onChange={(event) => {
+                  setPatientSearch(event.target.value);
+                  setPatientPage(1);
+                }}
                 placeholder="Enter patient national ID"
               />
             </div>
@@ -258,7 +479,7 @@ function AdminOperationsPanel({
               <section className="workspace-card workspace-card--compact">
                 <div className="workspace-card__header">
                   <div>
-                    <p className="micro-label">Patient details</p>
+                    <p className="micro-label">{t("patientProfiles")}</p>
                     <h3>{selectedPatient.full_name}</h3>
                   </div>
                   <button
@@ -272,7 +493,7 @@ function AdminOperationsPanel({
 
                 <div className="detail-list">
                   <div>
-                    <strong>Full name</strong>
+                    <strong>{t("fullName")}</strong>
                     <span>{selectedPatient.full_name}</span>
                   </div>
                   <div>
@@ -280,15 +501,15 @@ function AdminOperationsPanel({
                     <span>{selectedPatient.age}</span>
                   </div>
                   <div>
-                    <strong>Sex</strong>
+                    <strong>{t("gender")}</strong>
                     <span>{selectedPatient.sex}</span>
                   </div>
                   <div>
-                    <strong>National ID</strong>
+                    <strong>{t("egyptianNationalId")}</strong>
                     <span>{selectedPatient.national_id || "Not recorded"}</span>
                   </div>
                   <div>
-                    <strong>Governorate</strong>
+                    <strong>{t("governoratePending")}</strong>
                     <span>
                       {selectedPatient.current_governorate ||
                         selectedPatient.inferred_governorate ||
@@ -296,7 +517,7 @@ function AdminOperationsPanel({
                     </span>
                   </div>
                   <div>
-                    <strong>Chronic conditions</strong>
+                    <strong>{t("medicalHistory")}</strong>
                     <span>
                       {selectedPatient.chronic_conditions.length > 0
                         ? selectedPatient.chronic_conditions.join(", ")
@@ -320,7 +541,9 @@ function AdminOperationsPanel({
                       {patientAppointments.length === 0 ? (
                         <div className="empty-state">No appointments recorded.</div>
                       ) : (
-                        patientAppointments.map((appointment) => (
+                        patientAppointments
+                          .slice(0, ADMIN_RELATED_RECORD_LIMIT)
+                          .map((appointment) => (
                           <article key={appointment.id} className="activity-item">
                             <div>
                               <strong>Appointment #{appointment.id}</strong>
@@ -335,7 +558,7 @@ function AdminOperationsPanel({
                             </div>
                             <div className="activity-meta">
                               <span className={`badge badge--status-${appointment.status}`}>
-                                {appointment.status}
+                                {localizeAppointmentStatus(appointment.status, t)}
                               </span>
                               <small>{formatDateTime(appointment.scheduled_for || appointment.requested_at)}</small>
                             </div>
@@ -343,6 +566,15 @@ function AdminOperationsPanel({
                         ))
                       )}
                     </div>
+                    {patientAppointments.length > ADMIN_RELATED_RECORD_LIMIT ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => onNavigate("appointments")}
+                      >
+                        View all {patientAppointments.length} appointments
+                      </button>
+                    ) : null}
                   </div>
 
                   <div>
@@ -351,7 +583,7 @@ function AdminOperationsPanel({
                       {patientVisits.length === 0 ? (
                         <div className="empty-state">No visits recorded.</div>
                       ) : (
-                        patientVisits.map((visit) => (
+                        patientVisits.slice(0, ADMIN_RELATED_RECORD_LIMIT).map((visit) => (
                           <article key={visit.id} className="activity-item">
                             <div>
                               <strong>{visit.diagnosis || "Visit record"}</strong>
@@ -365,6 +597,15 @@ function AdminOperationsPanel({
                         ))
                       )}
                     </div>
+                    {patientVisits.length > ADMIN_RELATED_RECORD_LIMIT ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => onNavigate("visits")}
+                      >
+                        View all {patientVisits.length} visits
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -377,33 +618,38 @@ function AdminOperationsPanel({
                       : "Enter a national ID to search for patients."}
                   </div>
                 ) : (
-                  <div className="activity-list">
-                    {filteredPatients.map((patient) => (
-                      <button
-                        key={patient.id}
-                        type="button"
-                        className="activity-item"
-                        onClick={() => setSelectedPatientId(patient.id)}
-                      >
-                        <div>
+                  <>
+                    <div className="profile-record-table">
+                      <div className="profile-record-table__header">
+                        <span>Patient</span>
+                        <span>National ID</span>
+                        <span>Governorate</span>
+                        <span>Updated</span>
+                        <span>Action</span>
+                      </div>
+                      {paginate(filteredPatients, patientPage).map((patient) => (
+                        <button
+                          key={patient.id}
+                          type="button"
+                          className="profile-record-table__row"
+                          onClick={() => setSelectedPatientId(patient.id)}
+                        >
                           <strong>{patient.full_name}</strong>
-                          <p>
-                            {patient.national_id
-                              ? `National ID: ${patient.national_id}`
-                              : "No national ID"}
-                          </p>
-                          <p>
+                          <span>{patient.national_id || "Not recorded"}</span>
+                          <span>
                             {patient.current_governorate ||
                               patient.inferred_governorate ||
-                              "Governorate pending"}
-                          </p>
-                        </div>
-                        <div className="activity-meta">
-                          <small>{formatDateTime(patient.updated_at)}</small>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                              "Pending"}
+                          </span>
+                          <span>{formatDateTime(patient.updated_at)}</span>
+                          <span className="button button--ghost button--small">
+                            View
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {renderPagination(filteredPatients, patientPage, setPatientPage)}
+                  </>
                 )}
               </div>
             )}
@@ -415,7 +661,10 @@ function AdminOperationsPanel({
               <input
                 id="doctor-search"
                 value={doctorSearch}
-                onChange={(event) => setDoctorSearch(event.target.value)}
+                onChange={(event) => {
+                  setDoctorSearch(event.target.value);
+                  setDoctorPage(1);
+                }}
                 placeholder="Enter doctor name or specialty"
               />
             </div>
@@ -424,7 +673,7 @@ function AdminOperationsPanel({
               <section className="workspace-card workspace-card--compact">
                 <div className="workspace-card__header">
                   <div>
-                    <p className="micro-label">Doctor details</p>
+                    <p className="micro-label">{t("doctorProfiles")}</p>
                     <h3>{selectedDoctor.full_name}</h3>
                   </div>
                   <button
@@ -438,15 +687,15 @@ function AdminOperationsPanel({
 
                 <div className="detail-list">
                   <div>
-                    <strong>Full name</strong>
+                    <strong>{t("fullName")}</strong>
                     <span>{selectedDoctor.full_name}</span>
                   </div>
                   <div>
-                    <strong>Specialty</strong>
+                    <strong>{t("specialty")}</strong>
                     <span>{selectedDoctor.specialty}</span>
                   </div>
                   <div>
-                    <strong>Clinic</strong>
+                    <strong>{t("clinicReview")}</strong>
                     <span>{selectedDoctor.clinic || "Not specified"}</span>
                   </div>
                   <div>
@@ -454,8 +703,283 @@ function AdminOperationsPanel({
                     <span>{selectedDoctor.area || "Not specified"}</span>
                   </div>
                   <div>
-                    <strong>City</strong>
+                    <strong>{t("governoratePending")}</strong>
                     <span>{selectedDoctor.city || "Not specified"}</span>
+                  </div>
+                </div>
+
+                {doctorEditForm ? (
+                  <form
+                    className="form-grid admin-management-panel"
+                    onSubmit={submitDoctorAdminUpdate}
+                  >
+                    <div className="field">
+                      <label htmlFor="admin-doctor-name">{t("fullName")}</label>
+                      <input
+                        id="admin-doctor-name"
+                        value={doctorEditForm.full_name}
+                        onChange={(event) =>
+                          setDoctorEditForm((current) =>
+                            current
+                              ? { ...current, full_name: event.target.value }
+                              : current,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-specialty">
+                        {t("specialty")}
+                      </label>
+                      <input
+                        id="admin-doctor-specialty"
+                        value={doctorEditForm.specialty}
+                        onChange={(event) =>
+                          setDoctorEditForm((current) =>
+                            current
+                              ? { ...current, specialty: event.target.value }
+                              : current,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-clinic">
+                        {t("clinicReview")}
+                      </label>
+                      <input
+                        id="admin-doctor-clinic"
+                        value={doctorEditForm.clinic}
+                        onChange={(event) =>
+                          setDoctorEditForm((current) =>
+                            current
+                              ? { ...current, clinic: event.target.value }
+                              : current,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-area">{t("area")}</label>
+                      <input
+                        id="admin-doctor-area"
+                        value={doctorEditForm.area ?? ""}
+                        onChange={(event) =>
+                          setDoctorEditForm((current) =>
+                            current
+                              ? { ...current, area: event.target.value }
+                              : current,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-city">{t("city")}</label>
+                      <input
+                        id="admin-doctor-city"
+                        value={doctorEditForm.city ?? ""}
+                        onChange={(event) =>
+                          setDoctorEditForm((current) =>
+                            current
+                              ? { ...current, city: event.target.value }
+                              : current,
+                          )
+                        }
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="button button--primary"
+                      disabled={doctorManagementLoading}
+                    >
+                      {doctorManagementLoading
+                        ? t("working")
+                        : t("saveDoctorDetails")}
+                    </button>
+                  </form>
+                ) : null}
+
+                <div className="schedule-management-panel">
+                  <div className="workspace-card__header">
+                    <div>
+                      <p className="micro-label">{t("doctorSchedules")}</p>
+                      <h3>{t("scheduleManagement")}</h3>
+                    </div>
+                    <span className="badge">
+                      {doctorSlots.length} {t("availableSlots")}
+                    </span>
+                  </div>
+
+                  {doctorManagementMessage ? (
+                    <div className="notice">{doctorManagementMessage}</div>
+                  ) : null}
+
+                  <form className="form-grid" onSubmit={submitDoctorSchedule}>
+                    <div className="field">
+                      <label htmlFor="schedule-day">{t("dayOfWeek")}</label>
+                      <select
+                        id="schedule-day"
+                        value={scheduleForm.day_of_week}
+                        onChange={(event) =>
+                          setScheduleForm((current) => ({
+                            ...current,
+                            day_of_week: event.target.value,
+                          }))
+                        }
+                      >
+                        {[
+                          "sunday",
+                          "monday",
+                          "tuesday",
+                          "wednesday",
+                          "thursday",
+                          "friday",
+                          "saturday",
+                        ].map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="schedule-start">{t("startTime")}</label>
+                      <input
+                        id="schedule-start"
+                        type="time"
+                        value={scheduleForm.start_time.slice(0, 5)}
+                        onChange={(event) =>
+                          setScheduleForm((current) => ({
+                            ...current,
+                            start_time: `${event.target.value}:00`,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="schedule-end">{t("endTime")}</label>
+                      <input
+                        id="schedule-end"
+                        type="time"
+                        value={scheduleForm.end_time.slice(0, 5)}
+                        onChange={(event) =>
+                          setScheduleForm((current) => ({
+                            ...current,
+                            end_time: `${event.target.value}:00`,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="schedule-minutes">
+                        {t("slotMinutes")}
+                      </label>
+                      <input
+                        id="schedule-minutes"
+                        type="number"
+                        min={5}
+                        max={240}
+                        value={scheduleForm.slot_minutes}
+                        onChange={(event) =>
+                          setScheduleForm((current) => ({
+                            ...current,
+                            slot_minutes: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="schedule-location">
+                        {t("clinicReview")}
+                      </label>
+                      <input
+                        id="schedule-location"
+                        value={scheduleForm.location_label ?? ""}
+                        onChange={(event) =>
+                          setScheduleForm((current) => ({
+                            ...current,
+                            location_label: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="button button--primary"
+                      disabled={doctorManagementLoading}
+                    >
+                      {doctorManagementLoading ? t("working") : t("addSchedule")}
+                    </button>
+                  </form>
+
+                  <div className="activity-list compact">
+                    {doctorSchedules.length === 0 ? (
+                      <div className="empty-state">{t("noSchedulesRecorded")}</div>
+                    ) : (
+                      doctorSchedules.map((schedule) => (
+                        <article key={schedule.id} className="activity-item">
+                          <div>
+                            <strong>
+                              {schedule.day_of_week} · {schedule.start_time.slice(0, 5)}
+                              -{schedule.end_time.slice(0, 5)}
+                            </strong>
+                            <p>
+                              {schedule.slot_minutes} {t("minutes")} ·{" "}
+                              {schedule.location_label ||
+                                selectedDoctor?.clinic ||
+                                "Clinic"}
+                            </p>
+                          </div>
+                          <div className="activity-meta">
+                            <span
+                              className={`badge ${
+                                schedule.is_active
+                                  ? "badge--status-approved"
+                                  : "badge--status-rejected"
+                              }`}
+                            >
+                              {schedule.is_active ? t("active") : t("inactive")}
+                            </span>
+                            <button
+                              type="button"
+                              className="button button--ghost button--small"
+                              disabled={doctorManagementLoading}
+                              onClick={() =>
+                                toggleSchedule(schedule, !schedule.is_active)
+                              }
+                            >
+                              {schedule.is_active
+                                ? t("deactivate")
+                                : t("activate")}
+                            </button>
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="activity-list compact">
+                    <p className="micro-label">{t("availableSlots")}</p>
+                    {doctorSlots.length === 0 ? (
+                      <div className="empty-state">{t("noSlotsAvailable")}</div>
+                    ) : (
+                      doctorSlots.slice(0, 8).map((slot) => (
+                        <article key={slot.id} className="activity-item">
+                          <div>
+                            <strong>{formatDateTime(slot.start_at)}</strong>
+                            <p>
+                              {slot.clinic?.name ||
+                                selectedDoctor?.clinic ||
+                                "Clinic"}{" "}
+                              · {slot.clinic?.area || selectedDoctor?.area}
+                            </p>
+                          </div>
+                          <div className="activity-meta">
+                            <span className="badge">{localizeSlotStatus(slot.status, t)}</span>
+                          </div>
+                        </article>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -466,7 +990,9 @@ function AdminOperationsPanel({
                       {doctorAppointments.length === 0 ? (
                         <div className="empty-state">No appointments recorded.</div>
                       ) : (
-                        doctorAppointments.map((appointment) => (
+                        doctorAppointments
+                          .slice(0, ADMIN_RELATED_RECORD_LIMIT)
+                          .map((appointment) => (
                           <article key={appointment.id} className="activity-item">
                             <div>
                               <strong>Appointment #{appointment.id}</strong>
@@ -481,7 +1007,7 @@ function AdminOperationsPanel({
                             </div>
                             <div className="activity-meta">
                               <span className={`badge badge--status-${appointment.status}`}>
-                                {appointment.status}
+                                {localizeAppointmentStatus(appointment.status, t)}
                               </span>
                               <small>{formatDateTime(appointment.scheduled_for || appointment.requested_at)}</small>
                             </div>
@@ -489,6 +1015,15 @@ function AdminOperationsPanel({
                         ))
                       )}
                     </div>
+                    {doctorAppointments.length > ADMIN_RELATED_RECORD_LIMIT ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        onClick={() => onNavigate("appointments")}
+                      >
+                        View all {doctorAppointments.length} appointments
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -501,28 +1036,37 @@ function AdminOperationsPanel({
                       : "Enter a name or specialty to search for doctors."}
                   </div>
                 ) : (
-                  <div className="activity-list">
-                    {filteredDoctors.map((doctor) => (
-                      <button
-                        key={doctor.id}
-                        type="button"
-                        className="activity-item"
-                        onClick={() => setSelectedDoctorId(doctor.id)}
-                      >
-                        <div>
+                  <>
+                    <div className="profile-record-table profile-record-table--doctors">
+                      <div className="profile-record-table__header">
+                        <span>Doctor</span>
+                        <span>Specialty</span>
+                        <span>Location</span>
+                        <span>Updated</span>
+                        <span>Action</span>
+                      </div>
+                      {paginate(filteredDoctors, doctorPage).map((doctor) => (
+                        <button
+                          key={doctor.id}
+                          type="button"
+                          className="profile-record-table__row"
+                          onClick={() => setSelectedDoctorId(doctor.id)}
+                        >
                           <strong>{doctor.full_name}</strong>
-                          <p>{doctor.specialty}</p>
-                          <p>
+                          <span>{doctor.specialty}</span>
+                          <span>
                             {[doctor.area, doctor.city].filter(Boolean).join(", ") ||
                               doctor.clinic}
-                          </p>
-                        </div>
-                        <div className="activity-meta">
-                          <small>{formatDateTime(doctor.updated_at)}</small>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                          </span>
+                          <span>{formatDateTime(doctor.updated_at)}</span>
+                          <span className="button button--ghost button--small">
+                            View
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {renderPagination(filteredDoctors, doctorPage, setDoctorPage)}
+                  </>
                 )}
               </div>
             )}
@@ -533,8 +1077,8 @@ function AdminOperationsPanel({
       {/* Keep a short operational summary below the management grid. */}
       <div className="activity-columns">
         <SectionPanel
-          eyebrow="Patients"
-          title="Profile updates"
+          eyebrow={t("patientProfiles")}
+          title={t("updateProfile")}
           description="A short operational snapshot of the latest profile changes."
         >
           <div className="activity-list compact">
@@ -562,8 +1106,8 @@ function AdminOperationsPanel({
         </SectionPanel>
 
         <SectionPanel
-          eyebrow="Doctors"
-          title="Doctor updates"
+          eyebrow={t("doctorProfiles")}
+          title={t("updateDoctorDirectory")}
           description="Recently updated clinicians and public directory entries."
         >
           <div className="activity-list compact">
@@ -604,6 +1148,7 @@ export default function ProfilePanel({
   onSavePatient,
   onSaveDoctor,
 }: ProfilePanelProps) {
+  const { t } = useLanguage();
   const [patientForm, setPatientForm] = useState<PatientProfileFormState>(
     patientProfile
       ? {
@@ -648,6 +1193,39 @@ export default function ProfilePanel({
   const [chronicConditionsInput, setChronicConditionsInput] = useState(
     patientProfile?.chronic_conditions.join(", ") ?? "",
   );
+  const [historyCategory, setHistoryCategory] = useState("diagnosed_condition");
+  const [historyTitle, setHistoryTitle] = useState("");
+  const [historyNotes, setHistoryNotes] = useState("");
+  const [historySaving, setHistorySaving] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<
+    PatientMedicalHistoryEntryResponseDto[]
+  >([]);
+
+  useEffect(() => {
+    if (role !== "patient" || !patientProfile) {
+      setHistoryEntries([]);
+      return;
+    }
+
+    let cancelled = false;
+    listPatientMedicalHistory(patientProfile.id)
+      .then((entries) => {
+        if (!cancelled) {
+          setHistoryEntries(entries);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHistoryEntries([]);
+          setHistoryMessage("Could not load saved medical history entries.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patientProfile, role]);
 
   const parsedNationalId = useMemo(
     () =>
@@ -694,6 +1272,33 @@ export default function ProfilePanel({
     });
   }
 
+  async function submitMedicalHistoryEntry(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!patientProfile || !historyTitle.trim()) {
+      return;
+    }
+    setHistorySaving(true);
+    setHistoryMessage(null);
+    try {
+      const created = await createPatientMedicalHistoryEntry(patientProfile.id, {
+        category: historyCategory,
+        title: historyTitle.trim(),
+        notes: historyNotes.trim() || null,
+        status: "active",
+      });
+      setHistoryEntries((current) => [created, ...current]);
+      setHistoryTitle("");
+      setHistoryNotes("");
+      setHistoryMessage("Medical history entry saved.");
+    } catch {
+      setHistoryMessage("Could not save medical history entry.");
+    } finally {
+      setHistorySaving(false);
+    }
+  }
+
   const dateOfBirth =
     parsedNationalId?.dateOfBirth ??
     patientProfile?.date_of_birth ??
@@ -721,13 +1326,13 @@ export default function ProfilePanel({
     <div className="stack-lg">
       {role === "patient" ? (
         <SectionPanel
-          eyebrow="Patient profile"
-          title="Demographics and identity"
+          eyebrow={t("patientProfiles")}
+          title={t("profileTitle")}
           description="This profile powers patient-aware triage, appointments, and visit history. The national ID can derive date of birth and the governorate encoded inside the ID, while current residence stays editable."
         >
           <form className="form-grid" onSubmit={submitPatientProfile}>
             <div className="field">
-              <label htmlFor="patient-full-name">Full name</label>
+              <label htmlFor="patient-full-name">{t("fullName")}</label>
               <input
                 id="patient-full-name"
                 value={patientForm.full_name}
@@ -752,14 +1357,14 @@ export default function ProfilePanel({
                   }))
                 }
               >
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                <option value="">{t("selectGender")}</option>
+                <option value="Male">{t("male")}</option>
+                <option value="Female">{t("female")}</option>
               </select>
             </div>
 
             <div className="field">
-              <label htmlFor="patient-national-id">Egyptian national ID</label>
+              <label htmlFor="patient-national-id">{t("egyptianNationalId")}</label>
               <input
                 id="patient-national-id"
                 inputMode="numeric"
@@ -842,7 +1447,7 @@ export default function ProfilePanel({
             </div>
 
             <div className="field field--full">
-              <label htmlFor="patient-conditions">Chronic conditions</label>
+              <label htmlFor="patient-conditions">{t("medicalHistory")}</label>
               <input
                 id="patient-conditions"
                 value={chronicConditionsInput}
@@ -902,15 +1507,102 @@ export default function ProfilePanel({
         </SectionPanel>
       ) : null}
 
+      {role === "patient" && patientProfile ? (
+        <SectionPanel
+          eyebrow={t("medicalHistory")}
+          title={t("medicalHistory")}
+          description="Add structured details that should inform future triage, such as diagnosed conditions, injuries, surgeries, allergies, medications, hospitalizations, and family history."
+        >
+          <form className="form-grid" onSubmit={submitMedicalHistoryEntry}>
+            <div className="field">
+              <label htmlFor="history-category">{t("status")}</label>
+              <select
+                id="history-category"
+                value={historyCategory}
+                onChange={(event) => setHistoryCategory(event.target.value)}
+              >
+                <option value="diagnosed_condition">Diagnosed condition</option>
+                <option value="injury">Injury</option>
+                <option value="surgery">Surgery</option>
+                <option value="allergy">Allergy</option>
+                <option value="medication">Current medication</option>
+                <option value="hospitalization">Past hospitalization</option>
+                <option value="family_history">Family history</option>
+                <option value="note">Important note</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="history-title">{t("profileTitle")}</label>
+              <input
+                id="history-title"
+                value={historyTitle}
+                onChange={(event) => setHistoryTitle(event.target.value)}
+                placeholder="Asthma, knee injury, penicillin allergy..."
+              />
+            </div>
+
+            <div className="field field--full">
+              <label htmlFor="history-notes">{t("notes")}</label>
+              <textarea
+                id="history-notes"
+                rows={3}
+                value={historyNotes}
+                onChange={(event) => setHistoryNotes(event.target.value)}
+                placeholder="Add timing, severity, treatment, or relevant context."
+              />
+            </div>
+
+            {historyMessage ? (
+              <div className="notice field--full">{historyMessage}</div>
+            ) : null}
+
+            <button
+              type="submit"
+              className="button button--primary"
+              disabled={historySaving || !historyTitle.trim()}
+            >
+              {historySaving ? "Saving..." : "Add history entry"}
+            </button>
+          </form>
+
+          <div className="activity-list compact medical-history-list">
+            {historyEntries.length === 0 ? (
+              <div className="empty-state">
+                No structured history entries yet. Add surgeries, allergies,
+                medications, injuries, or important notes so future triage has better
+                context.
+              </div>
+            ) : (
+              historyEntries.map((entry) => (
+                <article key={entry.id} className="activity-item">
+                  <div>
+                    <strong>{entry.title}</strong>
+                    <p>
+                      {entry.category.replace(/_/g, " ")} ·{" "}
+                      {entry.status || "status not recorded"}
+                    </p>
+                    <p>{entry.notes || "No notes recorded"}</p>
+                  </div>
+                  <div className="activity-meta">
+                    <small>{formatDateTime(entry.created_at)}</small>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </SectionPanel>
+      ) : null}
+
       {role === "doctor" ? (
         <SectionPanel
-          eyebrow="Doctor profile"
-          title="Clinical identity"
+          eyebrow={t("doctorProfiles")}
+          title={t("profileTitle")}
           description="Choose a primary field from the controlled medical specialty list, then optionally add a more specific scope."
         >
           <form className="form-grid" onSubmit={submitDoctorProfile}>
             <div className="field">
-              <label htmlFor="doctor-full-name">Full name</label>
+              <label htmlFor="doctor-full-name">{t("fullName")}</label>
               <input
                 id="doctor-full-name"
                 value={doctorForm.full_name}
@@ -924,7 +1616,7 @@ export default function ProfilePanel({
             </div>
 
             <div className="field">
-              <label htmlFor="doctor-primary-specialty">Primary specialty</label>
+              <label htmlFor="doctor-primary-specialty">{t("primarySpecialty")}</label>
               <select
                 id="doctor-primary-specialty"
                 value={doctorPrimarySpecialty}
@@ -938,7 +1630,7 @@ export default function ProfilePanel({
                   }));
                 }}
               >
-                <option value="">Select specialty</option>
+                <option value="">{t("selectSpecialty")}</option>
                 {MEDICAL_SPECIALTY_GROUPS.map((option) => (
                   <option key={option.label} value={option.label}>
                     {option.label}
@@ -967,7 +1659,7 @@ export default function ProfilePanel({
             </div>
 
             <div className="field">
-              <label htmlFor="doctor-city">City</label>
+              <label htmlFor="doctor-city">{t("governoratePending")}</label>
               <input
                 id="doctor-city"
                 value={doctorForm.city ?? ""}
@@ -1011,7 +1703,7 @@ export default function ProfilePanel({
             </div>
 
             <div className="callout field--full">
-              <p className="micro-label">Saved display</p>
+              <p className="micro-label">{t("connected")}</p>
               <p>
                 {composeDoctorSpecialty(doctorPrimarySpecialty, doctorSpecialtyScope) ||
                   "Select a primary specialty first"}
@@ -1036,3 +1728,4 @@ export default function ProfilePanel({
     </div>
   );
 }
+

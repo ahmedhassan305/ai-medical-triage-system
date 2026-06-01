@@ -7,6 +7,11 @@ import type {
   TriageResponseDto,
 } from "../api/dto";
 import { apiPaths } from "../api/paths";
+import { useLanguage } from "../i18n/useLanguage";
+import {
+  translateClarificationOption,
+  translateClarificationQuestion,
+} from "../lib/clarificationLocalization";
 
 type Props = {
   originalQuery: string;
@@ -21,6 +26,7 @@ export default function ClarificationPanel({
   patientId,
   onComplete,
 }: Props) {
+  const { t, language } = useLanguage();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -36,6 +42,7 @@ export default function ClarificationPanel({
           }),
         ),
         patient_id: patientId,
+        language,
       };
       const response = await api.post(apiPaths.clarify, payload);
       if (response.data.triage_result) {
@@ -49,18 +56,18 @@ export default function ClarificationPanel({
   return (
     <section className="clarification-panel result-card">
       <div>
-        <p className="micro-label">More detail needed</p>
-        <h3>A few quick questions to better assess your symptoms</h3>
-        <p className="muted-copy">
-          Your answers help us give you more accurate guidance.
-        </p>
+        <p className="micro-label">{t("clarificationTitle")}</p>
+        <h3>{t("clarificationTitle")}</h3>
+        <p className="muted-copy">{t("clarificationHint")}</p>
       </div>
 
       <div className="clarification-list">
         {questions.map((question) => (
           <div key={question.id} className="clarification-question">
             <p>
-              <strong>{question.question}</strong>
+              <strong dir="auto">
+                {translateClarificationQuestion(question, t)}
+              </strong>
             </p>
             {question.options ? (
               <div className="clarification-options">
@@ -78,14 +85,14 @@ export default function ClarificationPanel({
                       }))
                     }
                   >
-                    {option}
+                    {translateClarificationOption(option, t)}
                   </button>
                 ))}
               </div>
             ) : (
               <input
                 type="text"
-                placeholder="Type your answer..."
+                placeholder={t("typeYourAnswer")}
                 onChange={(event) =>
                   setAnswers((current) => ({
                     ...current,
@@ -104,7 +111,7 @@ export default function ClarificationPanel({
         onClick={handleSubmit}
         disabled={loading || Object.keys(answers).length < questions.length}
       >
-        {loading ? "Analyzing..." : "Get My Assessment"}
+        {loading ? t("clarificationAnalyzing") : t("clarificationGetMyAssessment")}
       </button>
     </section>
   );

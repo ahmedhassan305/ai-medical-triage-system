@@ -1,14 +1,17 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type {
   DoctorSuggestionDto,
+  LabValueDto,
   ManagedPatientProfileCreateDto,
   PatientProfileResponseDto,
   RoleType,
   TriageResponseDto,
   VisitResponseDto,
 } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import { localizeUrgencyLevel } from "../lib/localizedDisplay";
 import ClarificationPanel from "./ClarificationPanel";
 import DoctorCard from "./DoctorCard";
 import SectionPanel from "./SectionPanel";
@@ -28,7 +31,11 @@ type TriagePanelProps = {
   patientCreateLoading: boolean;
   patientCreateError: string | null;
   query: string;
+  labValues?: LabValueDto[];
+  labLoading?: boolean;
+  labError?: string | null;
   onQueryChange: (value: string) => void;
+  onLabFileChange?: (file: File | null) => void;
   onLookupNationalIdChange: (value: string) => void;
   onLookupPatient: (nationalId: string) => Promise<void>;
   onClearLinkedPatient: () => void;
@@ -64,17 +71,6 @@ const EMPTY_PATIENT_FORM: ManagedPatientFormState = {
   chronic_conditions: "",
 };
 
-const LIKELIHOOD_LABELS: Record<
-  TriageResponseDto["suspected_conditions"][number]["likelihood"],
-  string
-> = {
-  more_likely: "More likely",
-  "more likely": "More likely",
-  possible: "Possible",
-  less_likely: "Less likely",
-  "less likely": "Less likely",
-};
-
 function summarize(text?: string | null, fallback = "No summary available."): string {
   if (!text) {
     return fallback;
@@ -84,6 +80,24 @@ function summarize(text?: string | null, fallback = "No summary available."): st
     return normalized;
   }
   return `${normalized.slice(0, 157).trimEnd()}...`;
+}
+
+function getLikelihoodLabel(
+  value: TriageResponseDto["suspected_conditions"][number]["likelihood"],
+  t: ReturnType<typeof useLanguage>["t"],
+): string {
+  switch (value) {
+    case "more_likely":
+    case "more likely":
+      return t("moreLikely");
+    case "possible":
+      return t("possible");
+    case "less_likely":
+    case "less likely":
+      return t("lessLikely");
+    default:
+      return value;
+  }
 }
 
 function formatDateTime(dateValue?: string | null): string {
@@ -129,6 +143,7 @@ function StaffPatientLookup({
     payload: ManagedPatientProfileCreateDto,
   ) => Promise<void>;
 }) {
+  const { t, language } = useLanguage();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] =
     useState<ManagedPatientFormState>(EMPTY_PATIENT_FORM);
@@ -184,16 +199,13 @@ function StaffPatientLookup({
     <div className="stack-lg">
       <section className="result-card">
         <div className="result-card__meta">
-          <span className="badge badge--neutral">Staff patient lookup</span>
-          <span className="muted-copy">
-            Use the Egyptian national ID to link triage with the correct patient
-            history.
-          </span>
+          <span className="badge badge--neutral">{t("patientNationalId")}</span>
+          <span className="muted-copy">{t("enterPatientHistoryCopy")}</span>
         </div>
 
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="triage-patient-national-id">Patient national ID</label>
+            <label htmlFor="triage-patient-national-id">{t("patientNationalId")}</label>
             <input
               id="triage-patient-national-id"
               inputMode="numeric"
@@ -204,7 +216,11 @@ function StaffPatientLookup({
                   event.target.value.replace(/\D/g, "").slice(0, 14),
                 )
               }
-              placeholder="14-digit Ø§Ù„Ø±Ù‚Ù… Ø§Ù„Ù‚ÙˆÙ…ÙŠ"
+              placeholder={
+                language === "ar"
+                  ? "الرقم القومي المكون من 14 رقمًا"
+                  : "14-digit national ID"
+              }
             />
           </div>
 
@@ -215,14 +231,14 @@ function StaffPatientLookup({
               disabled={lookupLoading || lookupNationalId.trim().length !== 14}
               onClick={() => onLookupPatient(lookupNationalId)}
             >
-              {lookupLoading ? "Looking up..." : "Find patient"}
+              {lookupLoading ? t("lookingUp") : t("findPatientShort")}
             </button>
             <button
               type="button"
               className="button button--ghost"
               onClick={handleToggleCreateForm}
             >
-              {showCreateForm ? "Close new patient form" : "Create new patient profile"}
+              {showCreateForm ? t("closeNewPatientForm") : t("createNewPatientProfile")}
             </button>
             {linkedPatient ? (
               <button
@@ -230,7 +246,7 @@ function StaffPatientLookup({
                 className="button button--ghost"
                 onClick={onClearLinkedPatient}
               >
-                Clear linked patient
+                {t("clearLinkedPatient")}
               </button>
             ) : null}
           </div>
@@ -242,70 +258,68 @@ function StaffPatientLookup({
           <div className="patient-lookup-card">
             <div className="patient-lookup-card__header">
               <div>
-                <p className="micro-label">Matched patient</p>
+                <p className="micro-label">{t("matchedPatient")}</p>
                 <h3>{linkedPatient.full_name}</h3>
                 <p className="muted-copy">
-                  {linkedPatient.sex} · {linkedPatient.age} years ·{" "}
+                  {linkedPatient.sex} · {linkedPatient.age} {t("years")} ·{" "}
                   {linkedPatient.current_governorate ||
                     linkedPatient.inferred_governorate ||
-                    "Governorate pending"}
+                    t("governoratePendingShort")}
                 </p>
               </div>
               <span className="badge badge--neutral">
-                National ID linked
+                {t("nationalIdLinked")}
               </span>
             </div>
 
             <div className="detail-list">
               <div>
-                <span>Chronic conditions</span>
+                <span>{t("medicalHistory")}</span>
                 <strong>
                   {linkedPatient.chronic_conditions.length > 0
                     ? linkedPatient.chronic_conditions.join(", ")
-                    : "None recorded"}
+                    : t("noneRecorded")}
                 </strong>
               </div>
               <div>
-                <span>Most recent visit</span>
+                <span>{t("latestVisitSummary")}</span>
                 <strong>
                   {latestVisit
                     ? formatDateTime(latestVisit.created_at)
-                    : "No visit history yet"}
+                    : t("visitHistoryNotAvailableYet")}
                 </strong>
               </div>
             </div>
 
             {latestVisit ? (
               <div className="callout">
-                <p className="micro-label">Latest visit summary</p>
+                <p className="micro-label">{t("latestVisit")}</p>
                 <p>
-                  <strong>{latestVisit.diagnosis || "Visit note"}</strong>
+                  <strong>{latestVisit.diagnosis || t("visitNoteRecorded")}</strong>
                 </p>
                 <p>{summarize(latestVisit.notes || latestVisit.symptoms)}</p>
               </div>
             ) : null}
           </div>
         ) : (
-          <div className="empty-state">
-            No patient is currently linked. You can still run anonymous triage, or
-            enter an SSN to use patient history.
-          </div>
+          <div className="empty-state">{t("noPatientLinked")}</div>
         )}
       </section>
 
       {showCreateForm ? (
         <section className="result-card">
           <div className="result-card__meta">
-            <span className="badge badge--neutral">New patient profile</span>
+            <span className="badge badge--neutral">{t("createAccount")}</span>
             <span className="muted-copy">
-              Doctors and admins can register an unlinked patient profile directly
-              from triage when a new case arrives.
+              {language === "ar"
+                ? "يمكن للطبيب أو المسؤول تسجيل ملف مريض جديد مباشرة من الفرز عند وصول حالة جديدة."
+                : "Doctors and admins can register an unlinked patient profile directly from triage when a new case arrives."}
             </span>
           </div>
 
           <form className="form-grid" onSubmit={submitCreateForm}>
             <div className="field">
-              <label htmlFor="triage-create-full-name">Full name</label>
+              <label htmlFor="triage-create-full-name">{t("fullName")}</label>
               <input
                 id="triage-create-full-name"
                 value={createForm.full_name}
@@ -319,7 +333,7 @@ function StaffPatientLookup({
             </div>
 
             <div className="field">
-              <label htmlFor="triage-create-sex">Gender</label>
+              <label htmlFor="triage-create-sex">{t("gender")}</label>
               <select
                 id="triage-create-sex"
                 value={createForm.sex}
@@ -330,14 +344,14 @@ function StaffPatientLookup({
                   }))
                 }
               >
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                <option value="">{t("selectGender")}</option>
+                <option value="Male">{t("male")}</option>
+                <option value="Female">{t("female")}</option>
               </select>
             </div>
 
             <div className="field">
-              <label htmlFor="triage-create-national-id">Egyptian national ID</label>
+              <label htmlFor="triage-create-national-id">{t("egyptianNationalId")}</label>
               <input
                 id="triage-create-national-id"
                 inputMode="numeric"
@@ -358,7 +372,7 @@ function StaffPatientLookup({
 
             <div className="field">
               <label htmlFor="triage-create-governorate">
-                Current governorate / residence
+                {t("currentGovernorateResidence")}
               </label>
               <input
                 id="triage-create-governorate"
@@ -369,12 +383,12 @@ function StaffPatientLookup({
                     current_governorate: event.target.value,
                   }))
                 }
-                placeholder={parsedNationalId?.governorate || "Optional override"}
+                placeholder={parsedNationalId?.governorate || t("optionalOverride")}
               />
             </div>
 
             <div className="field field--full">
-              <label htmlFor="triage-create-conditions">Chronic conditions</label>
+              <label htmlFor="triage-create-conditions">{t("medicalHistory")}</label>
               <input
                 id="triage-create-conditions"
                 value={createForm.chronic_conditions}
@@ -384,7 +398,7 @@ function StaffPatientLookup({
                     chronic_conditions: event.target.value,
                   }))
                 }
-                placeholder="hypertension, asthma, diabetes"
+                placeholder={t("chronicConditionsExample")}
               />
             </div>
 
@@ -399,7 +413,7 @@ function StaffPatientLookup({
                   }))
                 }
               />
-              Smoker
+              {t("smoker")}
             </label>
 
             <label className="checkbox">
@@ -413,12 +427,12 @@ function StaffPatientLookup({
                   }))
                 }
               />
-              Alcohol use
+              {t("alcoholUse")}
             </label>
 
             {nationalIdInvalid ? (
               <div className="notice notice--error">
-                Enter a valid 14-digit Egyptian national ID.
+                {t("enterValidNationalId")}
               </div>
             ) : null}
 
@@ -437,7 +451,7 @@ function StaffPatientLookup({
                 nationalIdInvalid
               }
             >
-              {createLoading ? "Creating..." : "Create patient profile"}
+              {createLoading ? t("creating") : t("createPatientProfile")}
             </button>
           </form>
         </section>
@@ -460,7 +474,11 @@ export default function TriagePanel({
   patientCreateLoading,
   patientCreateError,
   query,
+  labValues = [],
+  labLoading = false,
+  labError = null,
   onQueryChange,
+  onLabFileChange = () => undefined,
   onLookupNationalIdChange,
   onLookupPatient,
   onClearLinkedPatient,
@@ -469,41 +487,48 @@ export default function TriagePanel({
   onClarificationComplete,
   onReserveAppointment,
 }: TriagePanelProps) {
+  const { t } = useLanguage();
+  const urgencyLabel =
+    ["low", "medium", "high"].includes(
+      result?.urgency_label.trim().toLowerCase() ?? "",
+    )
+      ? localizeUrgencyLevel(result?.urgency_label ?? "", t)
+      : result?.urgency_label ?? "";
+
   return (
     <SectionPanel
-      eyebrow="AI-supported triage"
-      title="Understand urgency, possible causes, and next steps"
-      description="Describe symptoms in your own words. Patient-linked triage can also incorporate previous visits and chronic conditions."
+      eyebrow={t("triageTitle")}
+      title={t("triageDescription")}
+      description={t("describeSymptomsEmpty")}
     >
       {role === "patient" ? (
         <div className="result-card">
           <div className="result-card__meta">
-            <span className="badge badge--neutral">Linked patient profile</span>
+            <span className="badge badge--neutral">{t("patientProfiles")}</span>
             <span className="muted-copy">
               {patientProfile
-                ? "Your own profile and history will be used automatically."
-                : "Complete your patient profile to let triage use your history."}
+                ? t("patientProfileWillBeUsedAutomatically")
+                : t("completeProfileToUseHistory")}
             </span>
           </div>
           {patientProfile ? (
             <div className="detail-list">
               <div>
-                <span>Patient</span>
+                <span>{t("matchedPatient")}</span>
                 <strong>{patientProfile.full_name}</strong>
               </div>
               <div>
-                <span>Current governorate</span>
+                <span>{t("governoratePending")}</span>
                 <strong>
                   {patientProfile.current_governorate ||
                     patientProfile.inferred_governorate ||
-                    "Governorate pending"}
+                    t("governoratePendingShort")}
                 </strong>
               </div>
             </div>
           ) : (
             <div className="empty-state">
-              No patient profile is linked yet. You can still run triage, but visit
-              history will not be considered until the profile is complete.
+              {t("noPatientProfileLinkedYet")}
             </div>
           )}
         </div>
@@ -526,7 +551,11 @@ export default function TriagePanel({
       <TriageForm
         query={query}
         loading={loading}
+        labValues={labValues}
+        labLoading={labLoading}
+        labError={labError}
         onQueryChange={onQueryChange}
+        onLabFileChange={onLabFileChange}
         onSubmit={onSubmit}
       />
 
@@ -544,42 +573,44 @@ export default function TriagePanel({
           <section className="result-card result-card--hero">
             <div className="result-card__meta">
               <span className={`badge badge--${result.triage_level}`}>
-                {result.triage_level.toUpperCase()}
+                {localizeUrgencyLevel(result.triage_level, t)}
               </span>
               <span className="muted-copy">
-                {result.history_used
-                  ? "Past visits and profile data were used."
-                  : "No linked patient history was used."}
+                {result.history_used ? t("historyUsed") : t("historyNotUsed")}
               </span>
             </div>
 
             <div className="stack-md">
               <div>
-                <p className="micro-label">Urgency</p>
-                <h3 className="result-title">{result.urgency_label}</h3>
-                <p>{result.patient_friendly_explanation}</p>
+                <p className="micro-label">{t("status")}</p>
+                <h3 className="result-title" dir="auto">
+                  {urgencyLabel}
+                </h3>
+                <p dir="auto">{result.patient_friendly_explanation}</p>
               </div>
 
               {result.urgency_reason ? (
                 <div className="callout callout--next-step">
-                  <p className="micro-label">Why this needs attention</p>
-                  <p>{result.urgency_reason}</p>
+                  <p className="micro-label">{t("attention")}</p>
+                  <p dir="auto">{result.urgency_reason}</p>
                 </div>
               ) : null}
 
               {result.recommended_actions[0] ? (
                 <div className="callout">
-                  <p className="micro-label">What to do now</p>
-                  <p>{result.recommended_actions[0]}</p>
+                  <p className="micro-label">{t("topNextStep")}</p>
+                  <p dir="auto">{result.recommended_actions[0]}</p>
                 </div>
               ) : null}
 
               {result.red_flags.length > 0 ? (
                 <div className="callout callout--warning">
-                  <p className="micro-label">Warning signs to watch for</p>
+                  <p className="micro-label">{t("attention")}</p>
                   <ul className="list">
                     {result.red_flags.map((flag) => (
-                      <li key={flag}>{flag}</li>
+                      <li key={flag} dir="auto">
+                        {flag}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -589,59 +620,52 @@ export default function TriagePanel({
 
           <div className="result-grid">
             <section className="result-card">
-              <p className="micro-label">Clinical summary</p>
-              <p>{result.clinical_summary}</p>
+              <p className="micro-label">{t("recentClinicalSummary")}</p>
+              <p dir="auto">{result.clinical_summary}</p>
             </section>
 
             <section className="result-card">
-              <p className="micro-label">Recommended specialty</p>
-              <p>{result.recommended_specialty ?? "General Practice"}</p>
+              <p className="micro-label">{t("recommendedSpecialty")}</p>
+              <p>{result.recommended_specialty ?? t("generalPractice")}</p>
               {result.specialty_reason ? (
-                <p className="muted-copy">{result.specialty_reason}</p>
-              ) : (
-                <p className="muted-copy">
-                  The leading possible conditions and supporting references fit this
-                  specialty best.
+                <p className="muted-copy" dir="auto">
+                  {result.specialty_reason}
                 </p>
+              ) : (
+                <p className="muted-copy">{t("supportingReferencesFitSpecialty")}</p>
               )}
             </section>
           </div>
 
-          <section className="result-card">
-            <p className="micro-label">Possible conditions</p>
-            {result.suspected_conditions.length === 0 ? (
-              <p className="muted-copy">
-                The system could not rank likely conditions confidently from the
-                current symptoms alone.
-              </p>
-            ) : (
-              <div className="condition-list">
-                {result.suspected_conditions.map((condition) => (
-                  <article key={condition.name} className="condition-card">
-                    <div className="condition-card__header">
-                      <strong>{condition.name}</strong>
-                      <span className="badge badge--neutral">
-                        {LIKELIHOOD_LABELS[condition.likelihood]}
-                      </span>
-                    </div>
-                    <p>{condition.explanation}</p>
-                  </article>
-                ))}
-              </div>
+            <section className="result-card">
+              <p className="micro-label">{t("possibleConditions")}</p>
+              {result.suspected_conditions.length === 0 ? (
+                <p className="muted-copy">{t("couldNotRankConditions")}</p>
+              ) : (
+                <div className="condition-list">
+                  {result.suspected_conditions.map((condition) => (
+                    <article key={condition.name} className="condition-card">
+                      <div className="condition-card__header">
+                        <strong>{condition.name}</strong>
+                        <span className="badge badge--neutral">
+                          {getLikelihoodLabel(condition.likelihood, t)}
+                        </span>
+                      </div>
+                      <p dir="auto">{condition.explanation}</p>
+                    </article>
+                  ))}
+                </div>
             )}
           </section>
 
           <div className="result-grid">
             <section className="result-card">
-              <p className="micro-label">Suggested doctors</p>
+              <p className="micro-label">{t("latestDoctorRecommendation")}</p>
               {result.suggested_doctors.length === 0 ? (
-                <p className="muted-copy">
-                  No doctors matched this specialty yet. You can still book through
-                  appointments.
-                </p>
+                <p className="muted-copy">{t("noDoctorsMatchedYet")}</p>
               ) : (
                 <div className="stack-md">
-                  {result.suggested_doctors.map((doctor) => {
+                  {result.suggested_doctors.map((doctor, index) => {
                     const patientLoc =
                       role === "patient"
                         ? patientProfile?.current_governorate ||
@@ -653,14 +677,15 @@ export default function TriagePanel({
                       <DoctorCard
                         key={doctor.id}
                         doctor={doctor}
-                        specialty={result.recommended_specialty || "General Practice"}
+                        specialty={result.recommended_specialty || t("generalPractice")}
                         patientLocation={patientLoc || null}
+                        rank={index + 1}
                         onReserveAppointment={
                           onReserveAppointment
                             ? () =>
                                 onReserveAppointment(
                                   doctor,
-                                  result.recommended_specialty || "General Practice",
+                                  result.recommended_specialty || t("generalPractice"),
                                   query,
                                 )
                             : undefined
@@ -673,10 +698,12 @@ export default function TriagePanel({
             </section>
 
             <section className="result-card">
-              <p className="micro-label">Recommended next steps</p>
+              <p className="micro-label">{t("topNextStep")}</p>
               <ul className="list">
                 {result.recommended_actions.map((action) => (
-                  <li key={action}>{action}</li>
+                  <li key={action} dir="auto">
+                    {action}
+                  </li>
                 ))}
               </ul>
             </section>
@@ -684,7 +711,7 @@ export default function TriagePanel({
 
           {result.supporting_references.length > 0 ? (
             <section className="result-card">
-              <p className="micro-label">Supporting medical references</p>
+              <p className="micro-label">{t("supportingMedicalReferences")}</p>
               <div className="reference-list">
                 {result.supporting_references.map((reference) => (
                   <article
@@ -692,10 +719,12 @@ export default function TriagePanel({
                     className="reference-card"
                   >
                     <p>
-                      <strong>{reference.title}</strong>
+                      <strong dir="auto">{reference.title}</strong>
                     </p>
-                    <p className="muted-copy">{reference.source}</p>
-                    <p>{reference.snippet}</p>
+                    <p className="muted-copy" dir="auto">
+                      {reference.source}
+                    </p>
+                    <p dir="auto">{reference.snippet}</p>
                     {reference.url ? (
                       <a
                         className="reference-link"
@@ -703,7 +732,7 @@ export default function TriagePanel({
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Open source
+                        {t("openSource")}
                       </a>
                     ) : null}
                   </article>
@@ -713,13 +742,17 @@ export default function TriagePanel({
           ) : null}
 
           <section className="result-card">
-            <p className="micro-label">Safety note</p>
-            <p className="muted-copy">{result.disclaimer}</p>
+            <p className="micro-label">{t("attention")}</p>
+            <p className="muted-copy" dir="auto">
+              {result.disclaimer}
+            </p>
           </section>
         </div>
       ) : null}
     </SectionPanel>
   );
 }
+
+
 
 

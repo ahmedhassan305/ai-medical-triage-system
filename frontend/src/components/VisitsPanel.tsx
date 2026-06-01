@@ -5,6 +5,7 @@ import type {
   RoleType,
   VisitResponseDto,
 } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
 
 type VisitsPanelProps = {
@@ -37,6 +38,7 @@ export default function VisitsPanel({
   onSelectPatient,
   onCreateVisit,
 }: VisitsPanelProps) {
+  const { t } = useLanguage();
   const [patientId, setPatientId] = useState<number | "">(selectedPatientId ?? "");
   const [patientSearch, setPatientSearch] = useState("");
   const [symptoms, setSymptoms] = useState("");
@@ -78,7 +80,7 @@ export default function VisitsPanel({
   return (
     <SectionPanel
       eyebrow="Clinical records"
-      title="Visits"
+      title={t("visitsTitle")}
       description="Create visits as a clinician or inspect the visit timeline for the active patient."
     >
       {role === "doctor" || role === "admin" ? (
@@ -86,13 +88,13 @@ export default function VisitsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Create visit</p>
-                <h3>Document today&apos;s consultation</h3>
+                <p className="micro-label">{t("createVisit")}</p>
+                <h3>{t("visitsDescription")}</h3>
               </div>
             </div>
             <form className="form-grid" onSubmit={handleCreate}>
               <div className="field">
-                <label htmlFor="visit-patient-search">Patient national ID</label>
+                <label htmlFor="visit-patient-search">{t("patientNationalId")}</label>
                 <input
                   id="visit-patient-search"
                   type="text"
@@ -102,7 +104,7 @@ export default function VisitsPanel({
                 />
               </div>
               <div className="field">
-                <label htmlFor="visit-patient">Patient</label>
+                <label htmlFor="visit-patient">{t("patient")}</label>
                 <select
                   id="visit-patient"
                   value={patientId}
@@ -112,7 +114,7 @@ export default function VisitsPanel({
                     onSelectPatient(nextValue);
                   }}
                 >
-                  <option value="">Select patient</option>
+                  <option value="">{t("selectPatient")}</option>
                   {filteredPatientOptions.map((patient) => (
                     <option key={patient.id} value={patient.id}>
                       {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
@@ -122,7 +124,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field field--full">
-                <label htmlFor="visit-symptoms">Symptoms</label>
+                <label htmlFor="visit-symptoms">{t("symptomLabel")}</label>
                 <textarea
                   id="visit-symptoms"
                   rows={4}
@@ -133,7 +135,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field">
-                <label htmlFor="visit-diagnosis">Diagnosis</label>
+                <label htmlFor="visit-diagnosis">{t("diagnosis")}</label>
                 <input
                   id="visit-diagnosis"
                   value={diagnosis}
@@ -142,7 +144,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field">
-                <label htmlFor="visit-prescriptions">Prescriptions</label>
+                <label htmlFor="visit-prescriptions">{t("notes")}</label>
                 <input
                   id="visit-prescriptions"
                   value={prescriptions}
@@ -151,7 +153,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field field--full">
-                <label htmlFor="visit-notes">Notes</label>
+                <label htmlFor="visit-notes">{t("notes")}</label>
                 <textarea
                   id="visit-notes"
                   rows={3}
@@ -173,8 +175,8 @@ export default function VisitsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Visit history</p>
-                <h3>Recent clinician notes</h3>
+                <p className="micro-label">{t("visitHistory")}</p>
+                <h3>{t("recentVisitNotes")}</h3>
               </div>
             </div>
             {error ? <div className="notice notice--error">{error}</div> : null}
@@ -197,21 +199,21 @@ export default function VisitsPanel({
                       </div>
                     </div>
                     <p>
-                      <strong>Symptoms:</strong> {visit.symptoms}
+                      <strong>{t("symptomLabel")}:</strong> {visit.symptoms}
                     </p>
                     {visit.diagnosis ? (
                       <p>
-                        <strong>Diagnosis:</strong> {visit.diagnosis}
+                        <strong>{t("diagnosis")}:</strong> {visit.diagnosis}
                       </p>
                     ) : null}
                     {visit.notes ? (
                       <p>
-                        <strong>Notes:</strong> {visit.notes}
+                        <strong>{t("notes")}:</strong> {visit.notes}
                       </p>
                     ) : null}
                     {visit.prescriptions ? (
                       <p>
-                        <strong>Prescriptions:</strong> {visit.prescriptions}
+                        <strong>{t("notes")}:</strong> {visit.prescriptions}
                       </p>
                     ) : null}
                   </article>
@@ -253,21 +255,21 @@ export default function VisitsPanel({
                     </div>
                   </div>
                   <p>
-                    <strong>Symptoms:</strong> {visit.symptoms}
+                    <strong>{t("symptomLabel")}:</strong> {visit.symptoms}
                   </p>
                   {visit.diagnosis ? (
                     <p>
-                      <strong>Diagnosis:</strong> {visit.diagnosis}
+                      <strong>{t("diagnosis")}:</strong> {visit.diagnosis}
                     </p>
                   ) : null}
                   {visit.notes ? (
                     <p>
-                      <strong>Notes:</strong> {visit.notes}
+                      <strong>{t("notes")}:</strong> {visit.notes}
                     </p>
                   ) : null}
                   {visit.prescriptions ? (
                     <p>
-                      <strong>Prescriptions:</strong> {visit.prescriptions}
+                      <strong>{t("notes")}:</strong> {visit.prescriptions}
                     </p>
                   ) : null}
                 </article>
@@ -279,3 +281,4 @@ export default function VisitsPanel({
     </SectionPanel>
   );
 }
+

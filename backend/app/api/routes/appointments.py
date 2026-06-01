@@ -25,6 +25,7 @@ from app.services.slot_booking import (
     get_primary_doctor_clinic,
     load_appointments_with_relations,
     reserve_slot_for_appointment,
+    scheduled_time_is_available,
     sync_slot_status_for_appointment,
 )
 
@@ -103,6 +104,7 @@ def create_appointment(
                 reason=payload.reason,
                 notes=payload.notes,
                 slot_id=payload.slot_id,
+                clinic_id=payload.clinic_id,
             )
         except SlotBookingValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -116,11 +118,43 @@ def create_appointment(
         assert appointment is not None
         return _serialize_appointment(appointment)
 
-    appointment = Appointment(**payload.model_dump(), status="requested")
-    if appointment.clinic_id is None:
+    resolved_clinic_id = payload.clinic_id
+    if resolved_clinic_id is None:
         primary_doctor_clinic = get_primary_doctor_clinic(db, payload.doctor_id)
         if primary_doctor_clinic is not None:
-            appointment.clinic_id = primary_doctor_clinic.clinic_id
+            resolved_clinic_id = primary_doctor_clinic.clinic_id
+    if payload.scheduled_for is not None and not scheduled_time_is_available(
+        db,
+        doctor_id=payload.doctor_id,
+        scheduled_for=payload.scheduled_for,
+        clinic_id=resolved_clinic_id,
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Requested time is outside the doctor's available schedule.",
+        )
+    if resolved_clinic_id is None:
+        primary_doctor_clinic = get_primary_doctor_clinic(db, payload.doctor_id)
+        if primary_doctor_clinic is not None:
+            resolved_clinic_id = primary_doctor_clinic.clinic_id
+    if payload.scheduled_for is not None:
+        existing_appointment = (
+            db.query(Appointment)
+            .filter(
+                Appointment.doctor_id == payload.doctor_id,
+                Appointment.scheduled_for == payload.scheduled_for,
+                Appointment.status.in_(["requested", "approved"]),
+            )
+            .first()
+        )
+        if existing_appointment is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="This appointment time is no longer available.",
+            )
+
+    appointment = Appointment(**payload.model_dump(), status="requested")
+    appointment.clinic_id = resolved_clinic_id
     db.add(appointment)
     db.commit()
     appointment = (

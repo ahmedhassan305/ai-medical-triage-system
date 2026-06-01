@@ -48,6 +48,23 @@ class SuspectedCondition(BaseModel):
 class TriageRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     patient_id: int | None = None
+    lab_values: list[dict[str, str | None]] = Field(default_factory=list)
+
+
+class LabValue(BaseModel):
+    lab_name: str
+    value: str
+    unit: str | None = None
+    reference_range: str | None = None
+
+
+class LabPdfExtractionResponse(BaseModel):
+    filename: str
+    values: list[LabValue] = Field(default_factory=list)
+    warning: str = (
+        "Automated lab extraction may be imperfect. Confirm values before relying "
+        "on them clinically."
+    )
 
 
 class ClarificationQuestion(BaseModel):
@@ -140,3 +157,16 @@ class StructuredReasoningOutput(BaseModel):
     recommended_actions: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)
     clinical_features: ClinicalFeatures | None = None
+
+
+class RejectedSpecialty(BaseModel):
+    specialty: str = ""
+    reason: str = ""
+
+
+class SpecialtyAdjudicationOutput(BaseModel):
+    final_specialty: str | None = None
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reasoning: str = ""
+    rejected_specialties: list[RejectedSpecialty] = Field(default_factory=list)
+    relevant_reference_titles: list[str] = Field(default_factory=list)
