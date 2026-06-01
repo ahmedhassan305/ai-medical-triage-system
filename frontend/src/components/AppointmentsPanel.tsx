@@ -104,14 +104,25 @@ export default function AppointmentsPanel({
 }: AppointmentsPanelProps) {
   const { t, language } = useLanguage();
   const formRef = useRef<HTMLFormElement | null>(null);
-  const [doctorId, setDoctorId] = useState<number | "">(preFill?.doctorId ?? "");
-  const [patientId, setPatientId] = useState<number | "">(currentPatientId ?? "");
-  const [resolvedPatient, setResolvedPatient] = useState<PatientProfileResponseDto | null>(null);
+  const [doctorId, setDoctorId] = useState<number | "">(
+    preFill?.doctorId ?? "",
+  );
+  const [patientId, setPatientId] = useState<number | "">(
+    currentPatientId ?? "",
+  );
+  const [resolvedPatient, setResolvedPatient] =
+    useState<PatientProfileResponseDto | null>(null);
   const [patientNationalId, setPatientNationalId] = useState("");
   const [patientLookupLoading, setPatientLookupLoading] = useState(false);
-  const [patientLookupError, setPatientLookupError] = useState<string | null>(null);
-  const [selectedSpecialty, setSelectedSpecialty] = useState(preFill?.specialty ?? "");
-  const [availableSlots, setAvailableSlots] = useState<AppointmentSlotDto[]>([]);
+  const [patientLookupError, setPatientLookupError] = useState<string | null>(
+    null,
+  );
+  const [selectedSpecialty, setSelectedSpecialty] = useState(
+    preFill?.specialty ?? "",
+  );
+  const [availableSlots, setAvailableSlots] = useState<AppointmentSlotDto[]>(
+    [],
+  );
   const [selectedSlotId, setSelectedSlotId] = useState<number | "">("");
   const [slotLoading, setSlotLoading] = useState(false);
   const [slotError, setSlotError] = useState<string | null>(null);
@@ -138,38 +149,52 @@ export default function AppointmentsPanel({
   >({});
 
   const specialties = useMemo(
-    () => Array.from(new Set(doctors.map((doctor) => doctor.specialty).filter(Boolean))).sort(),
+    () =>
+      Array.from(
+        new Set(doctors.map((doctor) => doctor.specialty).filter(Boolean)),
+      ).sort(),
     [doctors],
   );
   const filteredDoctors = selectedSpecialty
     ? doctors.filter((doctor) => doctor.specialty === selectedSpecialty)
     : doctors;
-  const selectedDoctor = doctors.find((doctor) => doctor.id === Number(doctorId));
-  const selectedSlot = availableSlots.find((slot) => slot.id === Number(selectedSlotId));
+  const selectedDoctor = doctors.find(
+    (doctor) => doctor.id === Number(doctorId),
+  );
+  const selectedSlot = availableSlots.find(
+    (slot) => slot.id === Number(selectedSlotId),
+  );
 
   useEffect(() => {
     if (!preFill) {
       return;
     }
-    setDoctorId(preFill.doctorId);
-    setSelectedSpecialty(preFill.specialty);
-    setReason(preFill.reason);
-    setNotes(preFill.notes ?? "");
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const el = formRef.current;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, [preFill]);
 
   useEffect(() => {
     if (!doctorId) {
-      setAvailableSlots([]);
-      setSelectedSlotId("");
+      Promise.resolve().then(() => {
+        setAvailableSlots([]);
+        setSelectedSlotId("");
+      });
       return;
     }
 
     let cancelled = false;
-    setSlotLoading(true);
-    setSlotError(null);
-    setSelectedSlotId("");
-      listDoctorSlots(Number(doctorId))
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setSlotLoading(true);
+        setSlotError(null);
+        setSelectedSlotId("");
+      }
+    });
+
+    listDoctorSlots(Number(doctorId))
       .then((slots) => {
         if (!cancelled) {
           setAvailableSlots(slots.filter((slot) => slot.status === "open"));
@@ -259,8 +284,12 @@ export default function AppointmentsPanel({
     let comparison = 0;
 
     if (sortBy === "date") {
-      const leftDate = new Date(left.scheduled_for || left.requested_at).getTime();
-      const rightDate = new Date(right.scheduled_for || right.requested_at).getTime();
+      const leftDate = new Date(
+        left.scheduled_for || left.requested_at,
+      ).getTime();
+      const rightDate = new Date(
+        right.scheduled_for || right.requested_at,
+      ).getTime();
       comparison = leftDate - rightDate;
     } else if (sortBy === "id") {
       comparison = left.id - right.id;
@@ -281,12 +310,22 @@ export default function AppointmentsPanel({
     (appointment) => appointment.status === "rejected",
   );
   const activeAppointments = [...pendingAppointments, ...confirmedAppointments];
-  const previousAppointments = [...completedAppointments, ...rejectedAppointments];
+  const previousAppointments = [
+    ...completedAppointments,
+    ...rejectedAppointments,
+  ];
 
-  useEffect(() => {
+  function handleSortByChange(value: "date" | "id") {
+    setSortBy(value);
     setActivePage(1);
     setPreviousPage(1);
-  }, [appointments.length, sortBy, sortDirection]);
+  }
+
+  function handleSortDirectionToggle() {
+    setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    setActivePage(1);
+    setPreviousPage(1);
+  }
 
   function paginateAppointments(
     items: AppointmentResponseDto[],
@@ -321,49 +360,49 @@ export default function AppointmentsPanel({
         <span>
           Showing {startItem}-{endItem} of {items.length}
         </span>
-          <div className="button-row">
-            <button
-              type="button"
-              className="button button--ghost button--small"
-              disabled={safePage === 1}
-              onClick={() => setPage(Math.max(1, safePage - 1))}
-            >
-              {t("previous")}
-            </button>
-            <span className="pagination-strip__page">
-              {t("page")} {safePage} {t("of")} {pageCount}
-            </span>
-            <button
-              type="button"
-              className="button button--ghost button--small"
-              disabled={safePage === pageCount}
-              onClick={() => setPage(Math.min(pageCount, safePage + 1))}
-            >
-              {t("next")}
-            </button>
-          </div>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === 1}
+            onClick={() => setPage(Math.max(1, safePage - 1))}
+          >
+            {t("previous")}
+          </button>
+          <span className="pagination-strip__page">
+            {t("page")} {safePage} {t("of")} {pageCount}
+          </span>
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            disabled={safePage === pageCount}
+            onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+          >
+            {t("next")}
+          </button>
         </div>
+      </div>
     );
   }
 
   function getPatientName(appointment: AppointmentResponseDto): string {
     return (
-      patients.find((patient) => patient.id === appointment.patient_id)?.full_name ??
-      `${t("patientNumber")} #${appointment.patient_id}`
+      patients.find((patient) => patient.id === appointment.patient_id)
+        ?.full_name ?? `${t("patientNumber")} #${appointment.patient_id}`
     );
   }
 
   function getDoctorName(appointment: AppointmentResponseDto): string {
     return (
-      doctors.find((doctor) => doctor.id === appointment.doctor_id)?.full_name ??
-      `${t("doctorNumber")} #${appointment.doctor_id}`
+      doctors.find((doctor) => doctor.id === appointment.doctor_id)
+        ?.full_name ?? `${t("doctorNumber")} #${appointment.doctor_id}`
     );
   }
 
   function getDoctorSpecialty(appointment: AppointmentResponseDto): string {
     return (
-      doctors.find((doctor) => doctor.id === appointment.doctor_id)?.specialty ??
-      t("specialtyNotRecorded")
+      doctors.find((doctor) => doctor.id === appointment.doctor_id)
+        ?.specialty ?? t("specialtyNotRecorded")
     );
   }
 
@@ -407,14 +446,18 @@ export default function AppointmentsPanel({
     }
     return Boolean(
       appointment.status === "approved" &&
-        appointment.scheduled_for &&
-        new Date(appointment.scheduled_for) <= new Date(),
+      appointment.scheduled_for &&
+      new Date(appointment.scheduled_for) <= new Date(),
     );
   }
 
   async function handleDoctorReviewSubmit(appointment: AppointmentResponseDto) {
     const form = getReviewForm(appointment.id);
-    updateReviewForm(appointment.id, { loading: true, error: null, success: false });
+    updateReviewForm(appointment.id, {
+      loading: true,
+      error: null,
+      success: false,
+    });
     try {
       await submitDoctorReview({
         doctor_id: appointment.doctor_id,
@@ -426,7 +469,8 @@ export default function AppointmentsPanel({
     } catch (error) {
       updateReviewForm(appointment.id, {
         loading: false,
-        error: error instanceof Error ? error.message : "Could not submit review.",
+        error:
+          error instanceof Error ? error.message : "Could not submit review.",
       });
     }
   }
@@ -444,10 +488,15 @@ export default function AppointmentsPanel({
     const showReviewForm = canReviewAppointment(appointment);
 
     return (
-      <article key={appointment.id} className="entity-card entity-card--appointment">
+      <article
+        key={appointment.id}
+        className="entity-card entity-card--appointment"
+      >
         <div className="entity-card__header">
           <div>
-            <h3>{t("appointmentId")} #{appointment.id}</h3>
+            <h3>
+              {t("appointmentId")} #{appointment.id}
+            </h3>
             <p dir="auto">{appointment.reason}</p>
           </div>
           <span className={`badge badge--status-${appointment.status}`}>
@@ -475,7 +524,8 @@ export default function AppointmentsPanel({
         </div>
 
         <p className="muted-copy">
-          {t("requestedAt")}: {formatRequestedAt(appointment.requested_at, language)}
+          {t("requestedAt")}:{" "}
+          {formatRequestedAt(appointment.requested_at, language)}
         </p>
         {appointment.notes ? (
           <p className="muted-copy" dir="auto">
@@ -497,7 +547,9 @@ export default function AppointmentsPanel({
                   className={`doctor-review-star ${
                     value <= reviewForm.rating ? "is-active" : ""
                   }`}
-                  onClick={() => updateReviewForm(appointment.id, { rating: value })}
+                  onClick={() =>
+                    updateReviewForm(appointment.id, { rating: value })
+                  }
                   aria-label={`${value}`}
                 >
                   ★
@@ -508,7 +560,9 @@ export default function AppointmentsPanel({
               rows={2}
               value={reviewForm.comment}
               onChange={(event) =>
-                updateReviewForm(appointment.id, { comment: event.target.value })
+                updateReviewForm(appointment.id, {
+                  comment: event.target.value,
+                })
               }
               placeholder={t("optionalReviewComment")}
             />
@@ -544,19 +598,24 @@ export default function AppointmentsPanel({
                 {t("viewDetails")}
               </button>
             ) : null}
-            {options.showWorkflowActions && appointment.status === "requested" ? (
+            {options.showWorkflowActions &&
+            appointment.status === "requested" ? (
               <>
                 <button
                   type="button"
                   className="button button--primary"
-                  onClick={() => onUpdateStatus(appointment.id, { status: "approved" })}
+                  onClick={() =>
+                    onUpdateStatus(appointment.id, { status: "approved" })
+                  }
                 >
                   {t("approve")}
                 </button>
                 <button
                   type="button"
                   className="button button--ghost"
-                  onClick={() => onUpdateStatus(appointment.id, { status: "rejected" })}
+                  onClick={() =>
+                    onUpdateStatus(appointment.id, { status: "rejected" })
+                  }
                 >
                   {t("reject")}
                 </button>
@@ -606,7 +665,9 @@ export default function AppointmentsPanel({
                 <strong>#{appointment.id}</strong>
                 <span>{getPatientName(appointment)}</span>
                 <span>{getDoctorName(appointment)}</span>
-                <span>{formatDateTime(appointment.scheduled_for, language)}</span>
+                <span>
+                  {formatDateTime(appointment.scheduled_for, language)}
+                </span>
                 <span className={`badge badge--status-${appointment.status}`}>
                   {renderStatusLabel(appointment.status, t)}
                 </span>
@@ -629,7 +690,9 @@ export default function AppointmentsPanel({
     if (!selectedAppointment) {
       return null;
     }
-    const patient = patients.find((item) => item.id === selectedAppointment.patient_id);
+    const patient = patients.find(
+      (item) => item.id === selectedAppointment.patient_id,
+    );
 
     return (
       <div className="detail-drawer" role="dialog" aria-modal="true">
@@ -637,7 +700,9 @@ export default function AppointmentsPanel({
           <div className="entity-card__header">
             <div>
               <p className="micro-label">{t("appointmentDetails")}</p>
-              <h3>{t("appointmentId")} #{selectedAppointment.id}</h3>
+              <h3>
+                {t("appointmentId")} #{selectedAppointment.id}
+              </h3>
             </div>
             <button
               type="button"
@@ -675,11 +740,15 @@ export default function AppointmentsPanel({
             </div>
             <div>
               <strong>{t("scheduled")}</strong>
-              <span>{formatDateTime(selectedAppointment.scheduled_for, language)}</span>
+              <span>
+                {formatDateTime(selectedAppointment.scheduled_for, language)}
+              </span>
             </div>
             <div>
               <strong>{t("scheduled")}</strong>
-              <span dir="auto">{describeSlot(selectedAppointment.slot, t, language)}</span>
+              <span dir="auto">
+                {describeSlot(selectedAppointment.slot, t, language)}
+              </span>
             </div>
             <div>
               <strong>{t("reason")}</strong>
@@ -687,11 +756,15 @@ export default function AppointmentsPanel({
             </div>
             <div>
               <strong>{t("notes")}</strong>
-              <span dir="auto">{selectedAppointment.notes ?? t("noNotesRecorded")}</span>
+              <span dir="auto">
+                {selectedAppointment.notes ?? t("noNotesRecorded")}
+              </span>
             </div>
             <div>
               <strong>{t("createdAt")}</strong>
-              <span>{formatDateTime(selectedAppointment.requested_at, language)}</span>
+              <span>
+                {formatDateTime(selectedAppointment.requested_at, language)}
+              </span>
             </div>
             <div>
               <strong>{t("lastUpdated")}</strong>
@@ -701,7 +774,9 @@ export default function AppointmentsPanel({
 
           {role === "admin" ? (
             <div className="appointment-admin-actions">
-              <label htmlFor="appointment-status-notes">{t("adminStatusNotes")}</label>
+              <label htmlFor="appointment-status-notes">
+                {t("adminStatusNotes")}
+              </label>
               <textarea
                 id="appointment-status-notes"
                 rows={3}
@@ -713,7 +788,9 @@ export default function AppointmentsPanel({
                 <button
                   type="button"
                   className="button button--primary"
-                  disabled={loading || selectedAppointment.status === "approved"}
+                  disabled={
+                    loading || selectedAppointment.status === "approved"
+                  }
                   onClick={() => handleAdminStatusUpdate("approved")}
                 >
                   {t("markConfirmed")}
@@ -721,7 +798,9 @@ export default function AppointmentsPanel({
                 <button
                   type="button"
                   className="button button--ghost"
-                  disabled={loading || selectedAppointment.status === "rejected"}
+                  disabled={
+                    loading || selectedAppointment.status === "rejected"
+                  }
                   onClick={() => handleAdminStatusUpdate("rejected")}
                 >
                   {t("markRejected")}
@@ -757,7 +836,7 @@ export default function AppointmentsPanel({
               {preFill ? (
                 <div className="field field--full">
                   <div className="appointment-prefill">
-                  <div>
+                    <div>
                       <p className="micro-label">{t("readyFromTriage")}</p>
                       <h3>
                         Dr. {preFill.doctorName} {t("isPreselected")}
@@ -783,13 +862,17 @@ export default function AppointmentsPanel({
 
               {role === "admin" ? (
                 <div className="field field--full patient-lookup-card">
-                  <label htmlFor="appointment-patient-national-id">{t("patientNationalId")}</label>
+                  <label htmlFor="appointment-patient-national-id">
+                    {t("patientNationalId")}
+                  </label>
                   <div className="inline-filter">
                     <input
                       id="appointment-patient-national-id"
                       type="text"
                       value={patientNationalId}
-                      onChange={(event) => setPatientNationalId(event.target.value)}
+                      onChange={(event) =>
+                        setPatientNationalId(event.target.value)
+                      }
                       placeholder={t("enterEgyptianNationalId")}
                     />
                     <button
@@ -803,8 +886,8 @@ export default function AppointmentsPanel({
                   </div>
                   {resolvedPatient ? (
                     <small className="field__hint">
-                      {t("found")} {resolvedPatient.full_name} · #{resolvedPatient.id} ·{" "}
-                      {resolvedPatient.sex}
+                      {t("found")} {resolvedPatient.full_name} · #
+                      {resolvedPatient.id} · {resolvedPatient.sex}
                     </small>
                   ) : null}
                   {patientLookupError ? (
@@ -836,10 +919,8 @@ export default function AppointmentsPanel({
                 <label htmlFor="appointment-doctor">{t("doctor")}</label>
                 <CustomSelect
                   id="appointment-doctor"
-                  value={doctorId}
-                  onChange={(value) =>
-                    setDoctorId(value ? Number(value) : "")
-                  }
+                  value={String(doctorId)}
+                  onChange={(value) => setDoctorId(value ? Number(value) : "")}
                   options={[
                     { value: "", label: t("selectDoctor") },
                     ...filteredDoctors.map((doctor) => ({
@@ -853,7 +934,8 @@ export default function AppointmentsPanel({
                     {preFill?.doctorId === selectedDoctor.id
                       ? `${t("preselectedFromTriageRecommendation")} `
                       : ""}
-                    {selectedDoctor.clinic} · {selectedDoctor.area ?? t("areaNotListed")}
+                    {selectedDoctor.clinic} ·{" "}
+                    {selectedDoctor.area ?? t("areaNotListed")}
                   </small>
                 ) : null}
               </div>
@@ -862,20 +944,27 @@ export default function AppointmentsPanel({
                 <label htmlFor="appointment-slot">{t("availableSlot")}</label>
                 <CustomSelect
                   id="appointment-slot"
-                  value={selectedSlotId}
+                  value={String(selectedSlotId)}
                   onChange={(value) =>
                     setSelectedSlotId(value ? Number(value) : "")
                   }
                   disabled={!doctorId || slotLoading}
                   options={[
-                    { value: "", label: slotLoading ? t("loadingSlots") : t("selectAvailableTime") },
+                    {
+                      value: "",
+                      label: slotLoading
+                        ? t("loadingSlots")
+                        : t("selectAvailableTime"),
+                    },
                     ...availableSlots.map((slot) => ({
                       value: String(slot.id),
                       label: formatLocalizedSlotLabel(slot, language),
                     })),
                   ]}
                 />
-                {slotError ? <small className="field__error">{slotError}</small> : null}
+                {slotError ? (
+                  <small className="field__error">{slotError}</small>
+                ) : null}
                 {!slotLoading && doctorId && availableSlots.length === 0 ? (
                   <small className="field__hint">
                     {t("noOpenSlotsAvailable")}
@@ -924,7 +1013,9 @@ export default function AppointmentsPanel({
             <div className="workspace-card__header">
               <div>
                 <p className="micro-label">{t("appointmentHistory")}</p>
-                <h3>{appointments.length} {t("trackedBookings")}</h3>
+                <h3>
+                  {appointments.length} {t("trackedBookings")}
+                </h3>
               </div>
             </div>
 
@@ -934,14 +1025,14 @@ export default function AppointmentsPanel({
                   <button
                     type="button"
                     className={sortBy === "date" ? "is-active" : ""}
-                    onClick={() => setSortBy("date")}
+                    onClick={() => handleSortByChange("date")}
                   >
                     {t("sortByDate")}
                   </button>
                   <button
                     type="button"
                     className={sortBy === "id" ? "is-active" : ""}
-                    onClick={() => setSortBy("id")}
+                    onClick={() => handleSortByChange("id")}
                   >
                     {t("sortByNumber")}
                   </button>
@@ -949,7 +1040,7 @@ export default function AppointmentsPanel({
                 <button
                   type="button"
                   className="button button--ghost button--small"
-                  onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                  onClick={handleSortDirectionToggle}
                 >
                   {sortDirection === "asc" ? t("ascending") : t("descending")}
                 </button>
@@ -981,7 +1072,9 @@ export default function AppointmentsPanel({
                     {activeAppointments.length === 0 ? (
                       <div className="empty-state">
                         {t("noCurrentAppointmentRequests")}{" "}
-                        {language === "ar" ? "" : t("startWithANewBookingAbove")}
+                        {language === "ar"
+                          ? ""
+                          : t("startWithANewBookingAbove")}
                       </div>
                     ) : (
                       activeAppointments.map((appointment) =>
@@ -1030,7 +1123,9 @@ export default function AppointmentsPanel({
             </div>
             <div className="stack-md">
               {pendingAppointments.length === 0 ? (
-                <div className="empty-state">{t("noPendingApprovalsRightNow")}</div>
+                <div className="empty-state">
+                  {t("noPendingApprovalsRightNow")}
+                </div>
               ) : (
                 pendingAppointments.map((appointment) =>
                   renderAppointmentCard(appointment, {
@@ -1058,7 +1153,9 @@ export default function AppointmentsPanel({
                 </div>
               ) : (
                 confirmedAppointments.map((appointment) =>
-                  renderAppointmentCard(appointment, { showDetailsAction: true }),
+                  renderAppointmentCard(appointment, {
+                    showDetailsAction: true,
+                  }),
                 )
               )}
             </div>
@@ -1072,13 +1169,17 @@ export default function AppointmentsPanel({
               </div>
             </div>
             <div className="stack-md">
-              {[...completedAppointments, ...rejectedAppointments].length === 0 ? (
+              {[...completedAppointments, ...rejectedAppointments].length ===
+              0 ? (
                 <div className="empty-state">
                   {t("pastCompletedRejectedAppear")}
                 </div>
               ) : (
-                [...completedAppointments, ...rejectedAppointments].map((appointment) =>
-                  renderAppointmentCard(appointment, { showDetailsAction: true }),
+                [...completedAppointments, ...rejectedAppointments].map(
+                  (appointment) =>
+                    renderAppointmentCard(appointment, {
+                      showDetailsAction: true,
+                    }),
                 )
               )}
             </div>
@@ -1090,4 +1191,3 @@ export default function AppointmentsPanel({
     </SectionPanel>
   );
 }
-
