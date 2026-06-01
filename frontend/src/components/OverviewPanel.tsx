@@ -1315,39 +1315,6 @@ function AdminOverview({
             </button>
           </div>
         </section>
-
-        <section className="workspace-card">
-          <div className="workspace-card__header">
-            <div>
-              <p className="micro-label">{t("workspaceStatus")}</p>
-              <h3>{t("systemReadiness")}</h3>
-            </div>
-          </div>
-          <div className="status-grid">
-            <article className="status-card">
-              <span>{t("backendConnection")}</span>
-              <strong>{t("connected")}</strong>
-              <p>The frontend is currently operating against the live API workspace.</p>
-            </article>
-            <article className="status-card">
-              <span>{t("doctorDataset")}</span>
-              <strong>{doctors.length >= 80 ? t("seedTargetReached") : t("seedTargetPending")}</strong>
-              <p>
-                {doctors.length} doctors currently available for matching and booking
-                handoff.
-              </p>
-            </article>
-            <article className="status-card">
-              <span>{t("coverageReview")}</span>
-              <strong>{weakCoverage.length === 0 ? t("balanced") : t("needsFollowUp")}</strong>
-              <p>
-                {weakCoverage.length === 0
-                  ? "No required specialty is currently uncovered."
-                  : `Review these specialties next: ${weakCoverage.slice(0, 4).join(", ")}.`}
-              </p>
-            </article>
-          </div>
-        </section>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import {
   localizeAppointmentStatus,
 } from "../lib/localizedDisplay";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 const ADMIN_APPOINTMENTS_PAGE_SIZE = 6;
 
@@ -814,40 +815,39 @@ export default function AppointmentsPanel({
 
               <div className="field">
                 <label htmlFor="appointment-specialty">{t("specialty")}</label>
-                <select
+                <CustomSelect
                   id="appointment-specialty"
                   value={selectedSpecialty}
-                  onChange={(event) => {
-                    setSelectedSpecialty(event.target.value);
+                  onChange={(value) => {
+                    setSelectedSpecialty(value);
                     setDoctorId("");
                   }}
-                >
-                  <option value="">{t("allSpecialties")}</option>
-                  {specialties.map((specialty) => (
-                    <option key={specialty} value={specialty}>
-                      {specialty}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: t("allSpecialties") },
+                    ...specialties.map((specialty) => ({
+                      value: specialty,
+                      label: specialty,
+                    })),
+                  ]}
+                />
               </div>
 
               <div className="field">
                 <label htmlFor="appointment-doctor">{t("doctor")}</label>
-                <select
+                <CustomSelect
                   id="appointment-doctor"
                   value={doctorId}
-                  onChange={(event) =>
-                    setDoctorId(event.target.value ? Number(event.target.value) : "")
+                  onChange={(value) =>
+                    setDoctorId(value ? Number(value) : "")
                   }
-                >
-                  <option value="">{t("selectDoctor")}</option>
-                  {filteredDoctors.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>
-                      {doctor.full_name} · {doctor.specialty} · {doctor.area ?? doctor.city ?? doctor.clinic}
-                      {preFill?.doctorId === doctor.id ? ` · ${t("recommended")}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: t("selectDoctor") },
+                    ...filteredDoctors.map((doctor) => ({
+                      value: String(doctor.id),
+                      label: `${doctor.full_name} · ${doctor.specialty} · ${doctor.area ?? doctor.city ?? doctor.clinic}${preFill?.doctorId === doctor.id ? ` · ${t("recommended")}` : ""}`,
+                    })),
+                  ]}
+                />
                 {selectedDoctor ? (
                   <small className="field__hint">
                     {preFill?.doctorId === selectedDoctor.id
@@ -860,23 +860,21 @@ export default function AppointmentsPanel({
 
               <div className="field field--full">
                 <label htmlFor="appointment-slot">{t("availableSlot")}</label>
-                <select
+                <CustomSelect
                   id="appointment-slot"
                   value={selectedSlotId}
-                  onChange={(event) =>
-                    setSelectedSlotId(event.target.value ? Number(event.target.value) : "")
+                  onChange={(value) =>
+                    setSelectedSlotId(value ? Number(value) : "")
                   }
                   disabled={!doctorId || slotLoading}
-                >
-                  <option value="">
-                    {slotLoading ? t("loadingSlots") : t("selectAvailableTime")}
-                  </option>
-                  {availableSlots.map((slot) => (
-                    <option key={slot.id} value={slot.id}>
-                      {formatLocalizedSlotLabel(slot, language)}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: slotLoading ? t("loadingSlots") : t("selectAvailableTime") },
+                    ...availableSlots.map((slot) => ({
+                      value: String(slot.id),
+                      label: formatLocalizedSlotLabel(slot, language),
+                    })),
+                  ]}
+                />
                 {slotError ? <small className="field__error">{slotError}</small> : null}
                 {!slotLoading && doctorId && availableSlots.length === 0 ? (
                   <small className="field__hint">

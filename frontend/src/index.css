@@ -5,8 +5,16 @@
   font-weight: 400;
   color: #1f2933;
   background:
-    radial-gradient(circle at top left, rgba(255, 214, 165, 0.35), transparent 28%),
-    radial-gradient(circle at top right, rgba(79, 209, 197, 0.18), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 214, 165, 0.35),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(79, 209, 197, 0.18),
+      transparent 24%
+    ),
     linear-gradient(180deg, #f7f4ec 0%, #ecf4f2 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -56,6 +64,16 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+::selection {
+  background-color: #39544a;
+  color: white;
+}
+
+::-moz-selection {
+  background-color: #39544a;
+  color: white;
 }
 
 [dir="rtl"] body {
@@ -142,7 +160,11 @@ button {
 }
 
 .auth-shell__hero {
-  background: linear-gradient(160deg, rgba(22, 51, 50, 0.94), rgba(24, 91, 83, 0.86));
+  background: linear-gradient(
+    160deg,
+    rgba(22, 51, 50, 0.94),
+    rgba(24, 91, 83, 0.86)
+  );
   border-radius: 32px;
   color: #f8fafc;
   padding: 40px;
@@ -295,7 +317,11 @@ button {
 }
 
 .dashboard-nav__menu button.is-active {
-  background: linear-gradient(135deg, rgba(255, 214, 165, 0.22), rgba(15, 118, 110, 0.36));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 214, 165, 0.22),
+    rgba(15, 118, 110, 0.36)
+  );
   border-color: rgba(255, 255, 255, 0.16);
 }
 
@@ -409,6 +435,50 @@ select {
   background: var(--bg-panel-strong);
   padding: 12px 14px;
   color: var(--text-main);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23284847' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 1.2em;
+  padding-right: 36px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #39544a;
+  box-shadow: 0 0 0 4px rgba(57, 84, 74, 0.12);
+  outline: none;
+}
+
+select option {
+  background-color: rgba(57, 84, 74, 0.08);
+  color: var(--text-main);
+  padding: 8px 6px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+select option:checked {
+  background: linear-gradient(#39544a, #39544a);
+  background-color: #39544a;
+  color: white;
+  font-weight: 600;
+}
+
+select option:hover {
+  background: linear-gradient(#39544a, #39544a);
+  background-color: #39544a;
+  color: white;
 }
 
 textarea {
@@ -432,7 +502,10 @@ textarea {
   border-radius: 999px;
   padding: 12px 18px;
   border: 1px solid transparent;
-  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
 }
 
 .button--small {
@@ -440,7 +513,13 @@ textarea {
   font-size: 0.92rem;
 }
 
+button:hover:not(:disabled),
 .button:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.03);
+}
+
+.dashboard-nav button:hover:not(:disabled),
+.dashboard-nav .button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
@@ -529,15 +608,27 @@ textarea {
 }
 
 .callout {
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.1), rgba(255, 214, 165, 0.14));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 118, 110, 0.1),
+    rgba(255, 214, 165, 0.14)
+  );
 }
 
 .callout--warning {
-  background: linear-gradient(135deg, rgba(217, 119, 6, 0.12), rgba(255, 241, 237, 0.72));
+  background: linear-gradient(
+    135deg,
+    rgba(217, 119, 6, 0.12),
+    rgba(255, 241, 237, 0.72)
+  );
 }
 
 .callout--next-step {
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(216, 242, 238, 0.76));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 118, 110, 0.12),
+    rgba(216, 242, 238, 0.76)
+  );
   border-color: rgba(15, 118, 110, 0.16);
 }
 
@@ -622,7 +713,11 @@ textarea {
 .doctor-card {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(214, 242, 238, 0.18));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.96),
+    rgba(214, 242, 238, 0.18)
+  );
   padding: 20px;
   display: grid;
   gap: 16px;
@@ -796,7 +891,11 @@ textarea {
 
 /* Recommendation logic section */
 .doctor-card__recommendation-logic {
-  background: linear-gradient(135deg, rgba(255, 214, 165, 0.1), rgba(15, 118, 110, 0.06));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 214, 165, 0.1),
+    rgba(15, 118, 110, 0.06)
+  );
   border: 1px solid rgba(15, 118, 110, 0.12);
   padding: 12px 14px;
   border-radius: var(--radius-sm);
@@ -874,8 +973,16 @@ textarea {
   overflow: hidden;
   border-color: rgba(15, 118, 110, 0.14);
   background:
-    radial-gradient(circle at top right, rgba(255, 214, 165, 0.2), transparent 34%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(236, 244, 242, 0.82));
+    radial-gradient(
+      circle at top right,
+      rgba(255, 214, 165, 0.2),
+      transparent 34%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.96),
+      rgba(236, 244, 242, 0.82)
+    );
   box-shadow: 0 18px 36px rgba(22, 51, 50, 0.08);
 }
 
@@ -918,7 +1025,11 @@ textarea {
 
 .doctor-card__why-recommended {
   background:
-    linear-gradient(135deg, rgba(15, 118, 110, 0.075), rgba(255, 255, 255, 0.72)),
+    linear-gradient(
+      135deg,
+      rgba(15, 118, 110, 0.075),
+      rgba(255, 255, 255, 0.72)
+    ),
     rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(15, 118, 110, 0.13);
   border-inline-start: 0;
@@ -1005,7 +1116,11 @@ textarea {
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: var(--radius-sm);
   background:
-    radial-gradient(circle at top right, rgba(255, 214, 165, 0.2), transparent 32%),
+    radial-gradient(
+      circle at top right,
+      rgba(255, 214, 165, 0.2),
+      transparent 32%
+    ),
     rgba(15, 118, 110, 0.045);
 }
 
@@ -1061,7 +1176,11 @@ textarea {
   padding: 18px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(15, 118, 110, 0.12);
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.86));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 118, 110, 0.08),
+    rgba(255, 255, 255, 0.86)
+  );
 }
 
 .patient-lookup-card__header {
@@ -1074,7 +1193,11 @@ textarea {
 .appointment-prefill {
   border: 1px solid rgba(15, 118, 110, 0.14);
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.09), rgba(255, 214, 165, 0.14));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 118, 110, 0.09),
+    rgba(255, 214, 165, 0.14)
+  );
   padding: 18px;
 }
 
@@ -1255,7 +1378,11 @@ textarea {
 }
 
 .dashboard-hero--patient {
-  background: linear-gradient(145deg, rgba(10, 113, 107, 0.1), rgba(255, 241, 214, 0.8));
+  background: linear-gradient(
+    145deg,
+    rgba(10, 113, 107, 0.1),
+    rgba(255, 241, 214, 0.8)
+  );
 }
 
 .dashboard-hero--patient::after {
@@ -1263,7 +1390,11 @@ textarea {
 }
 
 .dashboard-hero--doctor {
-  background: linear-gradient(145deg, rgba(18, 55, 75, 0.14), rgba(214, 234, 248, 0.84));
+  background: linear-gradient(
+    145deg,
+    rgba(18, 55, 75, 0.14),
+    rgba(214, 234, 248, 0.84)
+  );
 }
 
 .dashboard-hero--doctor::after {
@@ -1271,7 +1402,11 @@ textarea {
 }
 
 .dashboard-hero--admin {
-  background: linear-gradient(145deg, rgba(22, 51, 50, 0.12), rgba(229, 243, 239, 0.92));
+  background: linear-gradient(
+    145deg,
+    rgba(22, 51, 50, 0.12),
+    rgba(229, 243, 239, 0.92)
+  );
 }
 
 .dashboard-hero--admin::after {
@@ -1343,7 +1478,11 @@ textarea {
 
 .workspace-card--skeleton {
   min-height: 220px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(237, 245, 243, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(237, 245, 243, 0.92)
+  );
 }
 
 .status-track {
@@ -1414,7 +1553,11 @@ textarea {
 .spotlight-inline {
   padding: 16px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(255, 214, 165, 0.14));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 118, 110, 0.08),
+    rgba(255, 214, 165, 0.14)
+  );
   border: 1px solid rgba(15, 118, 110, 0.12);
 }
 
@@ -1483,7 +1626,11 @@ button.activity-item:hover {
   text-align: left;
   display: grid;
   gap: 8px;
-  background: linear-gradient(145deg, rgba(15, 118, 110, 0.11), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(
+    145deg,
+    rgba(15, 118, 110, 0.11),
+    rgba(255, 255, 255, 0.9)
+  );
 }
 
 .action-shortcut--ghost {
@@ -1559,7 +1706,11 @@ button.activity-item:hover {
 .coverage-callout {
   padding: 16px;
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(22, 51, 50, 0.05), rgba(255, 255, 255, 0.92));
+  background: linear-gradient(
+    145deg,
+    rgba(22, 51, 50, 0.05),
+    rgba(255, 255, 255, 0.92)
+  );
   border: 1px solid rgba(22, 51, 50, 0.08);
 }
 
@@ -1644,7 +1795,11 @@ button.activity-item:hover {
   padding: 16px 18px;
   border-radius: 18px;
   border: 1px solid rgba(15, 118, 110, 0.12);
-  background: linear-gradient(145deg, rgba(15, 118, 110, 0.08), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(
+    145deg,
+    rgba(15, 118, 110, 0.08),
+    rgba(255, 255, 255, 0.9)
+  );
 }
 
 .workspace-primary-action p {
@@ -1775,7 +1930,9 @@ button.activity-item:hover {
 
 .appointment-table__header,
 .appointment-table__row {
-  grid-template-columns: 70px minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr) 140px 120px;
+  grid-template-columns:
+    70px minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr)
+    140px 120px;
 }
 
 .appointment-table__header {
@@ -1807,7 +1964,9 @@ button.activity-item:hover {
 .profile-record-table__header,
 .profile-record-table__row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.2fr) minmax(130px, 1fr) minmax(130px, 1fr) 120px 90px;
+  grid-template-columns:
+    minmax(140px, 1.2fr) minmax(130px, 1fr) minmax(130px, 1fr)
+    120px 90px;
   gap: 12px;
   align-items: center;
 }
