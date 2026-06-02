@@ -110,30 +110,6 @@ export default function HomePage() {
   const [triagePatientCreateError, setTriagePatientCreateError] =
     useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    if (user.role === "patient" && selectedTab === "records") {
-      setSelectedTab("overview");
-    }
-  }, [selectedTab, user]);
-
-  useEffect(() => {
-    if (!user || user.role === "patient") {
-      return;
-    }
-    if (!selectedPatientId) {
-      setTriageLinkedPatient(null);
-      setTriageLinkedPatientLatestVisit(null);
-      return;
-    }
-    const matchedPatient =
-      patients.find((patient) => patient.id === selectedPatientId) ?? null;
-    setTriageLinkedPatient(matchedPatient);
-  }, [patients, selectedPatientId, user]);
-
   function resetWorkspace() {
     clearSession();
     setSession(null);
@@ -582,6 +558,10 @@ export default function HomePage() {
   }
 
   function handleSelectTab(tab: DashboardTab) {
+    if (currentUser.role === "patient" && tab === "records") {
+      startTransition(() => setSelectedTab("overview"));
+      return;
+    }
     startTransition(() => setSelectedTab(tab));
   }
 
@@ -599,9 +579,23 @@ export default function HomePage() {
   }
 
   const currentUser: UserResponseDto = user;
+  const activeSelectedTab =
+    currentUser.role === "patient" && selectedTab === "records"
+      ? "overview"
+      : selectedTab;
 
   const currentPatientId =
     currentUser.role === "patient" ? patientProfile?.id ?? null : selectedPatientId;
+  const selectedWorkspacePatient = selectedPatientId
+    ? patients.find((patient) => patient.id === selectedPatientId) ?? null
+    : null;
+  const currentTriageLinkedPatient =
+    currentUser.role === "patient"
+      ? patientProfile
+      : triageLinkedPatient ?? selectedWorkspacePatient;
+  const currentTriageLinkedPatientLatestVisit = currentTriageLinkedPatient
+    ? triageLinkedPatientLatestVisit
+    : null;
 
   const tabMeta: Record<
     DashboardTab,
@@ -642,7 +636,7 @@ export default function HomePage() {
   };
 
   function renderPanel() {
-    switch (selectedTab) {
+    switch (activeSelectedTab) {
       case "overview":
         return (
           <OverviewPanel
@@ -686,8 +680,8 @@ export default function HomePage() {
             error={triageError}
             result={triageResult}
             patientProfile={patientProfile}
-            linkedPatient={currentUser.role === "patient" ? patientProfile : triageLinkedPatient}
-            linkedPatientLatestVisit={triageLinkedPatientLatestVisit}
+            linkedPatient={currentTriageLinkedPatient}
+            linkedPatientLatestVisit={currentTriageLinkedPatientLatestVisit}
             patientLookupNationalId={triagePatientNationalId}
             patientLookupLoading={triagePatientLookupLoading}
             patientLookupError={triagePatientLookupError}
@@ -771,7 +765,7 @@ export default function HomePage() {
       <div className="dashboard-shell">
         <DashboardNav
           user={currentUser}
-          selectedTab={selectedTab}
+          selectedTab={activeSelectedTab}
           onSelectTab={handleSelectTab}
           onLogout={handleLogout}
         />
@@ -780,9 +774,9 @@ export default function HomePage() {
           <header className="dashboard-main__header">
             <div>
               <p className="dashboard-main__eyebrow">{t("liveCareWorkspace")}</p>
-              <h2>{tabMeta[selectedTab].title}</h2>
+              <h2>{tabMeta[activeSelectedTab].title}</h2>
               <p className="dashboard-main__copy">
-                {tabMeta[selectedTab].description}
+                {tabMeta[activeSelectedTab].description}
               </p>
             </div>
           </header>

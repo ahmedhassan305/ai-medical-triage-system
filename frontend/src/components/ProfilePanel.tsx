@@ -58,6 +58,23 @@ type PatientProfileFormState = Omit<PatientProfileUpsertDto, "sex"> & {
   sex: "" | PatientProfileUpsertDto["sex"];
 };
 
+type DoctorEditFormState = {
+  doctorId: number;
+  values: DoctorProfileUpsertDto;
+};
+
+type DoctorScheduleWorkspaceState = {
+  doctorId: number;
+  schedules: DoctorScheduleDto[];
+  slots: AppointmentSlotDto[];
+  loading: boolean;
+};
+
+type PatientHistoryState = {
+  patientId: number;
+  entries: PatientMedicalHistoryEntryResponseDto[];
+};
+
 const EMPTY_PATIENT_FORM: PatientProfileFormState = {
   full_name: "",
   age: 0,
@@ -83,6 +100,16 @@ const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
   location_label: "",
   is_active: true,
 };
+
+function toDoctorEditForm(doctor: DoctorProfileResponseDto): DoctorProfileUpsertDto {
+  return {
+    full_name: doctor.full_name,
+    specialty: doctor.specialty,
+    clinic: doctor.clinic,
+    area: doctor.area ?? "",
+    city: doctor.city ?? "",
+  };
+}
 
 function formatDateTime(dateValue?: string | null): string {
   if (!dateValue) {
@@ -132,15 +159,14 @@ function AdminOperationsPanel({
   const [patientPage, setPatientPage] = useState(1);
   const [doctorPage, setDoctorPage] = useState(1);
   const [doctorEditForm, setDoctorEditForm] =
-    useState<DoctorProfileUpsertDto | null>(null);
-  const [doctorSchedules, setDoctorSchedules] = useState<DoctorScheduleDto[]>([]);
-  const [doctorSlots, setDoctorSlots] = useState<AppointmentSlotDto[]>([]);
+    useState<DoctorEditFormState | null>(null);
+  const [doctorScheduleWorkspace, setDoctorScheduleWorkspace] =
+    useState<DoctorScheduleWorkspaceState | null>(null);
   const [scheduleForm, setScheduleForm] =
     useState<DoctorScheduleCreateDto>(EMPTY_SCHEDULE_FORM);
   const [doctorManagementMessage, setDoctorManagementMessage] = useState<
     string | null
   >(null);
-  const [doctorManagementLoading, setDoctorManagementLoading] = useState(false);
 
   const completedAppointments = appointments.filter(
     (appointment) =>
@@ -187,43 +213,52 @@ function AdminOperationsPanel({
   const doctorAppointments = selectedDoctor
     ? appointments.filter((a) => a.doctor_id === selectedDoctor.id)
     : [];
+  const selectedDoctorEditForm =
+    selectedDoctor && doctorEditForm?.doctorId === selectedDoctor.id
+      ? doctorEditForm.values
+      : selectedDoctor
+        ? toDoctorEditForm(selectedDoctor)
+        : null;
+  const doctorSchedules =
+    selectedDoctor && doctorScheduleWorkspace?.doctorId === selectedDoctor.id
+      ? doctorScheduleWorkspace.schedules
+      : [];
+  const doctorSlots =
+    selectedDoctor && doctorScheduleWorkspace?.doctorId === selectedDoctor.id
+      ? doctorScheduleWorkspace.slots
+      : [];
+  const doctorManagementLoading = selectedDoctor
+    ? !doctorScheduleWorkspace ||
+      doctorScheduleWorkspace.doctorId !== selectedDoctor.id ||
+      doctorScheduleWorkspace.loading
+    : false;
 
   useEffect(() => {
     if (!selectedDoctor) {
-      setDoctorEditForm(null);
-      setDoctorSchedules([]);
-      setDoctorSlots([]);
-      setDoctorManagementMessage(null);
       return;
     }
 
-    setDoctorEditForm({
-      full_name: selectedDoctor.full_name,
-      specialty: selectedDoctor.specialty,
-      clinic: selectedDoctor.clinic,
-      area: selectedDoctor.area ?? "",
-      city: selectedDoctor.city ?? "",
-    });
-    setScheduleForm({
-      ...EMPTY_SCHEDULE_FORM,
-      location_label: selectedDoctor.clinic,
-    });
-    setDoctorManagementLoading(true);
-    setDoctorManagementMessage(null);
     Promise.all([
       listDoctorSchedules(selectedDoctor.id),
       listDoctorSlots(selectedDoctor.id),
     ])
       .then(([schedules, slots]) => {
-        setDoctorSchedules(schedules);
-        setDoctorSlots(slots);
+        setDoctorScheduleWorkspace({
+          doctorId: selectedDoctor.id,
+          schedules,
+          slots,
+          loading: false,
+        });
       })
       .catch(() => {
-        setDoctorSchedules([]);
-        setDoctorSlots([]);
+        setDoctorScheduleWorkspace({
+          doctorId: selectedDoctor.id,
+          schedules: [],
+          slots: [],
+          loading: false,
+        });
         setDoctorManagementMessage("Could not load schedules or slots.");
-      })
-      .finally(() => setDoctorManagementLoading(false));
+      });
   }, [selectedDoctor]);
 
   async function refreshDoctorScheduleWorkspace(doctorId: number) {
@@ -231,28 +266,42 @@ function AdminOperationsPanel({
       listDoctorSchedules(doctorId),
       listDoctorSlots(doctorId),
     ]);
-    setDoctorSchedules(schedules);
-    setDoctorSlots(slots);
+    setDoctorScheduleWorkspace({
+      doctorId,
+      schedules,
+      slots,
+      loading: false,
+    });
   }
 
   async function submitDoctorAdminUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedDoctor || !doctorEditForm) {
+    if (!selectedDoctor || !selectedDoctorEditForm) {
       return;
     }
-    setDoctorManagementLoading(true);
+    setDoctorScheduleWorkspace((current) => ({
+      doctorId: selectedDoctor.id,
+      schedules:
+        current?.doctorId === selectedDoctor.id ? current.schedules : doctorSchedules,
+      slots: current?.doctorId === selectedDoctor.id ? current.slots : doctorSlots,
+      loading: true,
+    }));
     setDoctorManagementMessage(null);
     try {
       await updateDoctorProfile(selectedDoctor.id, {
-        ...doctorEditForm,
-        area: doctorEditForm.area?.trim() || null,
-        city: doctorEditForm.city?.trim() || null,
+        ...selectedDoctorEditForm,
+        area: selectedDoctorEditForm.area?.trim() || null,
+        city: selectedDoctorEditForm.city?.trim() || null,
       });
       setDoctorManagementMessage("Doctor details saved.");
     } catch {
       setDoctorManagementMessage("Could not save doctor details.");
     } finally {
-      setDoctorManagementLoading(false);
+      setDoctorScheduleWorkspace((current) =>
+        current?.doctorId === selectedDoctor.id
+          ? { ...current, loading: false }
+          : current,
+      );
     }
   }
 
@@ -261,7 +310,13 @@ function AdminOperationsPanel({
     if (!selectedDoctor) {
       return;
     }
-    setDoctorManagementLoading(true);
+    setDoctorScheduleWorkspace((current) => ({
+      doctorId: selectedDoctor.id,
+      schedules:
+        current?.doctorId === selectedDoctor.id ? current.schedules : doctorSchedules,
+      slots: current?.doctorId === selectedDoctor.id ? current.slots : doctorSlots,
+      loading: true,
+    }));
     setDoctorManagementMessage(null);
     try {
       await createDoctorSchedule(selectedDoctor.id, {
@@ -277,7 +332,11 @@ function AdminOperationsPanel({
     } catch {
       setDoctorManagementMessage("Could not add schedule rule.");
     } finally {
-      setDoctorManagementLoading(false);
+      setDoctorScheduleWorkspace((current) =>
+        current?.doctorId === selectedDoctor.id
+          ? { ...current, loading: false }
+          : current,
+      );
     }
   }
 
@@ -285,7 +344,13 @@ function AdminOperationsPanel({
     if (!selectedDoctor) {
       return;
     }
-    setDoctorManagementLoading(true);
+    setDoctorScheduleWorkspace((current) => ({
+      doctorId: selectedDoctor.id,
+      schedules:
+        current?.doctorId === selectedDoctor.id ? current.schedules : doctorSchedules,
+      slots: current?.doctorId === selectedDoctor.id ? current.slots : doctorSlots,
+      loading: true,
+    }));
     setDoctorManagementMessage(null);
     try {
       await updateDoctorSchedule(selectedDoctor.id, schedule.id, {
@@ -306,7 +371,11 @@ function AdminOperationsPanel({
     } catch {
       setDoctorManagementMessage("Could not update schedule status.");
     } finally {
-      setDoctorManagementLoading(false);
+      setDoctorScheduleWorkspace((current) =>
+        current?.doctorId === selectedDoctor.id
+          ? { ...current, loading: false }
+          : current,
+      );
     }
   }
 
@@ -709,7 +778,7 @@ function AdminOperationsPanel({
                   </div>
                 </div>
 
-                {doctorEditForm ? (
+                {selectedDoctorEditForm ? (
                   <form
                     className="form-grid admin-management-panel"
                     onSubmit={submitDoctorAdminUpdate}
@@ -718,13 +787,15 @@ function AdminOperationsPanel({
                       <label htmlFor="admin-doctor-name">{t("fullName")}</label>
                       <input
                         id="admin-doctor-name"
-                        value={doctorEditForm.full_name}
+                        value={selectedDoctorEditForm.full_name}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, full_name: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              full_name: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -734,13 +805,15 @@ function AdminOperationsPanel({
                       </label>
                       <input
                         id="admin-doctor-specialty"
-                        value={doctorEditForm.specialty}
+                        value={selectedDoctorEditForm.specialty}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, specialty: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              specialty: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -750,13 +823,15 @@ function AdminOperationsPanel({
                       </label>
                       <input
                         id="admin-doctor-clinic"
-                        value={doctorEditForm.clinic}
+                        value={selectedDoctorEditForm.clinic}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, clinic: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              clinic: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -764,13 +839,15 @@ function AdminOperationsPanel({
                       <label htmlFor="admin-doctor-area">{t("area")}</label>
                       <input
                         id="admin-doctor-area"
-                        value={doctorEditForm.area ?? ""}
+                        value={selectedDoctorEditForm.area ?? ""}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, area: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              area: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -778,13 +855,15 @@ function AdminOperationsPanel({
                       <label htmlFor="admin-doctor-city">{t("city")}</label>
                       <input
                         id="admin-doctor-city"
-                        value={doctorEditForm.city ?? ""}
+                        value={selectedDoctorEditForm.city ?? ""}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, city: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              city: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -1194,13 +1273,17 @@ export default function ProfilePanel({
   const [historyNotes, setHistoryNotes] = useState("");
   const [historySaving, setHistorySaving] = useState(false);
   const [historyMessage, setHistoryMessage] = useState<string | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<
-    PatientMedicalHistoryEntryResponseDto[]
-  >([]);
+  const [patientHistory, setPatientHistory] =
+    useState<PatientHistoryState | null>(null);
+  const historyEntries =
+    role === "patient" &&
+    patientProfile &&
+    patientHistory?.patientId === patientProfile.id
+      ? patientHistory.entries
+      : [];
 
   useEffect(() => {
     if (role !== "patient" || !patientProfile) {
-      setHistoryEntries([]);
       return;
     }
 
@@ -1208,12 +1291,12 @@ export default function ProfilePanel({
     listPatientMedicalHistory(patientProfile.id)
       .then((entries) => {
         if (!cancelled) {
-          setHistoryEntries(entries);
+          setPatientHistory({ patientId: patientProfile.id, entries });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setHistoryEntries([]);
+          setPatientHistory({ patientId: patientProfile.id, entries: [] });
           setHistoryMessage("Could not load saved medical history entries.");
         }
       });
@@ -1284,7 +1367,13 @@ export default function ProfilePanel({
         notes: historyNotes.trim() || null,
         status: "active",
       });
-      setHistoryEntries((current) => [created, ...current]);
+      setPatientHistory((current) => ({
+        patientId: patientProfile.id,
+        entries:
+          current?.patientId === patientProfile.id
+            ? [created, ...current.entries]
+            : [created],
+      }));
       setHistoryTitle("");
       setHistoryNotes("");
       setHistoryMessage("Medical history entry saved.");
