@@ -108,7 +108,7 @@ export default function VisitsPanel({
                 <label htmlFor="visit-patient">{t("patient")}</label>
                 <CustomSelect
                   id="visit-patient"
-                  value={patientId}
+                  value={String(patientId)}
                   onChange={(value) => {
                     const nextValue = value ? Number(value) : null;
                     setPatientId(nextValue ?? "");
