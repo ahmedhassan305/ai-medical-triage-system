@@ -58,13 +58,8 @@ export function CustomSelect({
       className={`custom-select ${className} ${disabled ? "disabled" : ""}`}
       data-testid="custom-select"
     >
-      <input
-        type="hidden"
-        name={name}
-        value={value}
-        id={id}
-      />
-      
+      <input type="hidden" name={name} value={value} id={id} />
+
       <button
         type="button"
         className="custom-select__button"
@@ -73,7 +68,9 @@ export function CustomSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className={`custom-select__label ${!selectedOption ? "placeholder" : ""}`}>
+        <span
+          className={`custom-select__label ${!selectedOption ? "placeholder" : ""}`}
+        >
           {displayLabel}
         </span>
         <svg
@@ -90,24 +87,26 @@ export function CustomSelect({
       </button>
 
       {isOpen && (
-        <div className="custom-select__dropdown">
-          <ul className="custom-select__options" role="listbox">
-            {options.map((option) => (
-              <li key={option.value}>
-                <button
-                  type="button"
-                  className={`custom-select__option ${
-                    value === option.value ? "selected" : ""
-                  }`}
-                  onClick={() => handleSelect(option.value)}
-                  role="option"
-                  aria-selected={value === option.value}
-                >
-                  {option.label}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div
+          className="custom-select__dropdown"
+          role="listbox"
+          aria-label={placeholder}
+          id={id ? `${id}-listbox` : undefined}
+        >
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`custom-select__option ${
+                value === option.value ? "selected" : ""
+              }`}
+              onClick={() => handleSelect(option.value)}
+              role="option"
+              aria-selected={value === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
