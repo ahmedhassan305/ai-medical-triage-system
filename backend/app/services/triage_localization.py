@@ -226,7 +226,13 @@ QUESTION_AR: dict[str, tuple[str, list[str] | None]] = {
     ),
     "breathing_associated": (
         "هل يوجد أي من التالي مع صعوبة التنفس؟",
-        ["ألم في الصدر", "صفير مع التنفس", "ازرقاق الشفاه أو الأصابع", "حمى", "لا يوجد"],
+        [
+            "ألم في الصدر",
+            "صفير مع التنفس",
+            "ازرقاق الشفاه أو الأصابع",
+            "حمى",
+            "لا يوجد",
+        ],
     ),
     "cough_type": (
         "ما نوع الكحة؟",
@@ -391,7 +397,13 @@ QUESTION_AR.update(
         ),
         "breathing_associated": (
             "هل يوجد أي من التالي مع صعوبة التنفس؟",
-            ["ألم في الصدر", "صفير مع التنفس", "ازرقاق الشفاه أو الأصابع", "حمى", "لا يوجد"],
+            [
+                "ألم في الصدر",
+                "صفير مع التنفس",
+                "ازرقاق الشفاه أو الأصابع",
+                "حمى",
+                "لا يوجد",
+            ],
         ),
         "cough_type": (
             "ما نوع الكحة؟",
@@ -506,7 +518,9 @@ def _arabic_condition_names(response: TriageResponse) -> list[str]:
 def _arabic_patient_explanation(response: TriageResponse) -> str:
     specialty = localize_specialty_name(response.recommended_specialty, "ar")
     conditions = _arabic_condition_names(response)
-    condition_text = " أو ".join(conditions[:2]) if conditions else "سبب متعلق بالأعراض المذكورة"
+    condition_text = (
+        " أو ".join(conditions[:2]) if conditions else "سبب متعلق بالأعراض المذكورة"
+    )
     action = ARABIC_ACTIONS[response.urgency_level][0]
     return (
         f"الأعراض التي وصفتها قد تكون مرتبطة بـ {condition_text}. "
@@ -550,17 +564,19 @@ def localize_questions(
             ClarificationQuestion(
                 id=question.id,
                 question=QUESTION_TEXT_AR.get(question.question, question.question),
-                options=[
-                    OPTION_AR.get(option, option) for option in question.options
-                ]
-                if question.options
-                else None,
+                options=(
+                    [OPTION_AR.get(option, option) for option in question.options]
+                    if question.options
+                    else None
+                ),
             )
         )
     return localized
 
 
-def localize_triage_response(response: TriageResponse, language: Language) -> TriageResponse:
+def localize_triage_response(
+    response: TriageResponse, language: Language
+) -> TriageResponse:
     if language != "ar":
         return response
 
@@ -607,40 +623,9 @@ def localize_triage_response(response: TriageResponse, language: Language) -> Tr
     return localized
 
 
-# Clean UTF-8 overrides for the Arabic sentence builders. These intentionally
-# shadow the earlier definitions that were created during a bad encoding pass.
-def localize_specialty_name(name: str | None, language: Language) -> str:
-    if not name:
-        return "طب عام" if language == "ar" else "General Practice"
-    if language != "ar":
-        return name
-    return SPECIALTY_AR.get(name, name)
-
-
-def _arabic_patient_explanation(response: TriageResponse) -> str:
-    specialty = localize_specialty_name(response.recommended_specialty, "ar")
-    conditions = _arabic_condition_names(response)
-    condition_text = " أو ".join(conditions[:2]) if conditions else "سبب متعلق بالأعراض المذكورة"
-    action = ARABIC_ACTIONS[response.urgency_level][0]
-    return (
-        f"الأعراض التي وصفتها قد تكون مرتبطة بـ {condition_text}. "
-        f"درجة الخطورة الحالية {response.urgency_label}. "
-        f"التخصص الأنسب غالبا هو {specialty}. {action}"
-    )
-
-
-def _arabic_clinical_summary(response: TriageResponse) -> str:
-    specialty = localize_specialty_name(response.recommended_specialty, "ar")
-    conditions = _arabic_condition_names(response)
-    if conditions:
-        return (
-            f"توجد أعراض تشير إلى مشكلة ضمن تخصص {specialty}. "
-            f"الاحتمالات الطبية الأبرز: {', '.join(conditions[:3])}."
-        )
-    return f"توجد أعراض تحتاج إلى تقييم ضمن تخصص {specialty}."
-
-
-def localize_triage_response(response: TriageResponse, language: Language) -> TriageResponse:
+def localize_triage_response(
+    response: TriageResponse, language: Language
+) -> TriageResponse:
     if language != "ar":
         return response
 
@@ -657,7 +642,9 @@ def localize_triage_response(response: TriageResponse, language: Language) -> Tr
         "اطلب الرعاية الطبية فورا."
     )
     localized.questions = localize_questions(localized.questions, language)
-    localized.red_flags = [localize_red_flag(flag, language) for flag in localized.red_flags]
+    localized.red_flags = [
+        localize_red_flag(flag, language) for flag in localized.red_flags
+    ]
 
     localized.suspected_condition = (
         localize_condition_name(localized.suspected_condition, language)
