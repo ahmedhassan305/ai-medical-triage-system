@@ -186,6 +186,7 @@ def test_canonical_seed_file_has_expanded_public_directory_coverage() -> None:
         "ENT",
         "Pediatrics",
         "Family Medicine",
+        "Pulmonology",
     }:
         assert required_specialty in specialties
 

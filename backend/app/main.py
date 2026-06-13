@@ -1,3 +1,6 @@
+import os
+import threading
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +10,8 @@ from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import add_request_logging_middleware
 from app.db.session import create_all
-from app.services.triage_service import get_reasoner
+from app.rag.embedding_model import preload_embedding_model
+from app.services.triage_service import _preload_model, get_reasoner
 
 
 def create_app() -> FastAPI:
@@ -26,6 +30,7 @@ def create_app() -> FastAPI:
 
     add_request_logging_middleware(app)
     register_exception_handlers(app)
+
     app.include_router(api_v1_router)
     app.include_router(legacy_router, include_in_schema=False)
 
@@ -34,6 +39,13 @@ def create_app() -> FastAPI:
 
     if settings.strict_reasoner:
         get_reasoner()
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        # The semantic reranker uses the embedding model even when the primary
+        # retriever is TF-IDF/stub, so warm it unconditionally in runtime.
+        threading.Thread(target=preload_embedding_model, daemon=True).start()
+        if settings.reasoner_mode == "ollama":
+            # Keep local Ollama warm without leaving noisy background threads in tests.
+            threading.Thread(target=_preload_model, daemon=True).start()
 
     return app
 

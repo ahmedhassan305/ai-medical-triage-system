@@ -2,7 +2,9 @@ import axios from "axios";
 
 import { getAccessToken } from "../lib/session";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL;
+const baseURL =
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.MODE === "test" ? "http://127.0.0.1:19001" : "");
 
 if (!baseURL) {
   throw new Error("VITE_API_BASE_URL is required. Set it in frontend/.env");

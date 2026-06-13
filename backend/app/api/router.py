@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes.appointments import router as appointments_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.clarify import router as clarify_router
 from app.api.routes.doctors import router as doctors_router
 from app.api.routes.health import router as health_router
 from app.api.routes.patients import router as patients_router
@@ -15,6 +16,7 @@ settings = get_settings()
 api_v1_router = APIRouter(prefix=settings.api_v1_prefix)
 api_v1_router.include_router(health_router)
 api_v1_router.include_router(triage_router)
+api_v1_router.include_router(clarify_router)
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(patients_router)
 api_v1_router.include_router(doctors_router)

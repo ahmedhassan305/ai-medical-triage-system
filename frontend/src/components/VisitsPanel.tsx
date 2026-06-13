@@ -5,7 +5,9 @@ import type {
   RoleType,
   VisitResponseDto,
 } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type VisitsPanelProps = {
   role: RoleType;
@@ -37,7 +39,9 @@ export default function VisitsPanel({
   onSelectPatient,
   onCreateVisit,
 }: VisitsPanelProps) {
+  const { t } = useLanguage();
   const [patientId, setPatientId] = useState<number | "">(selectedPatientId ?? "");
+  const [patientSearch, setPatientSearch] = useState("");
   const [symptoms, setSymptoms] = useState("");
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
@@ -64,10 +68,20 @@ export default function VisitsPanel({
     setPrescriptions("");
   }
 
+  const filteredPatientOptions = patientOptions.filter((patient) => {
+    const search = patientSearch.trim();
+    if (!search) {
+      return true;
+    }
+    const nationalId = patient.national_id?.toLowerCase() ?? "";
+    return nationalId.includes(search.toLowerCase()) ||
+      patient.full_name.toLowerCase().includes(search.toLowerCase());
+  });
+
   return (
     <SectionPanel
       eyebrow="Clinical records"
-      title="Visits"
+      title={t("visitsTitle")}
       description="Create visits as a clinician or inspect the visit timeline for the active patient."
     >
       {role === "doctor" || role === "admin" ? (
@@ -75,33 +89,45 @@ export default function VisitsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Create visit</p>
-                <h3>Document today&apos;s consultation</h3>
+                <p className="micro-label">{t("createVisit")}</p>
+                <h3>{t("visitsDescription")}</h3>
               </div>
             </div>
             <form className="form-grid" onSubmit={handleCreate}>
               <div className="field">
-                <label htmlFor="visit-patient">Patient</label>
-                <select
+                <label htmlFor="visit-patient-search">{t("patientNationalId")}</label>
+                <input
+                  id="visit-patient-search"
+                  type="text"
+                  value={patientSearch}
+                  onChange={(event) => setPatientSearch(event.target.value)}
+                  placeholder="Enter patient national ID"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="visit-patient">{t("patient")}</label>
+                <CustomSelect
                   id="visit-patient"
-                  value={patientId}
-                  onChange={(event) => {
-                    const nextValue = event.target.value ? Number(event.target.value) : null;
+                  value={String(patientId)}
+                  onChange={(value) => {
+                    const nextValue = value ? Number(value) : null;
                     setPatientId(nextValue ?? "");
                     onSelectPatient(nextValue);
                   }}
-                >
-                  <option value="">Select patient</option>
-                  {patientOptions.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.full_name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: t("selectPatient") },
+                    ...filteredPatientOptions.map((patient) => ({
+                      value: String(patient.id),
+                      label: patient.national_id
+                        ? `${patient.national_id} — ${patient.full_name}`
+                        : `#${patient.id} — ${patient.full_name}`,
+                    })),
+                  ]}
+                />
               </div>
 
               <div className="field field--full">
-                <label htmlFor="visit-symptoms">Symptoms</label>
+                <label htmlFor="visit-symptoms">{t("symptomLabel")}</label>
                 <textarea
                   id="visit-symptoms"
                   rows={4}
@@ -112,7 +138,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field">
-                <label htmlFor="visit-diagnosis">Diagnosis</label>
+                <label htmlFor="visit-diagnosis">{t("diagnosis")}</label>
                 <input
                   id="visit-diagnosis"
                   value={diagnosis}
@@ -121,7 +147,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field">
-                <label htmlFor="visit-prescriptions">Prescriptions</label>
+                <label htmlFor="visit-prescriptions">{t("notes")}</label>
                 <input
                   id="visit-prescriptions"
                   value={prescriptions}
@@ -130,7 +156,7 @@ export default function VisitsPanel({
               </div>
 
               <div className="field field--full">
-                <label htmlFor="visit-notes">Notes</label>
+                <label htmlFor="visit-notes">{t("notes")}</label>
                 <textarea
                   id="visit-notes"
                   rows={3}
@@ -152,8 +178,8 @@ export default function VisitsPanel({
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
               <div>
-                <p className="micro-label">Visit history</p>
-                <h3>Recent clinician notes</h3>
+                <p className="micro-label">{t("visitHistory")}</p>
+                <h3>{t("recentVisitNotes")}</h3>
               </div>
             </div>
             {error ? <div className="notice notice--error">{error}</div> : null}
@@ -176,21 +202,21 @@ export default function VisitsPanel({
                       </div>
                     </div>
                     <p>
-                      <strong>Symptoms:</strong> {visit.symptoms}
+                      <strong>{t("symptomLabel")}:</strong> {visit.symptoms}
                     </p>
                     {visit.diagnosis ? (
                       <p>
-                        <strong>Diagnosis:</strong> {visit.diagnosis}
+                        <strong>{t("diagnosis")}:</strong> {visit.diagnosis}
                       </p>
                     ) : null}
                     {visit.notes ? (
                       <p>
-                        <strong>Notes:</strong> {visit.notes}
+                        <strong>{t("notes")}:</strong> {visit.notes}
                       </p>
                     ) : null}
                     {visit.prescriptions ? (
                       <p>
-                        <strong>Prescriptions:</strong> {visit.prescriptions}
+                        <strong>{t("notes")}:</strong> {visit.prescriptions}
                       </p>
                     ) : null}
                   </article>
@@ -232,21 +258,21 @@ export default function VisitsPanel({
                     </div>
                   </div>
                   <p>
-                    <strong>Symptoms:</strong> {visit.symptoms}
+                    <strong>{t("symptomLabel")}:</strong> {visit.symptoms}
                   </p>
                   {visit.diagnosis ? (
                     <p>
-                      <strong>Diagnosis:</strong> {visit.diagnosis}
+                      <strong>{t("diagnosis")}:</strong> {visit.diagnosis}
                     </p>
                   ) : null}
                   {visit.notes ? (
                     <p>
-                      <strong>Notes:</strong> {visit.notes}
+                      <strong>{t("notes")}:</strong> {visit.notes}
                     </p>
                   ) : null}
                   {visit.prescriptions ? (
                     <p>
-                      <strong>Prescriptions:</strong> {visit.prescriptions}
+                      <strong>{t("notes")}:</strong> {visit.prescriptions}
                     </p>
                   ) : null}
                 </article>

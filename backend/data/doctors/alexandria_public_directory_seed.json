@@ -3,7 +3,7 @@
     "dataset_name": "alexandria_public_directory_seed",
     "source_name": "Vezeeta public directory",
     "focus": "Alexandria public specialist directory coverage with reproducible page mapping.",
-    "captured_on": "2026-04-21",
+    "captured_on": "2026-05-20",
     "specialty_pages": {
       "Cardiology": "https://www.vezeeta.com/en/doctor/cardiology/alexandria",
       "Neurology": "https://www.vezeeta.com/en/doctor/neurology/alexandria",
@@ -16,7 +16,8 @@
       "Orthopedics": "https://www.vezeeta.com/en/doctor/orthopedics/alexandria",
       "ENT": "https://www.vezeeta.com/en/doctor/ear-nose-and-throat/alexandria",
       "Pediatrics": "https://www.vezeeta.com/en/doctor/pediatrics/alexandria",
-      "Family Medicine": "https://www.vezeeta.com/en/doctor/family-medicine/alexandria"
+      "Family Medicine": "https://www.vezeeta.com/en/doctor/family-medicine/alexandria",
+      "Pulmonology": "https://www.vezeeta.com/en/doctor/chest/alexandria"
     },
     "notes": [
       "Generated from public Vezeeta specialty pages using structured JSON-LD physician entries.",
@@ -1214,6 +1215,206 @@
       "source_name": "Vezeeta public directory",
       "source_url": "https://www.vezeeta.com/en/dr/doctor-sherif-marouf-psychiatry",
       "booking_url": "https://www.vezeeta.com/en/dr/doctor-sherif-marouf-psychiatry"
+    },
+    {
+      "full_name": "Ahdaf Enan",
+      "specialty": "Pulmonology",
+      "clinic": "Professor of chest disease",
+      "area": "Cleopatra",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahdaf-enan-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahdaf-enan-chest-and-respiratory"
+    },
+    {
+      "full_name": "Ahmed Farag Abo El Nor",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant and lecturer in Chest diseases and endoscopy, Alexandria University",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahmed--farag-abo-el-nor--chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahmed--farag-abo-el-nor--chest-and-respiratory"
+    },
+    {
+      "full_name": "Ahmed Salama Sadaka",
+      "specialty": "Pulmonology",
+      "clinic": "Assistant Professor and Consultant of Chest Diseases - Alexandria University",
+      "area": "Bulkly",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-sadaka-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ahmed-sadaka-chest-and-respiratory"
+    },
+    {
+      "full_name": "Engy Elnahas",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant of Respiratory Diseases and Allergy",
+      "area": "Moharam Bek",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-engy-elnahas-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-engy-elnahas-chest-and-respiratory"
+    },
+    {
+      "full_name": "Farid Fayez",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant of Chest Diseases, Allergy and Immunology at Faculty of Medicine Ain Shams University - MSc. Chest Diseases",
+      "area": "Hadayek El-Kobba",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-farid-fayez-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-farid-fayez-chest-and-respiratory"
+    },
+    {
+      "full_name": "Hager Noseir",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant of Pulmonology, Respiratory and Allergy",
+      "area": "El-Haram",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hager-noseir-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hager-noseir-chest-and-respiratory"
+    },
+    {
+      "full_name": "Haytham Emam",
+      "specialty": "Pulmonology",
+      "clinic": "lecturer and consultant of chest diseases   alexandria faculty of medicine",
+      "area": "Sidy Bishr",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-haytham-emam-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-haytham-emam-chest-and-respiratory"
+    },
+    {
+      "full_name": "Hesham Kassem",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant in chest diseases and tuberculosis",
+      "area": "El-Shorouk",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-hesham-kassem-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-hesham-kassem-chest-and-respiratory"
+    },
+    {
+      "full_name": "Maha Mohamed Abdelgalil",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant in Chest, Respiratory, and Internal Medicine",
+      "area": "El-Obour City",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-maha-mohamed-abdelgalil-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-maha-mohamed-abdelgalil-chest-and-respiratory"
+    },
+    {
+      "full_name": "Mohamed Ahmed Khames",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant of chest diseases and allergy and scenery at the Armed Forces Hospital",
+      "area": "Mahatet El-Raml",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-ahmed-khames-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-ahmed-khames-chest-and-respiratory"
+    },
+    {
+      "full_name": "Mohamed Al Jammal",
+      "specialty": "Pulmonology",
+      "clinic": "Specialist in chest diseases and intensive care unit for chest diseases - Faculty of Medicine - Al-Azhar University",
+      "area": "Nasr City",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-al-jammal-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-al-jammal-chest-and-respiratory"
+    },
+    {
+      "full_name": "Mohamed Fathy Hassan Hussien",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant and Professor Of Chest Diseases, Respiratory System And Chest Allergy",
+      "area": "El-Haram",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-fathy-hassan-hussien-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-fathy-hassan-hussien-chest-and-respiratory"
+    },
+    {
+      "full_name": "Mohamed Sabry",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant of Chest Diseases and Tuberculosis",
+      "area": "El-Seyouf",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-sabry-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-sabry-chest-and-respiratory"
+    },
+    {
+      "full_name": "Mohanad Magdy",
+      "specialty": "Pulmonology",
+      "clinic": "Pulmonology ,bronchoscopy and sleep medicine specialist",
+      "area": "El-Ibrahimia",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-mohanad-magdy-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-mohanad-magdy-chest-and-respiratory"
+    },
+    {
+      "full_name": "Mustafa Abu Shady",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant of Chest, Allergy and Respiratory Diseases-lecturer faculty of medicine - MD. Chest and Allergy Diseases",
+      "area": "6th of October",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Mustafa-Abu-Shady-Chest-and-Respiratory-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Mustafa-Abu-Shady-Chest-and-Respiratory-1"
+    },
+    {
+      "full_name": "Rania Ahmed Sweed",
+      "specialty": "Pulmonology",
+      "clinic": "Professor of chest and respiratory diseases-Alexandria University",
+      "area": "Fleming",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-rania-ahmed-sweed-chest-and-respiratory-1",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-rania-ahmed-sweed-chest-and-respiratory-1"
+    },
+    {
+      "full_name": "Rasha Daabis",
+      "specialty": "Pulmonology",
+      "clinic": "Professor of Pulmonology and allergology -faculty of medicine- Alexandria University",
+      "area": "Smouha",
+      "city": "Alexandria",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-rasha--daabis-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-rasha--daabis-chest-and-respiratory"
+    },
+    {
+      "full_name": "Reda Ibrahim",
+      "specialty": "Pulmonology",
+      "clinic": "Consultant Of Thoracis , Allergic , Immune And Respiratory Disease",
+      "area": "Boulaq El Dakrour",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-reda-ibrahim-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-reda-ibrahim-chest-and-respiratory"
+    },
+    {
+      "full_name": "Said Labib El Atary",
+      "specialty": "Pulmonology",
+      "clinic": "Chest Professor",
+      "area": "El-Zaitoun",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Dr-sayed-labib-el-atary-Respiratory-and-Chest",
+      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Dr-sayed-labib-el-atary-Respiratory-and-Chest"
+    },
+    {
+      "full_name": "Sameh Eltoukhy",
+      "specialty": "Pulmonology",
+      "clinic": "Chest Disease Specialist",
+      "area": "El-Haram",
+      "city": "Cairo",
+      "source_name": "Vezeeta public directory",
+      "source_url": "https://www.vezeeta.com/en/dr/doctor-sameh-el-toukhy-chest-and-respiratory",
+      "booking_url": "https://www.vezeeta.com/en/dr/doctor-sameh-el-toukhy-chest-and-respiratory"
     }
   ]
 }

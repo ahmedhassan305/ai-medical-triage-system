@@ -1,7 +1,9 @@
 import { useState } from "react";
 
 import type { RoleType } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type PatientSexOption = "" | "Male" | "Female";
 
@@ -25,6 +27,7 @@ export default function AuthPanel({
   onLogin,
   onRegister,
 }: AuthPanelProps) {
+  const { language, setLanguage, t } = useLanguage();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,12 +83,25 @@ export default function AuthPanel({
   return (
     <div className="auth-shell">
       <div className="auth-shell__hero">
-        <p className="hero__eyebrow">Clinical operations cockpit</p>
+        <div className="language-toggle">
+          <button
+            type="button"
+            className={language === "en" ? "is-active" : ""}
+            onClick={() => setLanguage("en")}
+          >
+            {t("languageEnglish")}
+          </button>
+          <button
+            type="button"
+            className={language === "ar" ? "is-active" : ""}
+            onClick={() => setLanguage("ar")}
+          >
+            {t("languageArabic")}
+          </button>
+        </div>
+        <p className="hero__eyebrow">{t("operationsControlCenter")}</p>
         <h1 className="hero__title">AI Medical Triage System</h1>
-        <p className="hero__copy">
-          Authenticate, manage patient and doctor profiles, run history-aware
-          triage, coordinate appointments, and import records from one screen.
-        </p>
+        <p className="hero__copy">{t("profileAdminDescription")}</p>
         <div className="hero__stats">
           <div className="hero__stat">
             <span>FastAPI</span>
@@ -103,9 +119,9 @@ export default function AuthPanel({
       </div>
 
       <SectionPanel
-        eyebrow="Access"
-        title={mode === "login" ? "Sign in" : "Create account"}
-        description="Use a patient, doctor, or admin account to unlock the relevant workspace."
+        eyebrow={t("access")}
+        title={mode === "login" ? t("signIn") : t("createAccount")}
+        description={t("profileDescription")}
       >
         <div className="segmented-control">
           <button
@@ -126,7 +142,7 @@ export default function AuthPanel({
 
         <form className="stack-lg" onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="auth-email">Email</label>
+            <label htmlFor="auth-email">{t("email")}</label>
             <input
               id="auth-email"
               type="email"
@@ -137,7 +153,7 @@ export default function AuthPanel({
           </div>
 
           <div className="field">
-            <label htmlFor="auth-password">Password</label>
+            <label htmlFor="auth-password">{t("password")}</label>
             <input
               id="auth-password"
               type="password"
@@ -150,30 +166,30 @@ export default function AuthPanel({
           {mode === "register" ? (
             <>
               <div className="field">
-                <label htmlFor="auth-role">Account type</label>
-                <select
+                <label htmlFor="auth-role">{t("accountType")}</label>
+                <CustomSelect
                   id="auth-role"
                   value={role}
-                  onChange={(event) => {
-                    setRole(event.target.value as RoleType);
-                    // Clear patient fields when switching roles
-                    if (event.target.value !== "patient") {
+                  onChange={(value) => {
+                    setRole(value as RoleType);
+                    if (value !== "patient") {
                       setFullName("");
                       setNationalId("");
                       setSex("");
                     }
                   }}
-                >
-                  <option value="patient">Patient</option>
-                  <option value="doctor">Doctor</option>
-                  <option value="admin">Admin</option>
-                </select>
+                  options={[
+                    { value: "patient", label: t("patient") },
+                    { value: "doctor", label: t("doctor") },
+                    { value: "admin", label: "Admin" },
+                  ]}
+                />
               </div>
 
               {isPatientMode ? (
                 <>
                   <div className="field">
-                    <label htmlFor="auth-full-name">Full name</label>
+                    <label htmlFor="auth-full-name">{t("fullName")}</label>
                     <input
                       id="auth-full-name"
                       type="text"
@@ -209,19 +225,19 @@ export default function AuthPanel({
                   </div>
 
                   <div className="field">
-                    <label htmlFor="auth-sex">Gender</label>
-                    <select
+                    <label htmlFor="auth-sex">{t("gender")}</label>
+                    <CustomSelect
                       id="auth-sex"
                       value={sex}
-                      onChange={(event) =>
-                        setSex(event.target.value as PatientSexOption)
+                      onChange={(value) =>
+                        setSex(value as PatientSexOption)
                       }
-                      required
-                    >
-                      <option value="">Select gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
+                      options={[
+                        { value: "", label: t("selectGender") },
+                        { value: "Male", label: t("male") },
+                        { value: "Female", label: t("female") },
+                      ]}
+                    />
                   </div>
                 </>
               ) : null}
@@ -236,10 +252,10 @@ export default function AuthPanel({
             disabled={!canSubmit}
           >
             {loading
-              ? "Working..."
+              ? t("working")
               : mode === "login"
-                ? "Login"
-                : "Create account"}
+                ? t("login")
+                : t("createAccount")}
           </button>
         </form>
       </SectionPanel>

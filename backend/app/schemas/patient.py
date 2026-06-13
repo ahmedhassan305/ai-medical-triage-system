@@ -69,3 +69,37 @@ class PatientProfileResponse(PatientProfileUpsert):
     inferred_governorate: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PatientMedicalHistoryEntryCreate(BaseModel):
+    category: str = Field(min_length=1, max_length=60)
+    title: str = Field(min_length=1, max_length=200)
+    occurred_on: date | None = None
+    status: str | None = Field(default=None, max_length=40)
+    notes: str | None = None
+
+    @field_validator("category", "title", "status", "notes")
+    @classmethod
+    def normalize_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class PatientMedicalHistoryEntryResponse(PatientMedicalHistoryEntryCreate):
+    id: int
+    patient_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class PatientLabResultResponse(BaseModel):
+    id: int
+    patient_id: int | None = None
+    lab_name: str
+    value: str
+    unit: str | None = None
+    reference_range: str | None = None
+    source_filename: str | None = None
+    uploaded_at: datetime

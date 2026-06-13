@@ -172,6 +172,16 @@ docker compose --profile backend up --build backend postgres ollama
 - Ollama API: `http://localhost:11434`
 - Postgres: `localhost:5432`
 
+### Change Model (Ollama)
+Edit root `.env`:
+```env
+OLLAMA_MODEL=llama3.2
+```
+Then restart:
+```powershell
+.\backend\.venv\Scripts\python scripts\seed_doctors.py
+```
+
 ## Doctor directory seed data
 
 Canonical doctor seed file:
@@ -310,3 +320,55 @@ npm run build
 Legacy compatibility:
 - `GET /health`
 - `POST /triage`
+
+### `backend/.env`
+- `APP_NAME=AI Medical Triage System API`
+- `API_V1_PREFIX=/api/v1`
+- `LOG_LEVEL=INFO`
+- `CORS_ORIGINS=http://localhost:5173,http://localhost:3000`
+- `DATABASE_URL=sqlite:///./triage.db`
+- `DB_AUTO_CREATE=false`
+- `JWT_SECRET_KEY=change-me-in-production`
+- `JWT_ALGORITHM=HS256`
+- `JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60`
+- `RAG_DATA_DIR=./data`
+- `RAG_RETRIEVER=stub` (`stub`, `tfidf`, `embedding`)
+- `RAG_TOP_K=3`
+- `OLLAMA_HOST=http://localhost:11434`
+- `OLLAMA_MODEL=llama3.2`
+- `REASONER_MODE=ollama`
+- `STRICT_REASONER=false`
+- `TFIDF_MAX_FEATURES=1000`
+- `TFIDF_NGRAM_MIN=1`
+- `TFIDF_NGRAM_MAX=2`
+- `RAG_EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2`
+- `RAG_CACHE_DIR=./.cache/rag`
+- `RAG_CHUNK_SIZE=2000`
+- `RAG_CHUNK_OVERLAP=200`
+- `RAG_REBUILD_INDEX=false`
+- `PATIENT_HISTORY_VISIT_LIMIT=10`
+- `PATIENT_HISTORY_TOP_MATCHES=3`
+
+### `frontend/.env`
+- `VITE_API_BASE_URL=http://localhost:19001`
+
+### Root `.env` (for Docker Compose)
+- `OLLAMA_MODEL=llama3.2`
+- `REASONER_MODE=ollama`
+- `STRICT_REASONER=false`
+- `RAG_REBUILD_INDEX=false`
+- `VITE_API_BASE_URL=http://localhost:19001`
+- `DATABASE_URL=postgresql+psycopg2://triage:triage@postgres:5432/triage`
+- `POSTGRES_DB=triage`
+- `POSTGRES_USER=triage`
+- `POSTGRES_PASSWORD=triage`
+- `JWT_SECRET_KEY=change-me-in-production`
+- `DB_AUTO_CREATE=false`
+
+## Troubleshooting
+- Port conflict:
+  - change local port mapping in `docker-compose.yml` and update `VITE_API_BASE_URL`.
+- CORS errors:
+  - ensure frontend origin is present in `CORS_ORIGINS` and restart backend.
+- Missing WSL distro confusion:
+  - run `wsl -l -v --all` to list all distros Docker can use.

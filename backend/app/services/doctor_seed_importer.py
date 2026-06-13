@@ -9,27 +9,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.models import DoctorProfile
-
-SPECIALTY_NORMALIZATION = {
-    "cardiologist": "Cardiology",
-    "cardiology": "Cardiology",
-    "internist": "Internal Medicine",
-    "internal medicine": "Internal Medicine",
-    "gastroenterologist": "Gastroenterology",
-    "gastroenterology": "Gastroenterology",
-    "pulmonologist": "Pulmonology",
-    "pulmonology": "Pulmonology",
-    "orthopedist": "Orthopedics",
-    "orthopedics": "Orthopedics",
-    "neurologist": "Neurology",
-    "neurology": "Neurology",
-    "psychiatrist": "Psychiatry",
-    "psychiatry": "Psychiatry",
-    "neurosurgeon": "Neurosurgery",
-    "neurosurgery": "Neurosurgery",
-    "dermatologist": "Dermatology",
-    "dermatology": "Dermatology",
-}
+from app.services.clinical_records import assign_department_to_doctor
+from app.services.specialties import canonicalize_specialty
 
 LEGACY_PROTOTYPE_NAMES = {
     "Dr. John Smith",
@@ -85,11 +66,7 @@ def _truncate(value: str | None, max_length: int) -> str | None:
 
 
 def normalize_specialty(value: str) -> str:
-    normalized = value.strip().lower()
-    mapped = SPECIALTY_NORMALIZATION.get(normalized)
-    if mapped:
-        return mapped
-    return value.strip()
+    return canonicalize_specialty(value) or value.strip()
 
 
 def normalize_seed_record(record: dict[str, Any]) -> DoctorSeedRecord:
@@ -212,6 +189,8 @@ def import_seed_records(
                 booking_url=record.booking_url,
             )
             db.add(existing)
+            db.flush()
+            assign_department_to_doctor(db, existing, department_name=record.specialty)
             inserted += 1
             continue
 
@@ -223,6 +202,7 @@ def import_seed_records(
         existing.source_name = record.source_name
         existing.source_url = record.source_url
         existing.booking_url = record.booking_url
+        assign_department_to_doctor(db, existing, department_name=record.specialty)
         updated += 1
 
     db.commit()

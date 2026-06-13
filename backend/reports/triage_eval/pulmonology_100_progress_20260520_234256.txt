@@ -1,0 +1,6 @@
+15/100
+specialty=0.3333
+urgency=0.6000
+both=0.2667
+last_case=pulmonology_easy_015
+elapsed_sec=750.37

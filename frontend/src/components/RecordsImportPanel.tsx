@@ -1,7 +1,9 @@
 import { useState } from "react";
 
 import type { PatientProfileResponseDto } from "../api/dto";
+import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type RecordsImportPanelProps = {
   patients: PatientProfileResponseDto[];
@@ -22,6 +24,8 @@ export default function RecordsImportPanel({
   onSelectPatient,
   onImport,
 }: RecordsImportPanelProps) {
+  const { t } = useLanguage();
+  const [patientSearch, setPatientSearch] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -34,6 +38,16 @@ export default function RecordsImportPanel({
     setFile(null);
   }
 
+  const filteredPatients = patients.filter((patient) => {
+    const search = patientSearch.trim();
+    if (!search) {
+      return true;
+    }
+    const nationalId = patient.national_id?.toLowerCase() ?? "";
+    return nationalId.includes(search.toLowerCase()) ||
+      patient.full_name.toLowerCase().includes(search.toLowerCase());
+  });
+
   return (
     <SectionPanel
       eyebrow="Bulk records"
@@ -43,21 +57,21 @@ export default function RecordsImportPanel({
       <div className="workspace-card workspace-card--compact">
         <div className="workspace-card__header">
           <div>
-            <p className="micro-label">Supported input</p>
-            <h3>Simple structured upload</h3>
+            <p className="micro-label">{t("recordsTitle")}</p>
+            <h3>{t("importRecords")}</h3>
           </div>
         </div>
         <div className="detail-list">
           <div>
-            <strong>Formats</strong>
+            <strong>{t("recordsTitle")}</strong>
             <span>JSON or CSV</span>
           </div>
           <div>
-            <strong>Best use</strong>
+            <strong>{t("topNextStep")}</strong>
             <span>Backfilling historical visits for an existing patient</span>
           </div>
           <div>
-            <strong>Tip</strong>
+            <strong>{t("notes")}</strong>
             <span>Pick the patient first, then upload one clean file.</span>
           </div>
         </div>
@@ -65,27 +79,35 @@ export default function RecordsImportPanel({
 
       <form className="form-grid" onSubmit={handleSubmit}>
         <div className="field">
-          <label htmlFor="records-patient">Patient</label>
-          <select
+          <label htmlFor="records-patient-search">{t("patientNationalId")}</label>
+          <input
+            id="records-patient-search"
+            type="text"
+            value={patientSearch}
+            onChange={(event) => setPatientSearch(event.target.value)}
+            placeholder="Enter patient national ID"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="records-patient">{t("patient")}</label>
+          <CustomSelect
             id="records-patient"
-            value={selectedPatientId ?? ""}
-            onChange={(event) =>
-              onSelectPatient(
-                event.target.value ? Number(event.target.value) : null,
-              )
-            }
-          >
-            <option value="">Select patient</option>
-            {patients.map((patient) => (
-              <option key={patient.id} value={patient.id}>
-                {patient.full_name}
-              </option>
-            ))}
-          </select>
+            value={selectedPatientId ? String(selectedPatientId) : ""}
+            onChange={(value) => {
+              onSelectPatient(value ? Number(value) : null);
+            }}
+            options={[
+              { value: "", label: t("selectPatient") },
+              ...filteredPatients.map((patient) => ({
+                value: String(patient.id),
+                label: patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`,
+              })),
+            ]}
+          />
         </div>
 
         <div className="field">
-          <label htmlFor="records-file">File</label>
+          <label htmlFor="records-file">{t("recordsTitle")}</label>
           <input
             id="records-file"
             type="file"
@@ -108,7 +130,7 @@ export default function RecordsImportPanel({
 
       {!error && !successMessage ? (
         <div className="empty-prompt empty-prompt--compact">
-          <h4>Import feedback will appear here.</h4>
+          <h4>{t("importRecordsCopy")}</h4>
           <p>
             After upload, the workspace will show whether the file succeeded or needs
             correction.
