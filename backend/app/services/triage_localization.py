@@ -252,9 +252,10 @@ QUESTION_TEXT_AR: dict[str, str] = {
     "Where do you feel the abdominal pain?": "أين تشعر بألم البطن؟",
     "Where is the abdominal discomfort strongest?": "أين يتركز ألم أو انزعاج البطن؟",
     "How long have you had these symptoms?": "منذ متى لديك هذه الأعراض؟",
-    "Have you noticed any changes in your bowel movements or appetite since starting to smoke?": (
-        "هل لاحظت أي تغير في التبرز أو الشهية منذ بدأت التدخين؟"
-    ),
+    (
+        "Have you noticed any changes in your bowel movements or "
+        "appetite since starting to smoke?"
+    ): ("هل لاحظت أي تغير في التبرز أو الشهية منذ بدأت التدخين؟"),
     "Do you experience any of the following symptoms: nausea, vomiting, or diarrhea?": (
         "هل لديك أي من الأعراض التالية: غثيان أو قيء أو إسهال؟"
     ),
@@ -362,7 +363,8 @@ QUESTION_AR.update(
             ["أعلى البطن", "أسفل البطن", "كل البطن", "لا يوجد"],
         ),
         "gi_red_flags": (
-            "هل لديك قيء دموي أو براز أسود أو اصفرار في العين/الجلد أو علامات جفاف شديد؟",
+            "هل لديك قيء دموي أو براز أسود أو اصفرار في العين/الجلد "
+            "أو علامات جفاف شديد؟",
             [
                 "قيء دموي",
                 "براز أسود",
@@ -471,7 +473,10 @@ def add_arabic_query_hints(query: str) -> str:
     if not hints:
         return query
     unique_hints = list(dict.fromkeys(hints))
-    return f"{query}\n\nEnglish clinical hints for system extraction: {', '.join(unique_hints)}"
+    return (
+        f"{query}\n\n"
+        f"English clinical hints for system extraction: {', '.join(unique_hints)}"
+    )
 
 
 def localize_condition_name(name: str, language: Language) -> str:
@@ -614,57 +619,9 @@ def localize_triage_response(
     localized.clinical_summary = _arabic_clinical_summary(localized)
     localized.summary = localized.clinical_summary
     localized.urgency_reason = localized.clinical_summary
+    specialty_name = localize_specialty_name(localized.recommended_specialty, language)
     localized.specialty_reason = (
-        f"تم اختيار تخصص {localize_specialty_name(localized.recommended_specialty, language)} "
-        "لأنه الأنسب للأعراض والاحتمالات الطبية الظاهرة."
-    )
-    localized.supporting_references = []
-
-    return localized
-
-
-def localize_triage_response(
-    response: TriageResponse, language: Language
-) -> TriageResponse:
-    if language != "ar":
-        return response
-
-    localized = response.model_copy(deep=True)
-    localized.urgency_label = {
-        "low": "منخفضة",
-        "medium": "متوسطة",
-        "high": "عالية",
-    }[localized.urgency_level]
-    localized.actions = ARABIC_ACTIONS[localized.urgency_level]
-    localized.recommended_actions = ARABIC_ACTIONS[localized.urgency_level]
-    localized.disclaimer = (
-        "هذا ليس بديلا عن الاستشارة الطبية. إذا كنت تعتقد أن لديك حالة طارئة، "
-        "اطلب الرعاية الطبية فورا."
-    )
-    localized.questions = localize_questions(localized.questions, language)
-    localized.red_flags = [
-        localize_red_flag(flag, language) for flag in localized.red_flags
-    ]
-
-    localized.suspected_condition = (
-        localize_condition_name(localized.suspected_condition, language)
-        if localized.suspected_condition
-        else localized.suspected_condition
-    )
-
-    localized.suspected_conditions = deepcopy(localized.suspected_conditions)
-    for condition in localized.suspected_conditions:
-        condition.name = localize_condition_name(condition.name, language)
-        condition.explanation = ""
-
-    localized.patient_friendly_explanation = _arabic_patient_explanation(localized)
-    localized.plain_language_explanation = localized.patient_friendly_explanation
-    localized.simple_reasoning = localized.patient_friendly_explanation
-    localized.clinical_summary = _arabic_clinical_summary(localized)
-    localized.summary = localized.clinical_summary
-    localized.urgency_reason = localized.clinical_summary
-    localized.specialty_reason = (
-        f"تم اختيار تخصص {localize_specialty_name(localized.recommended_specialty, language)} "
+        f"تم اختيار تخصص {specialty_name} "
         "لأنه الأنسب للأعراض والاحتمالات الطبية الظاهرة."
     )
     localized.supporting_references = []

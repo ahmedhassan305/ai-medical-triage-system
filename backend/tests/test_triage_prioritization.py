@@ -264,7 +264,10 @@ class TestTriagePrioritization:
         ), f"HIGH urgency detection rate: {pass_rate}% (target: >=80%)"
 
     def test_emergency_red_flag_detection(self, evaluator):
-        """Verify emergency red flag cases (meningitis, stroke, appendicitis) are HIGH urgency."""
+        """
+        Verify emergency red flag cases (meningitis, stroke, appendicitis)
+        are HIGH urgency.
+        """
         emergency_cases = [
             tc
             for tc in evaluator.test_cases
@@ -344,8 +347,10 @@ class TestTriagePrioritization:
         for case in chest_cases:
             response = triage(query=case.get("query"), age=case.get("age"))
             valid_specialties = ["cardiology", "pulmonology"]
+            case_name = case.get("name")
+            spec = response.specialty
             assert any(sp in response.specialty.lower() for sp in valid_specialties), (
-                f"Chest disease case '{case.get('name')}' recommended {response.specialty}. "
+                f"Chest disease case '{case_name}' recommended {spec}. "
                 f"Expected Cardiology or Pulmonology."
             )
 
@@ -411,18 +416,19 @@ class TestTriagePrioritization:
         if report["failed_cases"]:
             print("\nTop Failed Cases:")
             for i, failure in enumerate(report["failed_cases"][:5], 1):
-                print(
-                    f"\n  {i}. {failure['name']} (ID: {failure['id']}, Category: {failure['category']})"
-                )
-                print(
-                    f"     Urgency - Expected: {failure['urgency']['expected']}, Got: {failure['urgency']['actual']}"
-                )
-                print(
-                    f"     Specialty - Expected: {failure['specialty']['expected']}, Got: {failure['specialty']['actual']}"
-                )
-                print(
-                    f"     Condition - Expected: {failure['condition']['expected']}, Got: {failure['condition']['actual']}"
-                )
+                name = failure["name"]
+                fid = failure["id"]
+                cat = failure["category"]
+                print(f"\n  {i}. {name} (ID: {fid}, Category: {cat})")
+                urgency_exp = failure["urgency"]["expected"]
+                urgency_act = failure["urgency"]["actual"]
+                print(f"     Urgency - Expected: {urgency_exp}, Got: {urgency_act}")
+                spec_exp = failure["specialty"]["expected"]
+                spec_act = failure["specialty"]["actual"]
+                print(f"     Specialty - Expected: {spec_exp}, Got: {spec_act}")
+                cond_exp = failure["condition"]["expected"]
+                cond_act = failure["condition"]["actual"]
+                print(f"     Condition - Expected: {cond_exp}, Got: {cond_act}")
 
         print("\n" + "=" * 80)
 
