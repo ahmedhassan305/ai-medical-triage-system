@@ -1,16 +1,21 @@
-import { useState, useMemo } from "react";
-import type { AppointmentResponseDto, DoctorProfileResponseDto, PatientProfileResponseDto } from "../api/dto";
-import type { AppointmentStatusGroup } from "../lib/appointmentStatus";
+import { useMemo, useState } from "react";
+
+import type {
+  AppointmentResponseDto,
+  DoctorProfileResponseDto,
+  PatientProfileResponseDto,
+} from "../api/dto";
 import {
-  normalizeAppointments,
-  groupAppointmentsByStatus,
-  sortAppointmentsByDate,
-  searchAppointments,
   getAppointmentStats,
+  groupAppointmentsByStatus,
+  normalizeAppointments,
+  searchAppointments,
+  sortAppointmentsByDate,
   type AppointmentWithStatus,
 } from "../lib/appointmentFilters";
-import { StatusBadge, StatusGroupHeader } from "./StatusBadge";
+import type { AppointmentStatusGroup } from "../lib/appointmentStatus";
 import CustomSelect from "./CustomSelect";
+import { StatusBadge, StatusGroupHeader } from "./StatusBadge";
 
 export type AppointmentListProps = {
   appointments: AppointmentResponseDto[];
@@ -26,26 +31,6 @@ type FilterState = {
   expandedGroups: Set<AppointmentStatusGroup>;
 };
 
-/**
- * AppointmentList - Comprehensive appointment display component
- *
- * Features:
- * - Groups appointments by normalized status
- * - Color-coded status badges
- * - Search functionality
- * - Expandable/collapsible groups
- * - Role-aware display (shows relevant appointments based on user role)
- * - Summary statistics
- *
- * @example
- * <AppointmentList
- *   appointments={appointments}
- *   doctors={doctors}
- *   patients={patients}
- *   currentRole="doctor"
- *   currentUserId={42}
- * />
- */
 export function AppointmentList({
   appointments,
   doctors,
@@ -56,39 +41,35 @@ export function AppointmentList({
   const [filter, setFilter] = useState<FilterState>({
     statusGroup: "all",
     searchQuery: "",
-    expandedGroups: new Set(["active_upcoming", "pending"] as AppointmentStatusGroup[]),
+    expandedGroups: new Set([
+      "active_upcoming",
+      "pending",
+    ] as AppointmentStatusGroup[]),
   });
 
-  // Normalize appointments
   const normalizedAppointments = useMemo(
     () => normalizeAppointments(appointments),
     [appointments],
   );
 
-  // Create lookup maps for fast access
   const doctorMap = useMemo(
-    () =>
-      Object.fromEntries(doctors.map((doc) => [doc.id, doc])),
+    () => Object.fromEntries(doctors.map((doc) => [doc.id, doc])),
     [doctors],
   );
 
   const patientMap = useMemo(
-    () =>
-      Object.fromEntries(patients.map((pat) => [pat.id, pat])),
+    () => Object.fromEntries(patients.map((pat) => [pat.id, pat])),
     [patients],
   );
 
-  // Apply filters
   const filteredAndSearched = useMemo(() => {
     let result = normalizedAppointments;
 
-    // Filter by status group
     if (filter.statusGroup !== "all") {
       const grouped = groupAppointmentsByStatus(result);
       result = grouped[filter.statusGroup];
     }
 
-    // Apply search
     if (filter.searchQuery) {
       result = searchAppointments(
         result,
@@ -98,7 +79,6 @@ export function AppointmentList({
       );
     }
 
-    // Apply role-based filtering
     if (currentRole === "patient" && currentUserId) {
       result = result.filter((apt) => {
         const patient = patientMap[apt.patient_id];
@@ -112,15 +92,20 @@ export function AppointmentList({
     }
 
     return sortAppointmentsByDate(result);
-  }, [normalizedAppointments, filter, doctorMap, patientMap, currentRole, currentUserId]);
+  }, [
+    normalizedAppointments,
+    filter,
+    doctorMap,
+    patientMap,
+    currentRole,
+    currentUserId,
+  ]);
 
-  // Group filtered results by status
   const groupedAppointments = useMemo(
     () => groupAppointmentsByStatus(filteredAndSearched),
     [filteredAndSearched],
   );
 
-  // Calculate stats
   const stats = useMemo(
     () => getAppointmentStats(normalizedAppointments),
     [normalizedAppointments],
@@ -137,10 +122,9 @@ export function AppointmentList({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header with search and filter */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex-1">
+    <div className="appointment-list">
+      <div className="appointment-list__toolbar">
+        <div className="appointment-list__search">
           <input
             type="text"
             placeholder="Search by doctor, specialty, patient, national ID, or reason..."
@@ -148,10 +132,10 @@ export function AppointmentList({
             onChange={(e) =>
               setFilter({ ...filter, searchQuery: e.target.value })
             }
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <CustomSelect
+          className="appointment-list__filter"
           value={filter.statusGroup}
           onChange={(e) =>
             setFilter({
@@ -169,8 +153,7 @@ export function AppointmentList({
         />
       </div>
 
-      {/* Statistics bar */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="appointment-stats">
         <StatCard
           label="Total"
           value={stats.total}
@@ -198,9 +181,7 @@ export function AppointmentList({
         />
       </div>
 
-      {/* Appointments list */}
-      <div className="space-y-2 rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm">
-        {/* Active/Upcoming */}
+      <div className="appointment-list__groups">
         <AppointmentGroup
           title="Active & Upcoming"
           appointments={groupedAppointments.active_upcoming}
@@ -210,8 +191,6 @@ export function AppointmentList({
           patientMap={patientMap}
           currentRole={currentRole}
         />
-
-        {/* Pending */}
         <AppointmentGroup
           title="Pending Approval"
           appointments={groupedAppointments.pending}
@@ -221,8 +200,6 @@ export function AppointmentList({
           patientMap={patientMap}
           currentRole={currentRole}
         />
-
-        {/* Completed */}
         <AppointmentGroup
           title="Completed"
           appointments={groupedAppointments.completed}
@@ -232,8 +209,6 @@ export function AppointmentList({
           patientMap={patientMap}
           currentRole={currentRole}
         />
-
-        {/* Rejected/Cancelled */}
         <AppointmentGroup
           title="Rejected & Cancelled"
           appointments={groupedAppointments.rejected_cancelled}
@@ -245,10 +220,9 @@ export function AppointmentList({
         />
       </div>
 
-      {/* Empty state */}
       {filteredAndSearched.length === 0 && (
-        <div className="py-8 text-center text-gray-500">
-          <p className="text-sm">
+        <div className="appointment-list__empty">
+          <p>
             {appointments.length === 0
               ? "No appointments yet"
               : "No appointments match your filters"}
@@ -279,7 +253,7 @@ function AppointmentGroup({
   currentRole,
 }: AppointmentGroupProps) {
   return (
-    <div className="border-b last:border-b-0 border-gray-200">
+    <div className="appointment-group">
       <StatusGroupHeader
         groupLabel={title}
         count={appointments.length}
@@ -288,7 +262,7 @@ function AppointmentGroup({
       />
 
       {isExpanded && (
-        <div className="divide-y divide-gray-100">
+        <div className="appointment-group__rows">
           {appointments.map((apt) => (
             <AppointmentRow
               key={apt.id}
@@ -335,21 +309,20 @@ function AppointmentRow({
   );
 
   return (
-    <div className="px-4 py-3 hover:bg-gray-50 transition-colors">
-      <div className="flex flex-col gap-2">
-        {/* Header: Status badge, Doctor, Patient */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">
+    <div className="appointment-row">
+      <div className="appointment-row__body">
+        <div className="appointment-row__header">
+          <div className="appointment-row__identity">
+            <p className="appointment-row__name">
               {currentRole === "patient" || !patient
                 ? `Dr. ${doctor?.full_name || "Unknown"}`
                 : patient.full_name}
             </p>
-            <p className="text-xs text-gray-600 mt-0.5">
+            <p className="appointment-row__meta">
               {doctor?.specialty && (
                 <>
                   {doctor.specialty}
-                  {doctor.clinic && ` • ${doctor.clinic}`}
+                  {doctor.clinic && ` - ${doctor.clinic}`}
                 </>
               )}
             </p>
@@ -357,26 +330,25 @@ function AppointmentRow({
           <StatusBadge status={appointment.normalizedStatus} size="sm" />
         </div>
 
-        {/* Reason */}
-        <div className="text-sm text-gray-700">
-          <span className="text-gray-600">Reason:</span> {appointment.reason}
+        <div className="appointment-row__reason">
+          <span>Reason:</span> {appointment.reason}
         </div>
 
-        {/* Dates and details */}
-        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
+        <div className="appointment-row__details">
           {scheduledDate && (
-            <span>📅 Scheduled: <span className="font-medium">{scheduledDate}</span></span>
+            <span>
+              Scheduled: <strong>{scheduledDate}</strong>
+            </span>
           )}
-          <span>Requested: <span className="font-medium">{requestedDate}</span></span>
-          {appointment.clinic?.name && (
-            <span>📍 {appointment.clinic.name}</span>
-          )}
+          <span>
+            Requested: <strong>{requestedDate}</strong>
+          </span>
+          {appointment.clinic?.name && <span>{appointment.clinic.name}</span>}
         </div>
 
-        {/* Notes */}
         {appointment.notes && (
-          <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-200">
-            <span className="font-medium">Notes:</span> {appointment.notes}
+          <div className="appointment-row__notes">
+            <span>Notes:</span> {appointment.notes}
           </div>
         )}
       </div>
@@ -392,15 +364,9 @@ type StatCardProps = {
 
 function StatCard({ label, value, highlight = false }: StatCardProps) {
   return (
-    <div
-      className={`p-2 rounded-lg text-center text-xs border transition-colors ${
-        highlight
-          ? "bg-blue-50 border-blue-300"
-          : "bg-gray-50 border-gray-200"
-      }`}
-    >
-      <p className="text-lg font-bold text-gray-900">{value}</p>
-      <p className="text-gray-600 text-xs">{label}</p>
+    <div className={`appointment-stat ${highlight ? "is-highlighted" : ""}`}>
+      <p className="appointment-stat__value">{value}</p>
+      <p className="appointment-stat__label">{label}</p>
     </div>
   );
 }

@@ -10,14 +10,7 @@ export type StatusBadgeProps = {
 };
 
 /**
- * StatusBadge - Color-coded badge component for appointment status
- *
  * Displays appointment status with semantic colors, icons, and optional descriptions.
- * Uses Tailwind CSS for styling and adapts to different sizes.
- *
- * @example
- * <StatusBadge status={AppointmentStatus.ACTIVE} />
- * <StatusBadge status={AppointmentStatus.PENDING} size="lg" showIcon showDescription />
  */
 export function StatusBadge({
   status,
@@ -30,26 +23,17 @@ export function StatusBadge({
   const { label, description, colors } = displayInfo;
   const { icon } = colors;
 
-  const sizeClasses = {
-    sm: "px-2 py-1 text-xs",
-    md: "px-3 py-1.5 text-sm",
-    lg: "px-4 py-2 text-base",
-  };
-
-  const baseClasses =
-    "inline-flex items-center gap-1 font-medium rounded-full border transition-colors duration-200";
-
   return (
     <div
-      className={`${baseClasses} ${sizeClasses[size]} ${colors.background} ${colors.text} ${colors.border} ${className}`}
+      className={`status-badge status-badge--${status} status-badge--${size} ${className}`}
       role="status"
       aria-label={label}
       title={description}
     >
-      {showIcon && <span className="flex-shrink-0">{icon}</span>}
-      <span className="flex-1">{label}</span>
+      {showIcon && <span className="status-badge__icon">{icon}</span>}
+      <span className="status-badge__label">{label}</span>
       {showDescription && (
-        <span className="text-xs opacity-80">{description}</span>
+        <span className="status-badge__description">{description}</span>
       )}
     </div>
   );
@@ -62,12 +46,7 @@ export type StatusIndicatorProps = {
 };
 
 /**
- * StatusIndicator - Minimal status indicator (just icon + text)
- *
- * Lightweight version of StatusBadge for use in tables, lists, and compact layouts.
- *
- * @example
- * <StatusIndicator status={AppointmentStatus.COMPLETED} />
+ * Lightweight status indicator for compact layouts.
  */
 export function StatusIndicator({
   status,
@@ -78,15 +57,15 @@ export function StatusIndicator({
   const { label, colors } = displayInfo;
   const { icon } = colors;
 
-  const containerClass = inline ? "inline-flex" : "flex";
-
   return (
     <span
-      className={`${containerClass} items-center gap-1 ${colors.text} ${className}`}
+      className={`status-indicator ${
+        inline ? "status-indicator--inline" : ""
+      } status-indicator--${status} ${className}`}
       title={displayInfo.description}
     >
       <span>{icon}</span>
-      <span className="font-medium">{label}</span>
+      <span>{label}</span>
     </span>
   );
 }
@@ -100,12 +79,7 @@ export type StatusGroupHeaderProps = {
 };
 
 /**
- * StatusGroupHeader - Header for grouped appointment sections
- *
- * Used to organize appointments by status group with optional expand/collapse.
- *
- * @example
- * <StatusGroupHeader groupLabel="Upcoming & Active" count={3} />
+ * Header for grouped appointment sections.
  */
 export function StatusGroupHeader({
   groupLabel,
@@ -116,7 +90,7 @@ export function StatusGroupHeader({
 }: StatusGroupHeaderProps) {
   return (
     <div
-      className={`flex items-center gap-3 py-3 px-4 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors ${className}`}
+      className={`status-group-header ${className}`}
       onClick={onToggle}
       role="button"
       tabIndex={0}
@@ -127,14 +101,16 @@ export function StatusGroupHeader({
       }}
     >
       {onToggle && (
-        <span className={`text-gray-600 transform transition-transform ${isExpanded ? "rotate-90" : ""}`}>
-          ▶
+        <span
+          className={`status-group-header__chevron ${
+            isExpanded ? "is-open" : ""
+          }`}
+        >
+          &#9654;
         </span>
       )}
-      <h3 className="text-sm font-semibold text-gray-700 flex-1">{groupLabel}</h3>
-      <span className="bg-gray-200 text-gray-700 px-2.5 py-0.5 rounded-full text-xs font-semibold">
-        {count}
-      </span>
+      <h3>{groupLabel}</h3>
+      <span className="status-group-header__count">{count}</span>
     </div>
   );
 }
