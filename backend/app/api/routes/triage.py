@@ -41,6 +41,7 @@ def triage_route(
             patient_id=patient.id if patient else None,
             db=db,
             lab_values=payload.lab_values,
+            language=payload.language,
         )
     except TriageSystemUnavailable as exc:
         raise HTTPException(

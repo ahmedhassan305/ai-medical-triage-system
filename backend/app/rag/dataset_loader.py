@@ -82,12 +82,12 @@ def _to_condition(
     url = _first_text(record, ["url", "link", "source_url", "page_url"]) or ""
     sections = _collect_sections(record)
 
-    full_text = _first_text(
+    base_text = _first_text(
         record,
         ["full_text", "text", "content", "description", "overview", "summary"],
     )
-    if not full_text:
-        full_text = " ".join(sections)
+    section_text = " ".join(sections)
+    full_text = " ".join(part for part in (base_text, section_text) if part)
     if not full_text:
         return None
 

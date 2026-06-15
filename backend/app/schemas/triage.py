@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 TriageLevel = Literal["low", "medium", "high"]
+Language = Literal["en", "ar"]
 ConditionLikelihood = Literal[
     "more_likely",
     "more likely",
@@ -49,6 +50,7 @@ class TriageRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     patient_id: int | None = None
     lab_values: list[dict[str, str | None]] = Field(default_factory=list)
+    language: Language = "en"
 
 
 class LabValue(BaseModel):
@@ -116,6 +118,7 @@ class ClarificationRequest(BaseModel):
     original_query: str
     answers: list[ClarificationAnswer]
     patient_id: int | None = None
+    language: Language = "en"
 
 
 class TriageAssessmentResponse(TriageResponse):
@@ -157,6 +160,7 @@ class StructuredReasoningOutput(BaseModel):
     recommended_actions: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)
     clinical_features: ClinicalFeatures | None = None
+    clarification_questions: list[ClarificationQuestion] = Field(default_factory=list)
 
 
 class RejectedSpecialty(BaseModel):

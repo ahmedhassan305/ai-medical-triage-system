@@ -108,7 +108,7 @@ class OllamaClinicalFeatureExtractor:
                         "prompt": prompt,
                         "stream": False,
                         "format": "json",
-                        "options": {"temperature": 0.0, "num_predict": 700},
+                        "options": {"temperature": 0.0, "num_predict": 400},
                     },
                 )
                 response.raise_for_status()

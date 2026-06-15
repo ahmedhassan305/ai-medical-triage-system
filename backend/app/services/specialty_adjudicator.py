@@ -146,7 +146,7 @@ class OllamaSpecialtyAdjudicator:
                         "prompt": prompt,
                         "stream": False,
                         "format": "json",
-                        "options": {"temperature": 0.0},
+                        "options": {"temperature": 0.0, "num_predict": 450},
                     },
                 )
                 response.raise_for_status()

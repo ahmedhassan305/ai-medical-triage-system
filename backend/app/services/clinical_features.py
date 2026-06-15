@@ -34,6 +34,15 @@ _BODY_SYSTEM_PATTERNS: dict[str, tuple[str, ...]] = {
         "abdominal",
         "stomach",
         "belly",
+        "ascites",
+        "abdominal swelling",
+        "swollen abdomen",
+        "jaundice",
+        "yellow eyes",
+        "yellow skin",
+        "dark urine",
+        "liver",
+        "hepatic",
         "vomit",
         "nausea",
         "diarrhea",
@@ -86,6 +95,8 @@ _NORMALIZED_SYMPTOMS: dict[str, tuple[str, ...]] = {
         "cannot catch my breath",
         "can't catch my breath",
     ),
+    "wheezing": ("wheezing", "wheeze", "whistling sound"),
+    "cough": ("cough", "coughing", "dry cough", "productive cough"),
     "fever": ("fever", "temperature", "burning up"),
     "vomiting": ("vomiting", "throwing up", "can't keep food down"),
     "diarrhea": ("diarrhea", "loose stool"),
@@ -101,6 +112,22 @@ _NORMALIZED_SYMPTOMS: dict[str, tuple[str, ...]] = {
         "tummy pain",
         "cramps",
     ),
+    "abdominal swelling": (
+        "abdominal swelling",
+        "swollen abdomen",
+        "belly swelling",
+        "ascites",
+        "fluid in my belly",
+    ),
+    "jaundice": (
+        "jaundice",
+        "yellow eyes",
+        "yellow skin",
+        "yellowing of skin",
+        "yellowing of eyes",
+    ),
+    "dark urine": ("dark urine", "tea colored urine", "brown urine"),
+    "fatigue": ("fatigue", "tired", "lack of energy", "exhausted"),
     "back pain": ("back pain", "backache", "lower back"),
     "neck pain": ("neck pain", "neck hurts"),
     "joint pain": ("joint pain", "knee pain", "ankle pain", "shoulder pain"),
@@ -166,6 +193,13 @@ _RED_FLAG_PATTERNS: dict[str, tuple[str, ...]] = {
         "loss of bowel control",
         "incontinence",
     ),
+    "possible serious liver disease": (
+        "vomiting blood",
+        "black stool",
+        "black stools",
+        "confusion with jaundice",
+        "jaundice with confusion",
+    ),
 }
 
 
@@ -205,7 +239,16 @@ def _extract_onset(lowered: str) -> str:
         return "sudden"
     if _contains_any(lowered, ("for weeks", "for months", "long time", "chronic")):
         return "longstanding"
-    if _contains_any(lowered, ("few days", "several days", "since yesterday")):
+    if _contains_any(
+        lowered,
+        (
+            "few days",
+            "several days",
+            "since yesterday",
+            "this morning",
+            "since this morning",
+        ),
+    ):
         return "recent"
     return "unknown"
 
@@ -219,6 +262,8 @@ def _extract_duration(lowered: str) -> str | None:
         return match.group(1)
     if "since yesterday" in lowered:
         return "since yesterday"
+    if "since this morning" in lowered or "this morning" in lowered:
+        return "since this morning"
     if "last night" in lowered:
         return "since last night"
     return None
@@ -392,6 +437,7 @@ def assess_urgency_from_features(
             "major bleeding",
             "self-harm risk",
             "possible serious allergy",
+            "possible serious liver disease",
         }
     ):
         return "high"
@@ -416,6 +462,13 @@ def assess_urgency_from_features(
     ):
         return "high"
 
+    if "breathing difficulty" in symptoms and (
+        "chest discomfort" in symptoms
+        or "wheezing" in symptoms
+        or "respiratory" in systems
+    ):
+        return "medium"
+
     if (
         "headache" in symptoms
         and features.onset == "sudden"
@@ -427,6 +480,18 @@ def assess_urgency_from_features(
         return "medium"
 
     if {"fever", "vomiting"}.intersection(symptoms):
+        return "medium"
+
+    if "jaundice" in symptoms and {
+        "abdominal swelling",
+        "dark urine",
+    }.intersection(symptoms):
+        return "high"
+
+    if "jaundice" in symptoms:
+        return "medium"
+
+    if "abdominal pain" in symptoms and features.severity == "severe":
         return "medium"
 
     if features.severity == "severe" and features.progression == "worsening":

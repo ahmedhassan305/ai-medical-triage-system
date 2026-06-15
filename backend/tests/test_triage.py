@@ -1,14 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db.models import Visit
+from app.db.models import DoctorProfile, PatientProfile, Visit
 from app.db.session import SessionLocal
+from app.model.reasoner import _parse_reasoner_payload
 from app.schemas.triage import (
     ClinicalFeatures,
     ReasonerCondition,
     StructuredReasoningOutput,
 )
-from app.services.triage_service import VALID_SPECIALTIES
+from app.services.triage_service import VALID_SPECIALTIES, get_suggested_doctors
 
 
 def _auth_headers(client: TestClient, email: str, role: str) -> dict[str, str]:
@@ -120,6 +121,171 @@ def test_triage_with_patient_history_flag(client: TestClient) -> None:
     payload = res.json()
     assert payload["history_used"] is True
     assert isinstance(payload["suggested_doctors"], list)
+
+
+def test_jaundice_with_abdominal_swelling_and_dark_urine_is_high_urgency(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/triage",
+        json={
+            "query": (
+                "I have yellow eyes, abdominal swelling, dark urine and "
+                "chronic fatigue"
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["triage_level"] == "high"
+    assert payload["urgency_level"] == "high"
+    assert payload["recommended_specialty"] == "Gastroenterology"
+
+
+def test_adult_jaundice_does_not_display_biliary_atresia(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BiliaryAtresiaReasoner:
+        def reason(self, *args, **kwargs) -> StructuredReasoningOutput:
+            return StructuredReasoningOutput(
+                urgency_level="high",
+                clinical_summary=(
+                    "Adult jaundice with abdominal swelling. Biliary atresia is "
+                    "a possible diagnosis."
+                ),
+                patient_friendly_explanation="This may be a liver problem.",
+                possible_conditions=[
+                    ReasonerCondition(
+                        name="Biliary atresia",
+                        explanation="This infant liver disease can cause jaundice.",
+                        likelihood="more likely",
+                    )
+                ],
+                recommended_specialty="Gastroenterology",
+                recommended_actions=["Seek urgent care."],
+                red_flags=[],
+                clinical_features=ClinicalFeatures(
+                    chief_complaint="jaundice",
+                    symptoms=["jaundice", "abdominal swelling", "dark urine"],
+                    body_systems=["gastrointestinal"],
+                ),
+            )
+
+    monkeypatch.setattr(
+        "app.services.triage_service.get_reasoner",
+        lambda: BiliaryAtresiaReasoner(),
+    )
+
+    response = client.post(
+        "/api/v1/triage",
+        json={
+            "query": (
+                "I am 24 and I have yellow eyes, abdominal swelling, and dark urine"
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    condition_names = [item["name"] for item in payload["suspected_conditions"]]
+    assert "Biliary atresia" not in condition_names
+    assert condition_names == ["Liver disease"]
+    assert "Biliary atresia" not in payload["clinical_summary"]
+
+
+def test_reasoner_parser_repairs_missing_clarification_question_id() -> None:
+    payload = {
+        "urgency_level": "high",
+        "clinical_summary": "Jaundice with abdominal swelling.",
+        "patient_friendly_explanation": "Seek care.",
+        "possible_conditions": [
+            {
+                "name": "Liver disease",
+                "explanation": "Jaundice can fit liver disease.",
+                "likelihood": "possible",
+            }
+        ],
+        "recommended_specialty": "Gastroenterology",
+        "recommended_actions": ["Seek emergency care now."],
+        "red_flags": [],
+        "clinical_features": {
+            "chief_complaint": "jaundice",
+            "symptoms": ["jaundice", "dark urine"],
+            "body_systems": ["gastrointestinal"],
+            "onset": "unknown",
+            "duration": None,
+            "severity": "unknown",
+            "progression": "unknown",
+            "red_flags_present": [],
+            "red_flags_denied": [],
+            "risk_factors": [],
+            "missing_critical_details": [],
+        },
+        "clarification_questions": [
+            {
+                "question": "How severe is the jaundice?",
+                "options": ["Mild", "Moderate", "Severe"],
+            }
+        ],
+    }
+
+    parsed = _parse_reasoner_payload(__import__("json").dumps(payload))
+
+    assert parsed is not None
+    assert parsed.clarification_questions[0].id == "how_severe_is_the_jaundice"
+
+
+def test_doctor_recommendations_rank_subspecialty_before_name_order(
+    client: TestClient,
+) -> None:
+    db = SessionLocal()
+    patient = PatientProfile(
+        full_name="Knee Patient",
+        age=34,
+        sex="female",
+        current_governorate="Alexandria",
+    )
+    db.add(patient)
+    db.flush()
+    db.add_all(
+        [
+            DoctorProfile(
+                full_name="A Arm Specialist",
+                specialty="Orthopedics",
+                clinic=(
+                    "Consultant orthopedic surgeon specialized in hand and arm surgery"
+                ),
+                area="Loran",
+                city="Alexandria",
+            ),
+            DoctorProfile(
+                full_name="Z Knee Specialist",
+                specialty="Orthopedics",
+                clinic="Consultant in orthopedic surgery, knee and shoulder surgeries",
+                area="Loran",
+                city="Alexandria",
+            ),
+        ]
+    )
+    db.commit()
+
+    suggestions = get_suggested_doctors(
+        db,
+        "Orthopedics",
+        query="I twisted my knee while playing football and it is swollen",
+        clinical_features=ClinicalFeatures(
+            symptoms=["joint pain"],
+            body_systems=["musculoskeletal"],
+        ),
+        patient_id=patient.id,
+    )
+    db.close()
+
+    assert suggestions
+    assert suggestions[0].full_name == "Z Knee Specialist"
+    assert "knee" in (suggestions[0].recommendation_reason or "").lower()
 
 
 def test_anonymous_triage_cannot_use_patient_context(client: TestClient) -> None:
@@ -639,10 +805,14 @@ def test_specialty_adjudicator_fast_path_skips_matching_body_system_case(
     assert response.status_code == 200
     payload = response.json()
     assert payload["recommended_specialty"] == "Pulmonology"
-    assert "Skipped specialty adjudicator" in payload["specialty_reason"]
+    assert (
+        payload["specialty_reason"]
+        == "Recommended after reviewing the symptoms and likely body system: "
+        "Pulmonology."
+    )
 
 
-def test_specialty_adjudicator_still_runs_on_respiratory_cardiac_conflict(
+def test_specialty_conflict_uses_structured_fallback_when_aux_llm_calls_are_off(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -699,4 +869,8 @@ def test_specialty_adjudicator_still_runs_on_respiratory_cardiac_conflict(
     assert response.status_code == 200
     payload = response.json()
     assert payload["recommended_specialty"] == "Pulmonology"
-    assert payload["specialty_reason"] == "Respiratory symptoms dominate."
+    assert (
+        payload["specialty_reason"]
+        == "Recommended after reviewing the symptoms and likely body system: "
+        "Pulmonology."
+    )
