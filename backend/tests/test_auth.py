@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.core.security import create_access_token
+
 
 def test_register_and_login_flow(client) -> None:
     email = f"patient-{uuid4().hex}@example.com"
@@ -37,3 +39,15 @@ def test_register_and_login_flow(client) -> None:
     assert login_payload["role"] == "patient"
     assert isinstance(login_payload["access_token"], str)
     assert login_payload["access_token"]
+
+
+def test_auth_me_rejects_signed_token_with_non_numeric_subject(client) -> None:
+    token = create_access_token(subject="not-an-int", role="patient")
+
+    response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["message"] == "Invalid authentication credentials."

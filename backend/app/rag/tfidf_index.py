@@ -38,4 +38,6 @@ def search(
     query_vector = vectorizer.transform([query])
     scores = linear_kernel(query_vector, matrix).ravel()
     ranked_indexes = scores.argsort()[::-1][: max(top_k, 0)]
-    return [(conditions[index], float(scores[index])) for index in ranked_indexes]
+    ranked = [(conditions[index], float(scores[index])) for index in ranked_indexes]
+    positive_ranked = [(condition, score) for condition, score in ranked if score > 0.0]
+    return positive_ranked

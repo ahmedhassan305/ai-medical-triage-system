@@ -6,9 +6,9 @@ import os
 from typing import Protocol
 
 import httpx
+from pydantic import ValidationError
 
 from app.schemas.triage import ClinicalFeatures
-from app.services.exceptions import TriageSystemUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ _ALLOWED_BODY_SYSTEMS = {
     "respiratory",
     "neurologic",
     "gastrointestinal",
+    "genitourinary",
     "musculoskeletal",
     "skin",
     "mental_health",
@@ -31,6 +32,10 @@ _BODY_SYSTEM_ALIASES = {
     "psychiatric": "mental_health",
     "gi": "gastrointestinal",
     "digestive": "gastrointestinal",
+    "gu": "genitourinary",
+    "urologic": "genitourinary",
+    "urological": "genitourinary",
+    "urinary": "genitourinary",
     "pulmonary": "respiratory",
     "lung": "respiratory",
     "heart": "cardiac",
@@ -38,6 +43,10 @@ _BODY_SYSTEM_ALIASES = {
     "orthopedic": "musculoskeletal",
     "orthopaedic": "musculoskeletal",
 }
+
+_ALLOWED_ONSETS = {"sudden", "recent", "longstanding", "unknown"}
+_ALLOWED_SEVERITIES = {"mild", "moderate", "severe", "unknown"}
+_ALLOWED_PROGRESSIONS = {"worsening", "improving", "unknown"}
 
 
 class ClinicalFeatureExtractor(Protocol):
@@ -113,19 +122,20 @@ class OllamaClinicalFeatureExtractor:
                 )
                 response.raise_for_status()
             raw = str(response.json().get("response", "") or "").strip()
-            logger.info("clinical_feature_extractor_raw_json=%s", raw)
+            logger.info(
+                "clinical_feature_extractor_response_received length=%s", len(raw)
+            )
             parsed = _parse_feature_payload(raw)
             if parsed is not None:
                 return parsed
-            logger.warning("clinical_feature_extractor_parse_failed raw=%s", raw[:1000])
-            raise TriageSystemUnavailable()
-        except TriageSystemUnavailable:
-            raise
+            logger.warning("clinical_feature_extractor_parse_failed fallback=local")
+            return local_features
         except Exception as exc:
-            logger.exception(
-                "clinical_feature_extractor_failed no_keyword_fallback=true"
+            logger.warning(
+                "clinical_feature_extractor_failed fallback=local error=%s",
+                exc.__class__.__name__,
             )
-            raise TriageSystemUnavailable() from exc
+            return local_features
 
     def _build_prompt(
         self,
@@ -156,7 +166,7 @@ class OllamaClinicalFeatureExtractor:
             '  "chief_complaint": "plain clinical concept or null",\n'
             '  "symptoms": ["normalized symptom"],\n'
             '  "body_systems": ["cardiac|respiratory|neurologic|'
-            "gastrointestinal|musculoskeletal|skin|mental_health|ent|"
+            "gastrointestinal|genitourinary|musculoskeletal|skin|mental_health|ent|"
             'eye|general"],\n'
             '  "onset": "sudden|recent|longstanding|unknown",\n'
             '  "duration": "brief free-text duration or null",\n'
@@ -212,8 +222,11 @@ def _parse_feature_payload(raw_text: str) -> ClinicalFeatures | None:
 
     try:
         payload = json.loads(candidate)
+        if not isinstance(payload, dict):
+            return None
+        payload = _normalize_feature_payload(payload)
         parsed = ClinicalFeatures.model_validate(payload)
-    except Exception:
+    except (json.JSONDecodeError, ValidationError, TypeError, ValueError):
         return None
 
     parsed.body_systems = _normalize_body_systems(parsed.body_systems)
@@ -223,6 +236,76 @@ def _parse_feature_payload(raw_text: str) -> ClinicalFeatures | None:
     parsed.risk_factors = _clean_list(parsed.risk_factors)
     parsed.missing_critical_details = _clean_list(parsed.missing_critical_details)
     return parsed
+
+
+def _normalize_feature_payload(payload: dict) -> dict:
+    normalized = dict(payload)
+    normalized["symptoms"] = _as_list(normalized.get("symptoms"))
+    normalized["body_systems"] = _as_list(normalized.get("body_systems"))
+    normalized["red_flags_present"] = _as_list(normalized.get("red_flags_present"))
+    normalized["red_flags_denied"] = _as_list(normalized.get("red_flags_denied"))
+    normalized["risk_factors"] = _as_list(normalized.get("risk_factors"))
+    normalized["missing_critical_details"] = _as_list(
+        normalized.get("missing_critical_details")
+    )
+    normalized["onset"] = _normalize_onset(normalized.get("onset"))
+    normalized["severity"] = _normalize_severity(normalized.get("severity"))
+    normalized["progression"] = _normalize_progression(normalized.get("progression"))
+
+    duration = normalized.get("duration")
+    normalized["duration"] = None if duration in ("", "null") else duration
+    chief_complaint = normalized.get("chief_complaint")
+    normalized["chief_complaint"] = (
+        None if chief_complaint in ("", "null") else chief_complaint
+    )
+    return normalized
+
+
+def _as_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item or "").strip()]
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    return [str(value)]
+
+
+def _normalize_onset(value) -> str:
+    item = str(value or "").strip().lower().replace("-", " ")
+    if item in _ALLOWED_ONSETS:
+        return item
+    if any(term in item for term in ("sudden", "right now", "immediate")):
+        return "sudden"
+    if any(term in item for term in ("today", "morning", "hour", "day", "recent")):
+        return "recent"
+    if any(term in item for term in ("week", "month", "year", "chronic", "long")):
+        return "longstanding"
+    return "unknown"
+
+
+def _normalize_severity(value) -> str:
+    item = str(value or "").strip().lower().replace("-", " ")
+    if item in _ALLOWED_SEVERITIES:
+        return item
+    if any(term in item for term in ("mild", "slight", "minor")):
+        return "mild"
+    if any(term in item for term in ("moderate", "medium")):
+        return "moderate"
+    if any(term in item for term in ("severe", "bad", "intense", "worst")):
+        return "severe"
+    return "unknown"
+
+
+def _normalize_progression(value) -> str:
+    item = str(value or "").strip().lower().replace("-", " ")
+    if item in _ALLOWED_PROGRESSIONS:
+        return item
+    if any(term in item for term in ("worse", "worsen", "progress")):
+        return "worsening"
+    if any(term in item for term in ("better", "improv", "resolv")):
+        return "improving"
+    return "unknown"
 
 
 def _clean_list(values: list[str]) -> list[str]:

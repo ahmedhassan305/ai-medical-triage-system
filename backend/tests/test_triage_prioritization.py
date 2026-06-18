@@ -12,13 +12,42 @@ Evaluates triage accuracy across:
 """
 
 import json
+import os
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.core.config import get_settings
 from app.schemas.triage import TriageResponse
 from app.services.triage_service import clear_runtime_state, triage
+
+
+def _env_enabled(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _ollama_reachable() -> bool:
+    host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    try:
+        response = httpx.get(f"{host}/api/tags", timeout=2.0)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception:
+        return False
+
+    requested_model = os.getenv("OLLAMA_MODEL", "llama3.2")
+    models = payload.get("models", [])
+    model_names = {
+        item.get("name")
+        for item in models
+        if isinstance(item, dict) and item.get("name")
+    }
+    return requested_model in model_names or f"{requested_model}:latest" in model_names
+
+
+def _use_live_llm_tests() -> bool:
+    return _env_enabled("RUN_LIVE_LLM_TESTS") and _ollama_reachable()
 
 
 class TriageEvaluation:
@@ -247,9 +276,11 @@ class TestTriagePrioritization:
 
     @pytest.fixture
     def evaluator(self, monkeypatch) -> TriageEvaluation:
-        """Create evaluation framework with stub/offline mode."""
-        # Configure stub mode to avoid Ollama dependency
-        monkeypatch.setenv("REASONER_MODE", "stub")
+        """Create evaluation framework; live LLM only when explicitly enabled."""
+        if _use_live_llm_tests():
+            monkeypatch.setenv("REASONER_MODE", "ollama")
+        else:
+            monkeypatch.setenv("REASONER_MODE", "stub")
         monkeypatch.setenv("RAG_RETRIEVER", "stub")
         monkeypatch.setenv("STRICT_REASONER", "false")
 
@@ -267,11 +298,10 @@ class TestTriagePrioritization:
 
     def test_high_urgency_cases_detected_correctly(self, evaluator):
         """Verify HIGH urgency cases are correctly classified."""
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
             pytest.skip(
-                "Urgency classification requires full reasoner (stub mode unavailable)"
+                "Urgency classification requires live LLM. Set "
+                "RUN_LIVE_LLM_TESTS=true with Ollama/model available."
             )
 
         high_cases = [
@@ -297,11 +327,10 @@ class TestTriagePrioritization:
         Note: In stub mode, this test is skipped because the stub reasoner
         returns dummy responses for testing infrastructure only.
         """
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
             pytest.skip(
-                "Emergency detection requires full reasoner (stub mode unavailable)"
+                "Emergency detection requires live LLM. Set RUN_LIVE_LLM_TESTS=true "
+                "with Ollama/model available."
             )
 
         emergency_cases = [
@@ -322,10 +351,11 @@ class TestTriagePrioritization:
 
     def test_pediatric_cases_age_aware(self, evaluator):
         """Verify pediatric cases (age < 13) receive age-appropriate classification."""
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
-            pytest.skip("Age-aware classification not available in stub mode")
+            pytest.skip(
+                "Age-aware classification requires live LLM. Set "
+                "RUN_LIVE_LLM_TESTS=true with Ollama/model available."
+            )
 
         pediatric_cases = [
             tc
@@ -346,11 +376,10 @@ class TestTriagePrioritization:
 
     def test_colloquial_language_understanding(self, evaluator):
         """Verify system understands colloquial patient language."""
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
             pytest.skip(
-                "Language understanding requires full reasoner (stub mode unavailable)"
+                "Language understanding requires live LLM. Set "
+                "RUN_LIVE_LLM_TESTS=true with Ollama/model available."
             )
 
         colloquial_cases = [
@@ -370,11 +399,10 @@ class TestTriagePrioritization:
 
     def test_professional_language_accuracy(self, evaluator):
         """Verify system handles professional medical language accurately."""
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
             pytest.skip(
-                "Language accuracy requires full reasoner (stub mode unavailable)"
+                "Language accuracy requires live LLM. Set RUN_LIVE_LLM_TESTS=true "
+                "with Ollama/model available."
             )
 
         professional_cases = [
@@ -398,10 +426,11 @@ class TestTriagePrioritization:
 
     def test_chest_disease_specialty_detection(self, evaluator):
         """Verify chest disease cases recommend Cardiology or Pulmonology."""
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
-            pytest.skip("Specialty detection not available in stub mode")
+            pytest.skip(
+                "Specialty detection requires live LLM. Set RUN_LIVE_LLM_TESTS=true "
+                "with Ollama/model available."
+            )
 
         chest_cases = [
             tc for tc in evaluator.test_cases if tc.get("category") == "chest_disease"
@@ -421,10 +450,11 @@ class TestTriagePrioritization:
 
     def test_routine_low_risk_cases(self, evaluator):
         """Verify routine low-risk cases don't escalate urgency unnecessarily."""
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
-            pytest.skip("Low-risk detection not available in stub mode")
+            pytest.skip(
+                "Low-risk detection requires live LLM. Set RUN_LIVE_LLM_TESTS=true "
+                "with Ollama/model available."
+            )
 
         low_risk_cases = [
             tc
@@ -451,10 +481,11 @@ class TestTriagePrioritization:
         Note: In stub mode, this test is skipped because the stub reasoner
         returns dummy responses for testing infrastructure only.
         """
-        import os
-
         if os.getenv("REASONER_MODE") == "stub":
-            pytest.skip("Comprehensive evaluation not available in stub mode")
+            pytest.skip(
+                "Comprehensive evaluation requires live LLM. Set "
+                "RUN_LIVE_LLM_TESTS=true with Ollama/model available."
+            )
 
         report = evaluator.run_all_evaluations()
 

@@ -2,11 +2,15 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
-TEST_DB_PATH = Path(tempfile.gettempdir()) / "aimts_friend_branch_test.db"
+TEST_DB_PATH = (
+    Path(tempfile.gettempdir())
+    / f"aimts_friend_branch_test_{os.getpid()}_{uuid4().hex}.db"
+)
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
 
@@ -33,3 +37,11 @@ def client() -> TestClient:
 
     with TestClient(create_app()) as test_client:
         yield test_client
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    if TEST_DB_PATH.exists():
+        try:
+            TEST_DB_PATH.unlink()
+        except PermissionError:
+            pass

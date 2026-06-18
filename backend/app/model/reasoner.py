@@ -144,11 +144,14 @@ class OllamaReasoner:
                 response = client.post(f"{self.host}/api/generate", json=payload)
                 response.raise_for_status()
             generated = str(response.json().get("response", "")).strip()
-            logger.info("reasoner_raw_json=%s", generated)
+            logger.info("reasoner_response_received length=%s", len(generated))
             parsed = _parse_reasoner_payload(generated)
             if parsed is not None:
                 return parsed
-            logger.warning("reasoner_parse_failed raw=%s", generated[:1000])
+            logger.warning(
+                "reasoner_parse_failed length=%s fallback=unavailable",
+                len(generated),
+            )
             raise TriageSystemUnavailable(
                 "The triage AI system is unresponsive right now. "
                 "Please try again shortly."
@@ -265,7 +268,7 @@ class OllamaReasoner:
             '    "chief_complaint": "plain clinical concept or null",\n'
             '    "symptoms": ["normalized symptom 1", "normalized symptom 2"],\n'
             '    "body_systems": ["cardiac|respiratory|neurologic|"'
-            '"gastrointestinal|musculoskeletal|skin|mental_health|"'
+            '"gastrointestinal|genitourinary|musculoskeletal|skin|mental_health|"'
             '"ent|eye|general"],\n'
             '    "onset": "sudden|recent|longstanding|unknown",\n'
             '    "duration": "brief free-text duration or null",\n'
