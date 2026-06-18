@@ -8,6 +8,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.schemas.triage import ClarificationQuestion, ClinicalFeatures
+from app.services.triage_localization import localize_questions
 
 CONFIDENCE_THRESHOLD = 0.75
 MAX_CLARIFICATION_QUESTIONS = 4
@@ -513,6 +514,7 @@ def _build_llm_prompt(
     recommended_specialty: str | None,
     triage_level: str | None,
     clinical_features: ClinicalFeatures | None,
+    language: str = "en",
 ) -> str:
     payload = {
         "patient_query": query,
@@ -564,6 +566,9 @@ def _build_llm_prompt(
         "- Include a neutral option like 'None', 'Not sure', or 'No' when "
         "appropriate.\n"
         "- Avoid duplicate questions.\n\n"
+        f"- Output language: {'Arabic' if language == 'ar' else 'English'}.\n"
+        "- If output language is Arabic, write every question and every option "
+        "in natural Arabic. Do not mix English into patient-facing text.\n\n"
         f"Example JSON:\n{json.dumps(example, indent=2)}\n\n"
         f"Case data:\n{json.dumps(payload, indent=2)}"
     )
@@ -654,6 +659,7 @@ def _generate_llm_questions(
     recommended_specialty: str | None,
     triage_level: str | None,
     clinical_features: ClinicalFeatures | None,
+    language: str = "en",
 ) -> list[ClarificationQuestion]:
     settings = get_settings()
     if settings.reasoner_mode != "ollama":
@@ -665,6 +671,7 @@ def _generate_llm_questions(
         recommended_specialty=recommended_specialty,
         triage_level=triage_level,
         clinical_features=clinical_features,
+        language=language,
     )
     try:
         with httpx.Client(timeout=LLM_TIMEOUT_SECONDS) as client:
@@ -675,7 +682,7 @@ def _generate_llm_questions(
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
-                    "options": {"temperature": 0.1, "num_predict": 700},
+                    "options": {"temperature": 0.1, "num_predict": 450},
                 },
             )
             response.raise_for_status()
@@ -697,6 +704,7 @@ def _fallback_clarification_questions(
     recommended_specialty: str | None = None,
     triage_level: str | None = None,
     clinical_features: ClinicalFeatures | None = None,
+    language: str = "en",
 ) -> list[ClarificationQuestion]:
     """Deterministic backup questions based on missing details, not keywords.
 
@@ -748,9 +756,13 @@ def _fallback_clarification_questions(
     # identified that system. This avoids broad raw keyword category drift.
     if "respiratory" in body_systems:
         if "cough" in symptoms:
-            _add_unique(questions, QUESTION_BANK["cough"][:2])
+            _add_unique(questions, [QUESTION_BANK["cough"][0]])
+            if "when it started" in missing_details:
+                _add_unique(questions, [QUESTION_BANK["cough"][1]])
         if "breathing difficulty" in symptoms:
-            _add_unique(questions, QUESTION_BANK["breathing"][:2])
+            _add_unique(questions, [QUESTION_BANK["breathing"][0]])
+            if "when it started" in missing_details:
+                _add_unique(questions, [QUESTION_BANK["breathing"][1]])
     if "musculoskeletal" in body_systems:
         _add_unique(questions, SMART_QUESTION_BANK["pain_red_flags"][:2])
         _add_unique(questions, SMART_QUESTION_BANK["orthopedics"][:1])
@@ -777,24 +789,30 @@ def get_clarification_questions(
     recommended_specialty: str | None = None,
     triage_level: str | None = None,
     clinical_features: ClinicalFeatures | None = None,
+    language: str = "en",
 ) -> list[ClarificationQuestion]:
-    llm_questions = _generate_llm_questions(
-        query=query,
-        summary=summary,
-        recommended_specialty=recommended_specialty,
-        triage_level=triage_level,
-        clinical_features=clinical_features,
-    )
-    if llm_questions:
-        return llm_questions
+    settings = get_settings()
+    if settings.llm_aux_calls:
+        llm_questions = _generate_llm_questions(
+            query=query,
+            summary=summary,
+            recommended_specialty=recommended_specialty,
+            triage_level=triage_level,
+            clinical_features=clinical_features,
+            language=language,
+        )
+        if llm_questions:
+            return localize_questions(llm_questions, language)
 
-    return _fallback_clarification_questions(
+    fallback_questions = _fallback_clarification_questions(
         query,
         summary=summary,
         recommended_specialty=recommended_specialty,
         triage_level=triage_level,
         clinical_features=clinical_features,
+        language=language,
     )
+    return localize_questions(fallback_questions, language)
 
 
 def build_enriched_query(original_query: str, answers: list) -> str:
@@ -806,7 +824,17 @@ def build_enriched_query(original_query: str, answers: list) -> str:
     }
     additions = []
     for answer in answers:
-        if not answer.answer or answer.answer in ("None", "None of these"):
+        if not answer.answer or answer.answer in (
+            "None",
+            "None of these",
+            "No",
+            "Not sure",
+            "لا يوجد",
+            "لا شيء مما سبق",
+            "لا",
+            "لست متأكداً",
+            "لست متأكدا",
+        ):
             continue
         label = question_text_by_id.get(answer.question_id, answer.question_id)
         additions.append(f"Question: {label} Answer: {answer.answer}")

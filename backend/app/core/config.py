@@ -71,6 +71,7 @@ class Settings:
     ollama_host: str
     ollama_model: str
     reasoner_mode: str
+    llm_aux_calls: bool
     strict_reasoner: bool
     patient_history_visit_limit: int
     patient_history_top_matches: int
@@ -113,6 +114,7 @@ def get_settings() -> Settings:
         ollama_host=os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/"),
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
         reasoner_mode=os.getenv("REASONER_MODE", "ollama").strip().lower(),
+        llm_aux_calls=_to_bool(os.getenv("LLM_AUX_CALLS"), False),
         strict_reasoner=_to_bool(os.getenv("STRICT_REASONER"), False),
         patient_history_visit_limit=_to_int(
             os.getenv("PATIENT_HISTORY_VISIT_LIMIT"), 10

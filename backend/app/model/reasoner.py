@@ -137,18 +137,21 @@ class OllamaReasoner:
             "prompt": prompt,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.0},
+            "options": {"temperature": 0.0, "num_predict": 1100},
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(f"{self.host}/api/generate", json=payload)
                 response.raise_for_status()
             generated = str(response.json().get("response", "")).strip()
-            logger.info("reasoner_raw_json=%s", generated)
+            logger.info("reasoner_response_received length=%s", len(generated))
             parsed = _parse_reasoner_payload(generated)
             if parsed is not None:
                 return parsed
-            logger.warning("reasoner_parse_failed raw=%s", generated[:1000])
+            logger.warning(
+                "reasoner_parse_failed length=%s fallback=unavailable",
+                len(generated),
+            )
             raise TriageSystemUnavailable(
                 "The triage AI system is unresponsive right now. "
                 "Please try again shortly."
@@ -171,29 +174,29 @@ class OllamaReasoner:
         example_payload = {
             "urgency_level": "medium",
             "clinical_summary": (
-                "Respiratory symptoms with fever could reflect an acute lower "
-                "respiratory infection. The patient reports productive cough and "
-                "elevated temperature, consistent with pneumonia or acute "
-                "bronchitis based on retrieved medical literature."
+                "Chest tightness with shortness of breath and wheezing suggests "
+                "an acute breathing problem such as bronchospasm or an asthma-like "
+                "flare. Pneumonia is less supported if fever and cough are not "
+                "reported."
             ),
             "patient_friendly_explanation": (
-                "Your symptoms may be related to a chest or breathing infection. "
-                "Because you have fever and cough, it would be safer to speak "
-                "with a doctor soon rather than waiting several days."
+                "Your symptoms may be related to airway narrowing or irritation. "
+                "Because breathing symptoms can worsen, it would be safer to "
+                "speak with a doctor soon rather than waiting several days."
             ),
             "possible_conditions": [
                 {
-                    "name": "Pneumonia",
+                    "name": "Bronchospasm",
                     "explanation": (
-                        "Fever with persistent productive cough and respiratory "
-                        "findings can fit this pattern."
+                        "Wheezing with chest tightness and shortness of breath "
+                        "can fit airway narrowing."
                     ),
                 },
                 {
-                    "name": "Acute Bronchitis",
+                    "name": "Asthma exacerbation",
                     "explanation": (
-                        "Fever and productive cough are classic findings. "
-                        "Usually self-limited but medical review is prudent."
+                        "An asthma-like flare can cause wheezing and trouble "
+                        "breathing, even if asthma history is not yet known."
                     ),
                 },
             ],
@@ -204,18 +207,29 @@ class OllamaReasoner:
             ],
             "red_flags": ["trouble breathing", "blue lips", "coughing up blood"],
             "clinical_features": {
-                "chief_complaint": "cough",
-                "symptoms": ["cough", "fever"],
+                "chief_complaint": "breathing difficulty",
+                "symptoms": ["chest discomfort", "breathing difficulty", "wheezing"],
                 "body_systems": ["respiratory"],
                 "onset": "recent",
-                "duration": "2 days",
+                "duration": "since this morning",
                 "severity": "moderate",
                 "progression": "unknown",
                 "red_flags_present": [],
                 "red_flags_denied": [],
                 "risk_factors": [],
-                "missing_critical_details": ["whether breathing is difficult"],
+                "missing_critical_details": ["how severe the breathing difficulty is"],
             },
+            "clarification_questions": [
+                {
+                    "id": "breathing_severity",
+                    "question": "How severe is the breathing difficulty?",
+                    "options": [
+                        "Mild (can talk normally)",
+                        "Moderate (short sentences)",
+                        "Severe (can barely speak)",
+                    ],
+                }
+            ],
         }
         context_text = (
             "\n\n".join(contexts[:3]) if contexts else "No retrieved evidence."
@@ -254,7 +268,7 @@ class OllamaReasoner:
             '    "chief_complaint": "plain clinical concept or null",\n'
             '    "symptoms": ["normalized symptom 1", "normalized symptom 2"],\n'
             '    "body_systems": ["cardiac|respiratory|neurologic|"'
-            '"gastrointestinal|musculoskeletal|skin|mental_health|"'
+            '"gastrointestinal|genitourinary|musculoskeletal|skin|mental_health|"'
             '"ent|eye|general"],\n'
             '    "onset": "sudden|recent|longstanding|unknown",\n'
             '    "duration": "brief free-text duration or null",\n'
@@ -265,12 +279,20 @@ class OllamaReasoner:
             '    "risk_factors": ["risk factor"],\n'
             '    "missing_critical_details": ["missing detail that would "'
             '"change urgency or routing"]\n'
-            "  }\n"
+            "  },\n"
+            '  "clarification_questions": [\n'
+            '    {"id": "short_stable_id", "question": "one patient-facing "'
+            'question", "options": ["option 1", "option 2", "option 3"]}\n'
+            "  ]\n"
             "}\n\n"
             "Rules:\n"
             "- Treat retrieved evidence as supporting material, not as truth.\n"
             "- Use retrieved evidence ONLY when it clearly matches the "
             "patient's symptoms and context.\n"
+            "- Never copy symptoms from the example or references into the case. "
+            "Do not mention fever, productive cough, blood, palpitations, or "
+            "radiating pain unless the patient states them or patient context "
+            "clearly contains them.\n"
             "- If a retrieved article is weakly related, irrelevant, or "
             "conflicts with the symptoms, ignore it.\n"
             "- Do not list a condition only because it appears in retrieved "
@@ -285,6 +307,22 @@ class OllamaReasoner:
             "jaundice/yellow skin, liver disease, severe abdominal pain, "
             "colonoscopy-related, bowel disease. Weight loss, fatigue, "
             "general stomach discomfort = Internal Medicine.\n"
+            "- Jaundice/yellow eyes with abdominal swelling/ascites, dark urine, "
+            "confusion, bleeding, severe abdominal pain, or heavy alcohol/liver "
+            "context is potentially urgent. Do not describe it as needing "
+            "'immediate attention' while setting urgency_level to low or medium; "
+            "use high when emergency liver complications are suspected.\n"
+            "- Do not list Esophageal varices unless there is vomiting blood, "
+            "black/bloody stool, known cirrhosis, or portal hypertension. "
+            "Varices with bleeding is an emergency.\n"
+            "- Do not list Acute liver failure unless there is a liver-danger "
+            "pattern such as jaundice plus confusion, bleeding/bruising, severe "
+            "abdominal pain, or rapidly worsening illness; if listed, urgency "
+            "must be high with emergency care actions.\n"
+            "- Do not list lung-only conditions for fatigue in a liver-first "
+            "presentation unless cough, wheeze, or shortness of breath is stated.\n"
+            "- Do not list Biliary atresia unless the patient is a newborn or "
+            "young infant. It should not be used for adult jaundice.\n"
             "- recommended_specialty MUST be exactly one of: "
             f"{allowed_specialties_prompt()}. No other values are allowed.\n"
             "- recommended_specialty is your preliminary best-fit specialty. "
@@ -308,6 +346,11 @@ class OllamaReasoner:
             "- Chest tightness with wheezing, cough, fever, or breathing trouble "
             "should be treated as respiratory unless heart-pattern evidence is "
             "also present.\n"
+            "- Do not list Pneumonitis unless there is exposure/medication/"
+            "radiation context or several matching features such as dry cough, "
+            "fever, fatigue, appetite loss, or weight loss. Wheezing and "
+            "shortness of breath alone fit bronchospasm/asthma-like flare "
+            "better than pneumonitis.\n"
             "- Back, joint, muscle, sprain, strain, fracture, or non-emergency "
             "spine pain should usually use Orthopedics; use Neurosurgery only "
             "when there are major neurologic/spinal danger signs.\n"
@@ -324,6 +367,15 @@ class OllamaReasoner:
             "when the patient clearly says a warning sign is absent.\n"
             "- Keep clinical_features.missing_critical_details focused on "
             "information that would change urgency or specialty.\n"
+            "- clarification_questions must contain 0 to 3 targeted questions "
+            "that would change urgency, likely condition, or specialty.\n"
+            "- Do not ask a clarification question for information already "
+            "present in the patient's text. For example, if they say 'since "
+            "this morning', do not ask when it started.\n"
+            "- Do not ask duplicate questions. Prefer severity, danger signs, "
+            "spread/radiation, or function-limiting details when timing is known.\n"
+            "- For high urgency cases, clarification_questions should usually "
+            "be an empty list because the next step is urgent care.\n"
             "- Use wording such as 'possible condition' or 'may be related to'.\n"
             "- Do not overstate certainty.\n"
             "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
@@ -358,6 +410,7 @@ def _parse_reasoner_payload(raw_text: str) -> StructuredReasoningOutput | None:
 
     try:
         payload = json.loads(candidate)
+        _normalize_reasoner_payload(payload)
         parsed = StructuredReasoningOutput.model_validate(payload)
         parsed.recommended_specialty = canonicalize_specialty(
             parsed.recommended_specialty
@@ -365,6 +418,88 @@ def _parse_reasoner_payload(raw_text: str) -> StructuredReasoningOutput | None:
         return parsed
     except Exception:
         return None
+
+
+def _normalize_reasoner_payload(payload: dict) -> None:
+    features = payload.get("clinical_features")
+    if isinstance(features, dict):
+        features["onset"] = _normalize_feature_choice(
+            features.get("onset"),
+            {
+                "sudden": ("sudden", "suddenly", "right now", "acute onset"),
+                "recent": (
+                    "recent",
+                    "today",
+                    "this morning",
+                    "yesterday",
+                    "hour",
+                    "hours",
+                    "day",
+                    "days",
+                    "week",
+                    "over several",
+                    "past few",
+                ),
+                "longstanding": ("longstanding", "chronic", "months", "years"),
+            },
+            "unknown",
+        )
+        features["severity"] = _normalize_feature_choice(
+            features.get("severity"),
+            {
+                "mild": ("mild", "slight"),
+                "moderate": ("moderate", "medium"),
+                "severe": ("severe", "bad", "intense", "cannot", "can't"),
+            },
+            "unknown",
+        )
+        features["progression"] = _normalize_feature_choice(
+            features.get("progression"),
+            {
+                "worsening": ("worsening", "worse", "getting worse"),
+                "improving": ("improving", "better", "getting better"),
+            },
+            "unknown",
+        )
+
+    for condition in payload.get("possible_conditions", []) or []:
+        if not isinstance(condition, dict):
+            continue
+        condition["likelihood"] = _normalize_feature_choice(
+            condition.get("likelihood"),
+            {
+                "more likely": ("more likely", "likely", "most likely"),
+                "possible": ("possible", "consider", "may"),
+                "less likely": ("less likely", "unlikely"),
+            },
+            "possible",
+        )
+
+    for index, question in enumerate(payload.get("clarification_questions", []) or []):
+        if not isinstance(question, dict):
+            continue
+        if not str(question.get("id") or "").strip():
+            question_text = str(question.get("question") or "clarification").lower()
+            slug = "".join(
+                character if character.isalnum() else "_" for character in question_text
+            ).strip("_")
+            question["id"] = (slug or f"clarification_{index + 1}")[:60]
+
+
+def _normalize_feature_choice(
+    value: object,
+    choices: dict[str, tuple[str, ...]],
+    default: str,
+) -> str:
+    text = str(value or "").strip().lower().replace("_", " ")
+    if not text:
+        return default
+    if text in choices:
+        return text
+    for normalized, terms in choices.items():
+        if any(term in text for term in terms):
+            return normalized
+    return default
 
 
 def _guess_conditions(query: str) -> list[ReasonerCondition]:

@@ -27,6 +27,7 @@ def clarify_and_triage(
             enriched_query,
             patient_id=payload.patient_id,
             db=db,
+            language=payload.language,
         )
     except TriageSystemUnavailable as exc:
         raise HTTPException(

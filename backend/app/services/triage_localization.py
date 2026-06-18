@@ -308,6 +308,8 @@ CONDITION_AR.update(
         "inflammatory bowel disease (ibd)": "مرض التهاب الأمعاء",
         "irritable bowel syndrome": "متلازمة القولون العصبي",
         "peptic ulcer disease": "قرحة هضمية",
+        "median arcuate ligament syndrome": "متلازمة الرباط المقوس الأوسط",
+        "median arcuate ligament syndrome (mals)": "متلازمة الرباط المقوس الأوسط",
         "pneumonia": "التهاب رئوي",
         "acute bronchitis": "التهاب الشعب الهوائية الحاد",
         "bronchitis": "التهاب الشعب الهوائية",
@@ -543,6 +545,43 @@ def _arabic_clinical_summary(response: TriageResponse) -> str:
             f"الاحتمالات الطبية الأبرز: {', '.join(conditions[:3])}."
         )
     return f"توجد أعراض تحتاج إلى تقييم ضمن تخصص {specialty}."
+
+
+QUESTION_AR.update(
+    {
+        "pain_injury": (
+            "هل بدأ الألم بعد إصابة أو سقوط أو حمل شيء ثقيل أو تمرين؟",
+            [
+                "نعم، إصابة واضحة",
+                "بعد تمرين أو إجهاد",
+                "لا توجد إصابة",
+                "لست متأكداً",
+            ],
+        ),
+    }
+)
+
+QUESTION_TEXT_AR.update(
+    {
+        "Did this start after an injury, fall, heavy lifting, or exercise?": (
+            "هل بدأ الألم بعد إصابة أو سقوط أو حمل شيء ثقيل أو تمرين؟"
+        ),
+        "Did the pain start after an injury, exertion, or at rest?": (
+            "هل بدأ الألم بعد إصابة أو مجهود أم أثناء الراحة؟"
+        ),
+    }
+)
+
+OPTION_AR.update(
+    {
+        "Yes, clear injury": "نعم، إصابة واضحة",
+        "After exercise/strain": "بعد تمرين أو إجهاد",
+        "No injury": "لا توجد إصابة",
+        "After injury": "بعد إصابة",
+        "After exertion": "بعد مجهود",
+        "At rest": "أثناء الراحة",
+    }
+)
 
 
 def localize_questions(

@@ -146,16 +146,22 @@ class OllamaSpecialtyAdjudicator:
                         "prompt": prompt,
                         "stream": False,
                         "format": "json",
-                        "options": {"temperature": 0.0},
+                        "options": {"temperature": 0.0, "num_predict": 450},
                     },
                 )
                 response.raise_for_status()
             raw = str(response.json().get("response", "")).strip()
-            logger.info("specialty_adjudicator_raw_json=%s", raw)
+            logger.info(
+                "specialty_adjudicator_response_received length=%s",
+                len(raw),
+            )
             parsed = _parse_adjudication_payload(raw)
             if parsed and parsed.final_specialty:
                 return parsed
-            logger.warning("specialty_adjudicator_parse_failed raw=%s", raw[:1000])
+            logger.warning(
+                "specialty_adjudicator_parse_failed length=%s fallback=unavailable",
+                len(raw),
+            )
             raise TriageSystemUnavailable(
                 "The triage AI system is unresponsive right now. "
                 "Please try again shortly."

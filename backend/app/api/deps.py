@@ -29,14 +29,21 @@ def get_current_user(
             detail="Invalid authentication credentials.",
         ) from exc
 
-    subject = payload.get("sub")
-    if not subject:
+    raw_subject = payload.get("sub")
+    if raw_subject is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials.",
         )
+    try:
+        subject = int(raw_subject)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials.",
+        ) from exc
 
-    user = db.query(User).filter(User.id == int(subject)).first()
+    user = db.query(User).filter(User.id == subject).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
