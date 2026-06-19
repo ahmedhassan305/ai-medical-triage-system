@@ -3,6 +3,7 @@ import type {
   ManagedPatientProfileCreateDto,
   PatientMedicalHistoryEntryCreateDto,
   PatientMedicalHistoryEntryResponseDto,
+  PatientMedicalHistoryReportExtractionDto,
   PatientProfileResponseDto,
   PatientProfileUpsertDto,
 } from "./dto";
@@ -65,6 +66,20 @@ export async function createPatientMedicalHistoryEntry(
   const response = await api.post<PatientMedicalHistoryEntryResponseDto>(
     apiPaths.patients.medicalHistory(patientId),
     payload,
+  );
+  return response.data;
+}
+
+export async function extractPatientMedicalHistoryReport(
+  patientId: number,
+  file: File,
+): Promise<PatientMedicalHistoryReportExtractionDto> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post<PatientMedicalHistoryReportExtractionDto>(
+    apiPaths.patients.medicalHistoryReportExtract(patientId),
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return response.data;
 }

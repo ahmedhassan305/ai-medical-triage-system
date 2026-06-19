@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { useLanguage } from "../i18n/useLanguage";
+import { splitResidenceLocation } from "../lib/egyptianLocations";
 import { formatLocalizedDateTime } from "../lib/localizedDisplay";
 import type { DoctorSuggestionDto } from "../api/dto";
 
@@ -111,7 +112,16 @@ function getFallbackReasons(
     });
   }
 
-  if (patientLocation && [doctor.area, doctor.city].some((part) => part === patientLocation)) {
+  const residence = splitResidenceLocation(patientLocation);
+  if (
+    patientLocation &&
+    [doctor.area, doctor.city].some(
+      (part) =>
+        part === patientLocation ||
+        part === residence.governorate ||
+        part === residence.area,
+    )
+  ) {
     reasons.push({
       text: t("nearYourLocation"),
       icon: "📍",

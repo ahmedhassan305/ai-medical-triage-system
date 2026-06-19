@@ -94,6 +94,14 @@ class PatientMedicalHistoryEntryResponse(PatientMedicalHistoryEntryCreate):
     updated_at: datetime
 
 
+class PatientMedicalHistoryReportExtractionResponse(BaseModel):
+    filename: str
+    category: str
+    title: str
+    notes: str
+    warning: str | None = None
+
+
 class PatientLabResultResponse(BaseModel):
     id: int
     patient_id: int | None = None

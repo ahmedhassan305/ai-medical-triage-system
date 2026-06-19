@@ -22,7 +22,6 @@ DEFAULT_DEMO_WEEKDAYS = {"sunday", "monday", "tuesday", "wednesday", "thursday"}
 DEFAULT_DEMO_START_TIME = time(9, 0)
 DEFAULT_DEMO_END_TIME = time(17, 0)
 OPEN_SLOT_STATUSES = {"open"}
-RESERVED_SLOT_STATUS = "reserved"
 BOOKED_SLOT_STATUS = "booked"
 DEFAULT_WORKING_DAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday")
 DEFAULT_START_TIME = time(9, 0)
@@ -189,6 +188,36 @@ def _load_existing_slots(
     return {(slot.doctor_clinic_id, slot.start_at, slot.end_at): slot for slot in slots}
 
 
+def prune_expired_open_slots(
+    db: Session,
+    doctor_id: int | None = None,
+    *,
+    now: datetime | None = None,
+) -> int:
+    current_time = now or datetime.now()
+    query = db.query(AppointmentSlot).filter(
+        AppointmentSlot.status.in_(OPEN_SLOT_STATUSES),
+        AppointmentSlot.start_at <= current_time,
+    )
+    if doctor_id is not None:
+        doctor_clinic_ids = [
+            row[0]
+            for row in db.query(DoctorClinic.id)
+            .filter(DoctorClinic.doctor_id == doctor_id)
+            .all()
+        ]
+        if not doctor_clinic_ids:
+            return 0
+        query = query.filter(AppointmentSlot.doctor_clinic_id.in_(doctor_clinic_ids))
+    expired_slots = query.all()
+    for slot in expired_slots:
+        db.delete(slot)
+    deleted = len(expired_slots)
+    if deleted:
+        db.flush()
+    return deleted
+
+
 def ensure_primary_doctor_clinic(db: Session, doctor: DoctorProfile) -> DoctorClinic:
     existing = get_primary_doctor_clinic(db, doctor.id)
     if existing is not None:
@@ -270,8 +299,10 @@ def generate_slots_for_doctor(
     if not schedules:
         return []
 
+    pruned_any = prune_expired_open_slots(db, doctor_id) > 0
     existing_slots = _load_existing_slots(db, doctor_id, window)
     created_any = False
+    now = datetime.now()
 
     for current_date in _iter_dates(window.start_date, window.end_date):
         weekday_name = _serialize_weekday(current_date)
@@ -292,7 +323,7 @@ def generate_slots_for_doctor(
             while slot_start + slot_delta <= schedule_end:
                 slot_end = slot_start + slot_delta
                 key = (schedule.doctor_clinic_id, slot_start, slot_end)
-                if key not in existing_slots:
+                if slot_start > now and key not in existing_slots:
                     slot = AppointmentSlot(
                         doctor_clinic_id=schedule.doctor_clinic_id,
                         schedule_id=schedule.id,
@@ -305,7 +336,7 @@ def generate_slots_for_doctor(
                     created_any = True
                 slot_start = slot_end
 
-    if created_any:
+    if pruned_any or created_any:
         try:
             db.commit()
         except IntegrityError:
@@ -338,6 +369,12 @@ def reserve_slot_for_appointment(
     )
     if slot is None:
         raise SlotBookingValidationError("Appointment slot not found.")
+    if slot.status in OPEN_SLOT_STATUSES and slot.start_at <= datetime.now():
+        db.delete(slot)
+        db.commit()
+        raise SlotBookingConflict(
+            "The selected appointment slot has expired. Please choose a later time."
+        )
     if slot.status not in OPEN_SLOT_STATUSES:
         raise SlotBookingConflict(
             "The selected appointment slot is no longer available."
@@ -356,12 +393,12 @@ def reserve_slot_for_appointment(
         doctor_id=doctor_id,
         clinic_id=slot.doctor_clinic.clinic_id,
         slot_id=slot.id,
-        status="requested",
+        status="approved",
         scheduled_for=slot.start_at,
         reason=reason,
         notes=notes,
     )
-    slot.status = RESERVED_SLOT_STATUS
+    slot.status = BOOKED_SLOT_STATUS
     db.add(appointment)
 
     try:

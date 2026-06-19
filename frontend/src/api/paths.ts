@@ -19,6 +19,8 @@ export const apiPaths = {
     byId: (patientId: number) => `${API_V1_PREFIX}/patients/${patientId}`,
     medicalHistory: (patientId: number) =>
       `${API_V1_PREFIX}/patients/${patientId}/medical-history`,
+    medicalHistoryReportExtract: (patientId: number) =>
+      `${API_V1_PREFIX}/patients/${patientId}/medical-history/extract-report`,
   },
   doctors: {
     list: `${API_V1_PREFIX}/doctors/`,

@@ -474,10 +474,26 @@ export default function HomePage() {
     doctor_id: number;
     reason: string;
     notes?: string;
-    scheduled_for?: string | null;
-    clinic_id?: number | null;
     slot_id?: number | null;
   }) {
+    if (user?.role === "doctor" && payload.doctor_id !== doctorProfile?.id) {
+      setAppointmentsError(
+        "Doctors can only book patients into their own schedule.",
+      );
+      return;
+    }
+
+    if (
+      user?.role !== "patient" &&
+      user?.role !== "admin" &&
+      user?.role !== "doctor"
+    ) {
+      setAppointmentsError(
+        "Only patient, doctor, and admin accounts can create bookings.",
+      );
+      return;
+    }
+
     setAppointmentsLoading(true);
     setAppointmentsError(null);
     try {
@@ -561,6 +577,14 @@ export default function HomePage() {
     if (currentUser.role === "patient" && tab === "records") {
       startTransition(() => setSelectedTab("overview"));
       return;
+    }
+    if (tab === "appointments") {
+      void listDoctors()
+        .then(setDoctors)
+        .catch(() => undefined);
+      void listAppointments()
+        .then(setAppointments)
+        .catch(() => undefined);
     }
     startTransition(() => setSelectedTab(tab));
   }
@@ -712,6 +736,7 @@ export default function HomePage() {
             doctors={doctors}
             patients={patients}
             currentPatientId={currentPatientId}
+            currentDoctorId={doctorProfile?.id ?? null}
             appointments={appointments}
             loading={appointmentsLoading}
             error={appointmentsError}

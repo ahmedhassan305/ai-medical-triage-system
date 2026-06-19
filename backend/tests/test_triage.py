@@ -1,7 +1,16 @@
+from datetime import datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db.models import DoctorProfile, PatientProfile, Visit
+from app.db.models import (
+    AppointmentSlot,
+    Clinic,
+    DoctorClinic,
+    DoctorProfile,
+    PatientProfile,
+    Visit,
+)
 from app.db.session import SessionLocal
 from app.model.reasoner import _parse_reasoner_payload
 from app.schemas.triage import (
@@ -448,6 +457,112 @@ def test_doctor_recommendations_rank_subspecialty_before_name_order(
     assert suggestions
     assert suggestions[0].full_name == "Z Knee Specialist"
     assert "knee" in (suggestions[0].recommendation_reason or "").lower()
+
+
+def test_doctor_recommendations_rank_same_alexandria_area_first(
+    client: TestClient,
+) -> None:
+    db = SessionLocal()
+    patient = PatientProfile(
+        full_name="Smouha Patient",
+        age=41,
+        sex="male",
+        current_governorate="Alexandria - Smouha",
+    )
+    db.add(patient)
+    db.flush()
+    db.add_all(
+        [
+            DoctorProfile(
+                full_name="A Loran Doctor",
+                specialty="Cardiology",
+                clinic="Heart clinic",
+                area="Loran",
+                city="Alexandria",
+            ),
+            DoctorProfile(
+                full_name="Z Smouha Doctor",
+                specialty="Cardiology",
+                clinic="Heart clinic",
+                area="Smouha",
+                city="Alexandria",
+            ),
+        ]
+    )
+    db.commit()
+
+    suggestions = get_suggested_doctors(
+        db,
+        "Cardiology",
+        query="Chest tightness when walking upstairs",
+        clinical_features=ClinicalFeatures(
+            symptoms=["chest tightness"],
+            body_systems=["cardiovascular"],
+        ),
+        patient_id=patient.id,
+    )
+    db.close()
+
+    assert suggestions
+    assert suggestions[0].area == "Smouha"
+    assert suggestions[0].full_name != "A Loran Doctor"
+    assert "same clinic area" in (suggestions[0].recommendation_reason or "").lower()
+
+
+def test_doctor_recommendations_include_scoped_base_specialty(
+    client: TestClient,
+) -> None:
+    db = SessionLocal()
+    generic_doctor = DoctorProfile(
+        full_name="A Generic Internist",
+        specialty="Internal Medicine",
+        clinic="Internal medicine clinic",
+        area="Smouha",
+        city="Alexandria",
+    )
+    scoped_doctor = DoctorProfile(
+        full_name="MMT",
+        specialty="Internal Medicine - Rheumatology",
+        clinic="Internal medicine and rheumatology clinic",
+        area="Smouha",
+        city="Alexandria",
+    )
+    db.add_all([generic_doctor, scoped_doctor])
+    db.flush()
+    clinic = Clinic(name="MMT Clinic", area="Smouha", city="Alexandria")
+    db.add(clinic)
+    db.flush()
+    doctor_clinic = DoctorClinic(
+        doctor_id=scoped_doctor.id,
+        clinic_id=clinic.id,
+        is_primary=True,
+        is_active=True,
+    )
+    db.add(doctor_clinic)
+    db.flush()
+    db.add(
+        AppointmentSlot(
+            doctor_clinic_id=doctor_clinic.id,
+            start_at=datetime.now() + timedelta(days=1),
+            end_at=datetime.now() + timedelta(days=1, minutes=30),
+            status="open",
+        )
+    )
+    db.commit()
+
+    suggestions = get_suggested_doctors(
+        db,
+        "Internal Medicine",
+        query="I have fatigue, joint aches, and fever",
+        clinical_features=ClinicalFeatures(
+            symptoms=["fatigue", "joint aches", "fever"],
+            body_systems=["systemic"],
+        ),
+    )
+    db.close()
+
+    assert suggestions[0].full_name == "MMT"
+    assert suggestions[0].earliest_available_slot is not None
 
 
 def test_anonymous_triage_cannot_use_patient_context(client: TestClient) -> None:

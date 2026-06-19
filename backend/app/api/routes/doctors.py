@@ -24,6 +24,7 @@ from app.schemas.doctor import (
     DoctorScheduleCreate,
     DoctorScheduleResponse,
 )
+from app.services.access_control import require_linked_doctor_profile
 from app.services.clinical_records import assign_department_to_doctor
 from app.services.slot_booking import (
     SlotBookingValidationError,
@@ -79,6 +80,21 @@ def _clear_future_open_slots(db: Session, doctor_id: int) -> None:
         )
         .delete(synchronize_session=False)
     )
+
+
+def _ensure_doctor_schedule_access(
+    db: Session,
+    current_user: User,
+    doctor_id: int,
+) -> None:
+    if current_user.role == "admin":
+        return
+    linked_doctor = require_linked_doctor_profile(db, current_user)
+    if linked_doctor.id != doctor_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Doctors can only manage their own schedule.",
+        )
 
 
 @router.get("/", response_model=list[DoctorProfileResponse])
@@ -175,10 +191,11 @@ def update_doctor(
 def list_doctor_schedules(
     doctor_id: int,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("doctor", "admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> list[DoctorScheduleResponse]:
     if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    _ensure_doctor_schedule_access(db, current_user, doctor_id)
     schedules = (
         db.query(DoctorSchedule)
         .filter(DoctorSchedule.doctor_id == doctor_id)
@@ -200,10 +217,11 @@ def create_doctor_schedule(
     doctor_id: int,
     payload: DoctorScheduleCreate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> DoctorScheduleResponse:
     if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    _ensure_doctor_schedule_access(db, current_user, doctor_id)
     schedule_data = payload.model_dump()
     if schedule_data.get("doctor_clinic_id") is None:
         schedule_data["doctor_clinic_id"] = _default_doctor_clinic_id(db, doctor_id)
@@ -224,8 +242,9 @@ def update_doctor_schedule(
     schedule_id: int,
     payload: DoctorScheduleCreate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> DoctorScheduleResponse:
+    _ensure_doctor_schedule_access(db, current_user, doctor_id)
     schedule = (
         db.query(DoctorSchedule)
         .filter(

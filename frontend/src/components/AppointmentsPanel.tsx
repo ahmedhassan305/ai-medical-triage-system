@@ -26,6 +26,7 @@ type AppointmentsPanelProps = {
   doctors: DoctorProfileResponseDto[];
   patients: PatientProfileResponseDto[];
   currentPatientId: number | null;
+  currentDoctorId?: number | null;
   appointments: AppointmentResponseDto[];
   loading: boolean;
   error: string | null;
@@ -34,8 +35,6 @@ type AppointmentsPanelProps = {
     doctor_id: number;
     reason: string;
     notes?: string;
-    scheduled_for?: string | null;
-    clinic_id?: number | null;
     slot_id?: number | null;
   }) => Promise<void>;
   onUpdateStatus: (
@@ -89,11 +88,16 @@ function formatRequestedAt(
   return new Date(value).toLocaleString(language === "ar" ? "ar-EG" : "en-US");
 }
 
+function primarySpecialty(value: string): string {
+  return value.split(" - ")[0]?.trim() || value;
+}
+
 export default function AppointmentsPanel({
   role,
   doctors,
   patients,
   currentPatientId,
+  currentDoctorId = null,
   appointments,
   loading,
   error,
@@ -105,7 +109,7 @@ export default function AppointmentsPanel({
   const { t, language } = useLanguage();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [doctorId, setDoctorId] = useState<number | "">(
-    preFill?.doctorId ?? "",
+    preFill?.doctorId ?? currentDoctorId ?? "",
   );
   const [patientId, setPatientId] = useState<number | "">(
     currentPatientId ?? "",
@@ -151,20 +155,26 @@ export default function AppointmentsPanel({
   const specialties = useMemo(
     () =>
       Array.from(
-        new Set(doctors.map((doctor) => doctor.specialty).filter(Boolean)),
+        new Set(
+          doctors
+            .map((doctor) => primarySpecialty(doctor.specialty))
+            .filter(Boolean),
+        ),
       ).sort(),
     [doctors],
   );
+  const bookableDoctors =
+    role === "doctor" && currentDoctorId
+      ? doctors.filter((doctor) => doctor.id === currentDoctorId)
+      : doctors;
   const filteredDoctors = selectedSpecialty
-    ? doctors.filter((doctor) => doctor.specialty === selectedSpecialty)
-    : doctors;
+    ? bookableDoctors.filter(
+        (doctor) => primarySpecialty(doctor.specialty) === selectedSpecialty,
+      )
+    : bookableDoctors;
   const selectedDoctor = doctors.find(
     (doctor) => doctor.id === Number(doctorId),
   );
-  const selectedSlot = availableSlots.find(
-    (slot) => slot.id === Number(selectedSlotId),
-  );
-
   useEffect(() => {
     if (!preFill) {
       return;
@@ -175,6 +185,18 @@ export default function AppointmentsPanel({
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [preFill]);
+
+  useEffect(() => {
+    if (role !== "doctor" || !currentDoctorId) {
+      return;
+    }
+
+    setDoctorId(currentDoctorId);
+    const ownDoctor = doctors.find((doctor) => doctor.id === currentDoctorId);
+    if (ownDoctor) {
+      setSelectedSpecialty(primarySpecialty(ownDoctor.specialty));
+    }
+  }, [currentDoctorId, doctors, role]);
 
   useEffect(() => {
     if (!doctorId) {
@@ -197,7 +219,14 @@ export default function AppointmentsPanel({
     listDoctorSlots(Number(doctorId))
       .then((slots) => {
         if (!cancelled) {
-          setAvailableSlots(slots.filter((slot) => slot.status === "open"));
+          const now = Date.now();
+          setAvailableSlots(
+            slots.filter(
+              (slot) =>
+                slot.status === "open" &&
+                new Date(slot.start_at).getTime() > now,
+            ),
+          );
         }
       })
       .catch(() => {
@@ -251,8 +280,6 @@ export default function AppointmentsPanel({
       doctor_id: Number(doctorId),
       reason: reason.trim(),
       notes: notes.trim() || undefined,
-      scheduled_for: selectedSlot?.start_at ?? null,
-      clinic_id: selectedSlot?.clinic?.id ?? null,
       slot_id: Number(selectedSlotId),
     });
     setReason("");
@@ -314,6 +341,20 @@ export default function AppointmentsPanel({
     ...completedAppointments,
     ...rejectedAppointments,
   ];
+  const doctorScheduleText =
+    language === "ar"
+      ? {
+          title: "جدول الطبيب الأسبوعي",
+          eyebrow: "هذا الأسبوع",
+          empty: "لا توجد مواعيد مؤكدة في هذا الأسبوع.",
+          legacyPending: "طلبات قديمة تحتاج متابعة",
+        }
+      : {
+          title: "Doctor weekly schedule",
+          eyebrow: "This week",
+          empty: "No confirmed appointments this week.",
+          legacyPending: "Legacy requests needing follow-up",
+        };
 
   function handleSortByChange(value: "date" | "id") {
     setSortBy(value);
@@ -390,6 +431,15 @@ export default function AppointmentsPanel({
       patients.find((patient) => patient.id === appointment.patient_id)
         ?.full_name ?? `${t("patientNumber")} #${appointment.patient_id}`
     );
+  }
+
+  function getShortPatientName(appointment: AppointmentResponseDto): string {
+    const patientName = getPatientName(appointment);
+    const parts = patientName.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0]} ${parts[1]}`;
+    }
+    return patientName;
   }
 
   function getDoctorName(appointment: AppointmentResponseDto): string {
@@ -686,6 +736,106 @@ export default function AppointmentsPanel({
     );
   }
 
+  function renderDoctorWeeklySchedule() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(today);
+      day.setDate(today.getDate() + index);
+      return day;
+    });
+    const weekEnd = new Date(today);
+    weekEnd.setDate(today.getDate() + 7);
+    const appointmentsThisWeek = confirmedAppointments
+      .filter((appointment) => {
+        if (!appointment.scheduled_for) {
+          return false;
+        }
+        const scheduled = new Date(appointment.scheduled_for);
+        return scheduled >= today && scheduled < weekEnd;
+      })
+      .sort(
+        (left, right) =>
+          new Date(left.scheduled_for ?? "").getTime() -
+          new Date(right.scheduled_for ?? "").getTime(),
+      );
+
+    return (
+      <section className="workspace-card workspace-card--compact">
+        <div className="workspace-card__header">
+          <div>
+            <p className="micro-label">{doctorScheduleText.eyebrow}</p>
+            <h3>{doctorScheduleText.title}</h3>
+          </div>
+          <span className="badge badge--status-approved">
+            {appointmentsThisWeek.length} {t("upcomingBookings")}
+          </span>
+        </div>
+
+        <div className="doctor-week-calendar">
+          {days.map((day) => {
+            const dayKey = day.toDateString();
+            const dayAppointments = appointmentsThisWeek.filter(
+              (appointment) =>
+                appointment.scheduled_for &&
+                new Date(appointment.scheduled_for).toDateString() === dayKey,
+            );
+            return (
+              <div key={dayKey} className="doctor-week-calendar__day">
+                <div className="doctor-week-calendar__date">
+                  <strong>
+                    {day.toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
+                      weekday: "short",
+                    })}
+                  </strong>
+                  <span>
+                    {day.toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+                <div className="doctor-week-calendar__items">
+                  {dayAppointments.length === 0 ? (
+                    <span className="doctor-week-calendar__empty">-</span>
+                  ) : (
+                    dayAppointments.map((appointment) => (
+                      <button
+                        key={appointment.id}
+                        type="button"
+                        className="doctor-week-calendar__booking"
+                        onClick={() => openDetails(appointment)}
+                      >
+                        <strong>
+                          {new Date(
+                            appointment.scheduled_for ?? appointment.requested_at,
+                          ).toLocaleTimeString(
+                            language === "ar" ? "ar-EG" : "en-US",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </strong>
+                        <span title={getPatientName(appointment)}>
+                          {getShortPatientName(appointment)}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {appointmentsThisWeek.length === 0 ? (
+          <div className="empty-state">{doctorScheduleText.empty}</div>
+        ) : null}
+      </section>
+    );
+  }
+
   function renderAppointmentDetails() {
     if (!selectedAppointment) {
       return null;
@@ -819,7 +969,7 @@ export default function AppointmentsPanel({
       title={t("appointmentsTitle")}
       description={t("appointmentsPanelDescription")}
     >
-      {role !== "doctor" ? (
+      {role !== "doctor" || currentDoctorId ? (
         <div className="stack-md">
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
@@ -828,7 +978,9 @@ export default function AppointmentsPanel({
                 <h3>
                   {role === "admin"
                     ? t("createAppointmentRequest")
-                    : t("bookAFollowUpAppointment")}
+                    : role === "doctor"
+                      ? "Book selected patient"
+                      : t("bookAFollowUpAppointment")}
                 </h3>
               </div>
             </div>
@@ -903,8 +1055,11 @@ export default function AppointmentsPanel({
                   value={selectedSpecialty}
                   onChange={(value) => {
                     setSelectedSpecialty(value);
-                    setDoctorId("");
+                    if (role !== "doctor") {
+                      setDoctorId("");
+                    }
                   }}
+                  disabled={role === "doctor"}
                   options={[
                     { value: "", label: t("allSpecialties") },
                     ...specialties.map((specialty) => ({
@@ -921,6 +1076,7 @@ export default function AppointmentsPanel({
                   id="appointment-doctor"
                   value={String(doctorId)}
                   onChange={(value) => setDoctorId(value ? Number(value) : "")}
+                  disabled={role === "doctor"}
                   options={[
                     { value: "", label: t("selectDoctor") },
                     ...filteredDoctors.map((doctor) => ({
@@ -1112,30 +1268,26 @@ export default function AppointmentsPanel({
 
       {role === "doctor" ? (
         <div className="stack-md">
-          <section className="workspace-card workspace-card--compact">
-            <div className="workspace-card__header">
-              <div>
-                <p className="micro-label">{t("pendingApprovals")}</p>
-                <h3>
-                  {pendingAppointments.length} {t("requestsNeedDecision")}
-                </h3>
-              </div>
-            </div>
-            <div className="stack-md">
-              {pendingAppointments.length === 0 ? (
-                <div className="empty-state">
-                  {t("noPendingApprovalsRightNow")}
+          {renderDoctorWeeklySchedule()}
+
+          {pendingAppointments.length > 0 ? (
+            <section className="workspace-card workspace-card--compact">
+              <div className="workspace-card__header">
+                <div>
+                  <p className="micro-label">{t("pendingApprovals")}</p>
+                  <h3>{doctorScheduleText.legacyPending}</h3>
                 </div>
-              ) : (
-                pendingAppointments.map((appointment) =>
+              </div>
+              <div className="stack-md">
+                {pendingAppointments.map((appointment) =>
                   renderAppointmentCard(appointment, {
                     showWorkflowActions: true,
                     showDetailsAction: true,
                   }),
-                )
-              )}
-            </div>
-          </section>
+                )}
+              </div>
+            </section>
+          ) : null}
 
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">

@@ -77,10 +77,10 @@ def _serialize_appointment(appointment: Appointment) -> AppointmentResponse:
 def create_appointment(
     payload: AppointmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("patient", "admin")),
+    current_user: User = Depends(require_roles("patient", "admin", "doctor")),
 ) -> AppointmentResponse:
     patient = get_patient_profile_or_404(db, payload.patient_id)
-    get_doctor_profile_or_404(db, payload.doctor_id)
+    doctor = get_doctor_profile_or_404(db, payload.doctor_id)
 
     if current_user.role == "patient":
         own_patient_profile = get_linked_patient_profile(db, current_user)
@@ -93,6 +93,18 @@ def create_appointment(
             raise HTTPException(
                 status_code=403,
                 detail="Patients can only book appointments for themselves.",
+            )
+    elif current_user.role == "doctor":
+        own_doctor_profile = get_linked_doctor_profile(db, current_user)
+        if own_doctor_profile is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Doctor profile is required before booking patients.",
+            )
+        if own_doctor_profile.id != doctor.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Doctors can only book patients into their own schedule.",
             )
 
     if payload.slot_id is not None:
@@ -153,7 +165,10 @@ def create_appointment(
                 detail="This appointment time is no longer available.",
             )
 
-    appointment = Appointment(**payload.model_dump(), status="requested")
+    appointment_status = (
+        "approved" if payload.scheduled_for is not None else "requested"
+    )
+    appointment = Appointment(**payload.model_dump(), status=appointment_status)
     appointment.clinic_id = resolved_clinic_id
     db.add(appointment)
     db.commit()

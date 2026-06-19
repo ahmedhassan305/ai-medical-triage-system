@@ -7,15 +7,15 @@
   background:
     radial-gradient(
       circle at top left,
-      rgba(255, 214, 165, 0.35),
+      rgba(22, 51, 50, 0.2),
       transparent 28%
     ),
     radial-gradient(
       circle at top right,
-      rgba(79, 209, 197, 0.18),
+      rgba(15, 118, 110, 0.2),
       transparent 24%
     ),
-    linear-gradient(180deg, #f7f4ec 0%, #ecf4f2 100%);
+    linear-gradient(180deg, #eef6f2 0%, #dfecea 52%, #f7fbf9 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -26,6 +26,8 @@
   --bg-panel-strong: rgba(255, 255, 255, 0.96);
   --bg-ink: #163332;
   --bg-ink-soft: #284847;
+  --text-on-ink: #f8fafc;
+  --text-on-ink-rgb: 248, 250, 252;
   --text-main: #1f2933;
   --text-muted: #546371;
   --border-soft: rgba(22, 51, 50, 0.12);
@@ -39,6 +41,15 @@
   --success-soft: #def7ec;
   --shadow-soft: 0 18px 40px rgba(31, 41, 51, 0.08);
   --shadow-deep: 0 28px 60px rgba(22, 51, 50, 0.14);
+  --surface-green-gradient: linear-gradient(
+    145deg,
+    rgba(22, 51, 50, 0.24) 0%,
+    rgba(40, 72, 71, 0.16) 28%,
+    rgba(15, 118, 110, 0.1) 58%,
+    rgba(255, 255, 255, 0.88) 100%
+  );
+  --surface-green-border: rgba(22, 51, 50, 0.18);
+  --surface-green-shadow: 0 18px 38px rgba(22, 51, 50, 0.1);
   --radius-lg: 24px;
   --radius-md: 18px;
   --radius-sm: 12px;
@@ -166,7 +177,7 @@ button {
     rgba(24, 91, 83, 0.86)
   );
   border-radius: 32px;
-  color: #f8fafc;
+  color: var(--text-on-ink);
   padding: 40px;
   box-shadow: var(--shadow-deep);
   position: relative;
@@ -267,7 +278,7 @@ button {
 .dashboard-nav {
   background: var(--bg-ink);
   border-radius: 30px;
-  color: #f8fafc;
+  color: var(--text-on-ink);
   padding: 26px 20px;
   display: flex;
   flex-direction: column;
@@ -284,7 +295,7 @@ button {
   margin: 0;
   display: grid;
   gap: 6px;
-  color: rgba(248, 250, 252, 0.72);
+  color: rgba(var(--text-on-ink-rgb), 0.72);
 }
 
 .dashboard-nav__meta span {
@@ -293,12 +304,12 @@ button {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   padding: 4px 10px;
-  color: #f8fafc;
+  color: var(--text-on-ink);
 }
 
 .dashboard-nav__copy {
   margin: 0;
-  color: rgba(248, 250, 252, 0.74);
+  color: rgba(var(--text-on-ink-rgb), 0.74);
   line-height: 1.55;
 }
 
@@ -311,7 +322,7 @@ button {
   border: 1px solid transparent;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.06);
-  color: #f8fafc;
+  color: var(--text-on-ink);
   padding: 12px 14px;
   text-align: left;
 }
@@ -357,11 +368,15 @@ button {
 }
 
 .panel {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-soft);
+  background:
+    var(--surface-green-gradient),
+    var(--bg-panel);
+  border: 1px solid var(--surface-green-border);
   border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: var(--shadow-soft);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    var(--surface-green-shadow);
 }
 
 .panel__header {
@@ -397,6 +412,7 @@ button {
 
 .field,
 .checkbox {
+  min-width: 0;
   display: grid;
   gap: 8px;
 }
@@ -429,7 +445,10 @@ button {
 input,
 textarea,
 select {
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
+  max-width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-panel-strong);
@@ -460,8 +479,8 @@ select:focus {
 }
 
 select option {
-  background-color: rgba(57, 84, 74, 0.08);
-  color: var(--text-main);
+  background-color: var(--bg-ink);
+  color: var(--text-on-ink);
   padding: 8px 6px;
   line-height: 1.5;
   font-size: 0.95rem;
@@ -469,16 +488,16 @@ select option {
 }
 
 select option:checked {
-  background: linear-gradient(#39544a, #39544a);
-  background-color: #39544a;
-  color: white;
+  background: linear-gradient(var(--accent), var(--accent));
+  background-color: var(--accent);
+  color: var(--text-on-ink);
   font-weight: 600;
 }
 
 select option:hover {
-  background: linear-gradient(#39544a, #39544a);
-  background-color: #39544a;
-  color: white;
+  background: linear-gradient(var(--bg-ink-soft), var(--bg-ink-soft));
+  background-color: var(--bg-ink-soft);
+  color: var(--text-on-ink);
 }
 
 textarea {
@@ -530,7 +549,7 @@ button:hover:not(:disabled),
 
 .button--primary {
   background: linear-gradient(135deg, #0f766e, #155e75);
-  color: #f8fafc;
+  color: var(--text-on-ink);
   box-shadow: 0 14px 24px rgba(15, 118, 110, 0.18);
 }
 
@@ -596,10 +615,15 @@ button:hover:not(:disabled),
 .loading-card,
 .empty-state,
 .callout {
-  background: var(--bg-panel-strong);
-  border: 1px solid var(--border-soft);
+  background:
+    var(--surface-green-gradient),
+    var(--bg-panel-strong);
+  border: 1px solid var(--surface-green-border);
   border-radius: var(--radius-md);
   padding: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    0 12px 28px rgba(22, 51, 50, 0.07);
 }
 
 .metric-card strong {
@@ -667,9 +691,53 @@ button:hover:not(:disabled),
   gap: 18px;
 }
 
+.result-layout {
+  padding: 22px;
+  border: 1px solid rgba(22, 51, 50, 0.18);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(22, 51, 50, 0.32) 0%,
+      rgba(40, 72, 71, 0.24) 26%,
+      rgba(15, 118, 110, 0.18) 58%,
+      rgba(216, 242, 238, 0.56) 100%
+    ),
+    var(--bg-panel);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 24px 54px rgba(22, 51, 50, 0.14);
+}
+
+.result-layout > .result-card,
+.result-layout .result-grid > .result-card {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(22, 51, 50, 0.22) 0%,
+      rgba(40, 72, 71, 0.14) 24%,
+      rgba(15, 118, 110, 0.1) 54%,
+      rgba(255, 255, 255, 0.88) 100%
+    ),
+    var(--bg-panel-strong);
+  border-color: rgba(22, 51, 50, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 16px 34px rgba(22, 51, 50, 0.12);
+}
+
 .result-card--hero {
-  border-color: rgba(15, 118, 110, 0.14);
-  box-shadow: 0 18px 34px rgba(15, 118, 110, 0.08);
+  border-color: rgba(15, 118, 110, 0.26);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(22, 51, 50, 0.26),
+      rgba(40, 72, 71, 0.2),
+      rgba(15, 118, 110, 0.14),
+      rgba(255, 255, 255, 0.88)
+    ),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 34px rgba(15, 118, 110, 0.14);
 }
 
 .result-grid {
@@ -679,10 +747,12 @@ button:hover:not(:disabled),
 }
 
 .result-title {
-  margin: 8px 0 10px;
-  font-size: clamp(1.4rem, 2.8vw, 2rem);
+  margin: 8px 0 0;
+  max-width: 72ch;
+  font-size: clamp(1.08rem, 1.8vw, 1.32rem);
+  line-height: 1.65;
   font-family:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Georgia", serif;
+    "Aptos", "Segoe UI Variable Text", "Trebuchet MS", "Gill Sans", sans-serif;
 }
 
 .condition-card,
@@ -1310,10 +1380,14 @@ button:hover:not(:disabled),
 .status-card,
 .action-shortcut,
 .coverage-item {
-  background: var(--bg-panel-strong);
-  border: 1px solid var(--border-soft);
+  background:
+    var(--surface-green-gradient),
+    var(--bg-panel-strong);
+  border: 1px solid var(--surface-green-border);
   border-radius: 22px;
-  box-shadow: var(--shadow-soft);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    var(--surface-green-shadow);
 }
 
 .dashboard-hero {
@@ -1450,6 +1524,13 @@ button:hover:not(:disabled),
   padding: 22px;
   display: grid;
   gap: 18px;
+  background:
+    var(--surface-green-gradient),
+    var(--bg-panel-strong);
+  border: 1px solid var(--surface-green-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    0 14px 30px rgba(22, 51, 50, 0.08);
 }
 
 .workspace-card__header {
@@ -1460,7 +1541,7 @@ button:hover:not(:disabled),
 }
 
 .workspace-card--feature {
-  border-color: rgba(15, 118, 110, 0.14);
+  border-color: rgba(15, 118, 110, 0.24);
 }
 
 .workspace-card--compact {
@@ -1480,20 +1561,26 @@ button:hover:not(:disabled),
   min-height: 220px;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.98),
+    rgba(22, 51, 50, 0.16),
     rgba(237, 245, 243, 0.92)
   );
 }
 
 .status-track {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
 }
 
 .status-track__step {
+  min-width: 0;
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(22, 51, 50, 0.1);
   background: rgba(255, 255, 255, 0.72);
+}
+
+.status-track__step strong,
+.status-track__step span {
+  overflow-wrap: anywhere;
 }
 
 .status-track__step strong,
@@ -1534,12 +1621,32 @@ button:hover:not(:disabled),
 }
 
 .detail-list {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.detail-list--appointment-summary {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .detail-list div {
+  min-width: 0;
   display: grid;
   gap: 6px;
+}
+
+.detail-list span,
+.detail-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.entity-card--appointment .detail-list div:last-child {
+  grid-column: span 2;
+}
+
+.detail-list__wide {
+  grid-column: 1 / -1;
 }
 
 .spotlight-inline,
@@ -1734,7 +1841,7 @@ button.activity-item:hover {
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(22, 51, 50, 0.9);
-  color: #f8fafc;
+  color: var(--text-on-ink);
   font-size: 0.88rem;
 }
 
@@ -1956,6 +2063,91 @@ button.activity-item:hover {
   justify-self: start;
 }
 
+.doctor-week-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.doctor-week-calendar__day {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(22, 51, 50, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.doctor-week-calendar__date {
+  display: grid;
+  gap: 1px;
+  color: var(--bg-ink);
+}
+
+.doctor-week-calendar__date strong {
+  font-size: 0.95rem;
+}
+
+.doctor-week-calendar__date span,
+.doctor-week-calendar__booking small,
+.doctor-week-calendar__empty {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.doctor-week-calendar__items {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.doctor-week-calendar__booking {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  min-height: 54px;
+  padding: 8px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: 10px;
+  background: rgba(227, 244, 234, 0.84);
+  color: var(--bg-ink);
+  text-align: start;
+  cursor: pointer;
+}
+
+.doctor-week-calendar__booking:hover {
+  border-color: rgba(36, 138, 91, 0.35);
+  background: rgba(215, 239, 225, 0.96);
+}
+
+.doctor-week-calendar__booking span,
+.doctor-week-calendar__booking strong {
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doctor-week-calendar__booking strong {
+  font-size: 0.94rem;
+}
+
+.doctor-week-calendar__booking span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.doctor-week-calendar__empty {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px dashed rgba(22, 51, 50, 0.12);
+}
+
 .profile-record-table {
   display: grid;
   gap: 8px;
@@ -2052,6 +2244,10 @@ button.activity-item:hover {
   .status-track {
     grid-template-columns: 1fr;
   }
+
+  .doctor-week-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -2069,8 +2265,18 @@ button.activity-item:hover {
   .hero__stats,
   .metric-grid,
   .form-grid,
-  .result-grid {
+  .result-grid,
+  .doctor-week-calendar {
     grid-template-columns: 1fr;
+  }
+
+  .detail-list,
+  .detail-list--dense {
+    grid-template-columns: 1fr;
+  }
+
+  .entity-card--appointment .detail-list div:last-child {
+    grid-column: auto;
   }
 
   .dashboard-main__header,

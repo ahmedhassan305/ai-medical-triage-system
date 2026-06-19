@@ -2,13 +2,14 @@
 
 import logging
 import re
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import DoctorProfile, PatientProfile
+from app.db.models import AppointmentSlot, DoctorClinic, DoctorProfile, PatientProfile
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
 from app.rag.embedding_retriever import EmbeddingRetriever
 from app.rag.reranker import rerank_retrieved_chunks
@@ -38,6 +39,7 @@ from app.services.clinical_features import (
 )
 from app.services.exceptions import TriageSystemUnavailable
 from app.services.patient_context import PatientContextProvider
+from app.services.slot_booking import generate_slots_for_doctor
 from app.services.specialties import (
     TRIAGE_SPECIALTIES,
     canonicalize_specialty,
@@ -111,6 +113,28 @@ SUBSPECIALTY_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
         "stroke": ("stroke", "weakness", "numbness"),
         "seizure": ("seizure", "epilepsy"),
     },
+    "Internal Medicine": {
+        "rheumatology": (
+            "rheumat",
+            "joint",
+            "arthritis",
+            "autoimmune",
+            "lupus",
+            "aches",
+        ),
+        "diabetes": ("diabetes", "sugar", "thirst", "urination", "endocrine"),
+        "cardiology": ("pressure", "hypertension", "blood pressure", "heart"),
+        "critical_care": ("icu", "critical", "severe infection", "sepsis"),
+    },
+}
+
+SPECIALTY_CLINIC_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "Cardiology": ("heart", "cardiac", "cardio"),
+    "Pulmonology": ("chest", "lung", "respiratory", "pulmonary"),
+    "Gastroenterology": ("gastro", "digestive", "liver", "endoscopy"),
+    "Orthopedics": ("ortho", "bone", "joint", "spine"),
+    "Neurology": ("neuro", "brain", "nerve"),
+    "Internal Medicine": ("internal", "medicine"),
 }
 
 HIGH_RISK_KEYWORDS: tuple[str, ...] = (
@@ -1376,8 +1400,98 @@ def _normalize_location(value: str | None) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
 
+_ALEXANDRIA_AREA_ALIASES: dict[str, tuple[str, ...]] = {
+    "abu qir": ("abu qir", "abou qir"),
+    "agami": ("agami", "el agami"),
+    "azarita": ("azarita", "azareeta", "el azarita", "el-azarita"),
+    "bolkly": ("bolkly", "bulkly", "bokly"),
+    "cleopatra": ("cleopatra",),
+    "fleming": ("fleming",),
+    "gleem": ("gleem", "glim"),
+    "ibrahimia": ("ibrahimia", "ibrahimeya"),
+    "kafr abdo": ("kafr abdo",),
+    "loran": ("loran", "laurent"),
+    "mandara": ("mandara", "el mandara"),
+    "miami": ("miami",),
+    "moharam bek": ("moharam bek", "muharram bek", "moharram bek"),
+    "raml station": ("raml station", "mahatet el raml", "raml"),
+    "roushdy": ("roushdy", "rushdy", "roshdy"),
+    "san stefano": ("san stefano", "san stephano"),
+    "sidi beshr": ("sidi beshr", "sidy beshr"),
+    "sidi gaber": ("sidi gaber", "sidy gaber"),
+    "smouha": ("smouha", "smoha"),
+    "sporting": ("sporting",),
+    "stanley": ("stanley",),
+    "victoria": ("victoria",),
+}
+
+
+def _canonical_alexandria_area(value: str | None) -> str:
+    normalized = _normalize_location(value)
+    if not normalized:
+        return ""
+    for canonical, aliases in _ALEXANDRIA_AREA_ALIASES.items():
+        if normalized == canonical or any(alias in normalized for alias in aliases):
+            return canonical
+    return normalized
+
+
+def _split_location_context(value: str | None) -> tuple[str, str]:
+    normalized = _normalize_location(value)
+    if not normalized:
+        return "", ""
+
+    parts = [
+        _normalize_location(part)
+        for part in re.split(r"\s+-\s+|,", normalized)
+        if _normalize_location(part)
+    ]
+    if len(parts) >= 2:
+        first, second = parts[0], parts[1]
+        if first == "alexandria":
+            return first, _canonical_alexandria_area(second)
+        if second == "alexandria":
+            return second, _canonical_alexandria_area(first)
+
+    if normalized == "alexandria":
+        return "alexandria", ""
+    return normalized, ""
+
+
 def _text_matches_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term in text for term in terms)
+
+
+def _doctor_open_slot_info(
+    db: Session,
+    doctor_id: int,
+) -> tuple[int, str | None]:
+    try:
+        generated_slots = generate_slots_for_doctor(db, doctor_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "doctor_slot_generation_failed doctor_id=%s error=%s", doctor_id, exc
+        )
+        generated_slots = []
+
+    if generated_slots:
+        first_slot = generated_slots[0].start_at.isoformat()
+        return len(generated_slots), first_slot
+
+    now = datetime.now()
+    slots = (
+        db.query(AppointmentSlot)
+        .join(AppointmentSlot.doctor_clinic)
+        .filter(
+            DoctorClinic.doctor_id == doctor_id,
+            AppointmentSlot.status == "open",
+            AppointmentSlot.start_at >= now,
+        )
+        .order_by(AppointmentSlot.start_at.asc())
+        .all()
+    )
+    first_slot = slots[0].start_at.isoformat() if slots else None
+    return len(slots), first_slot
 
 
 def _subspecialty_needs(
@@ -1406,13 +1520,19 @@ def _doctor_match_score(
     specialty: str,
     subspecialty_needs: set[str],
     patient_location: str | None,
+    open_slot_count: int = 0,
 ) -> tuple[float, list[str]]:
     score = 0.0
     reasons: list[str] = []
 
-    if doc.specialty == specialty:
+    if doc.specialty == specialty or canonicalize_specialty(doc.specialty) == specialty:
         score += 100.0
         reasons.append("Main specialty matches your case")
+        if doc.specialty != specialty:
+            scoped_label = doc.specialty.replace(specialty, "", 1).strip(" -")
+            if scoped_label:
+                score += 12.0
+                reasons.append(f"Focused scope: {scoped_label}")
 
     doctor_text = " ".join(
         part
@@ -1436,19 +1556,41 @@ def _doctor_match_score(
         labels = ", ".join(label.replace("_", " ") for label in matched_subspecialties)
         reasons.append(f"Subspecialty fit: {labels}")
 
+    clinic_text = _normalize_location(doc.clinic)
+    clinic_keywords = SPECIALTY_CLINIC_KEYWORDS.get(specialty, ())
+    if clinic_text and _text_matches_any(clinic_text, clinic_keywords):
+        score += 8.0
+        reasons.append("Clinic focus matches the specialty")
+
     if patient_location:
         patient_location_normalized = _normalize_location(patient_location)
+        patient_governorate, patient_area = _split_location_context(patient_location)
         doctor_city = _normalize_location(doc.city)
         doctor_area = _normalize_location(doc.area)
-        if doctor_city and doctor_city == patient_location_normalized:
+        doctor_area_key = _canonical_alexandria_area(doc.area or doc.clinic)
+        if (
+            patient_governorate == "alexandria"
+            and doctor_city == "alexandria"
+            and patient_area
+            and doctor_area_key == patient_area
+        ):
+            score += 42.0
+            reasons.append(f"Same clinic area: {doc.area or doc.clinic}")
+        elif doctor_area and doctor_area == patient_location_normalized:
+            score += 28.0
+            reasons.append(f"Same area: {doc.area}")
+        elif doctor_city and doctor_city == (
+            patient_governorate or patient_location_normalized
+        ):
             score += 18.0
             reasons.append(f"Same governorate/city: {doc.city}")
-        elif doctor_area and doctor_area == patient_location_normalized:
-            score += 24.0
-            reasons.append(f"Same area: {doc.area}")
 
     if doc.booking_url:
         score += 2.0
+
+    if open_slot_count > 0:
+        score += 10.0 + min(open_slot_count, 8)
+        reasons.append("Has open appointment slots")
 
     return score, reasons
 
@@ -1478,19 +1620,35 @@ def get_suggested_doctors(
                 )
 
         needs = _subspecialty_needs(specialty, query, clinical_features)
-        doctors = (
-            db.query(DoctorProfile).filter(DoctorProfile.specialty == specialty).all()
-        )
+        doctors = [
+            doctor
+            for doctor in db.query(DoctorProfile).all()
+            if doctor.specialty == specialty
+            or canonicalize_specialty(doctor.specialty) == specialty
+        ]
 
         scored = []
         for doc in doctors:
+            open_slot_count, earliest_available_slot = _doctor_open_slot_info(
+                db, doc.id
+            )
             score, reasons = _doctor_match_score(
                 doc,
                 specialty=specialty,
                 subspecialty_needs=needs,
                 patient_location=patient_location,
+                open_slot_count=open_slot_count,
             )
-            scored.append((score, doc.full_name.lower(), doc.id, doc, reasons))
+            scored.append(
+                (
+                    score,
+                    doc.full_name.lower(),
+                    doc.id,
+                    doc,
+                    reasons,
+                    earliest_available_slot,
+                )
+            )
         scored.sort(key=lambda item: (-item[0], item[1], item[2]))
 
         return [
@@ -1504,6 +1662,7 @@ def get_suggested_doctors(
                 source_name=doc.source_name,
                 source_url=doc.source_url,
                 booking_url=doc.booking_url,
+                earliest_available_slot=earliest_available_slot,
                 recommendation_reason=(
                     "; ".join(reasons)
                     if reasons
@@ -1515,7 +1674,14 @@ def get_suggested_doctors(
                     else "Main specialty matches your case"
                 ),
             )
-            for _score, _name, _id, doc, reasons in scored[:limit]
+            for (
+                _score,
+                _name,
+                _id,
+                doc,
+                reasons,
+                earliest_available_slot,
+            ) in scored[:limit]
         ]
     except Exception as e:
         logger.warning(f"Failed to get doctors for specialty {specialty}: {e}")

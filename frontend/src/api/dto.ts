@@ -190,6 +190,14 @@ export type PatientMedicalHistoryEntryResponseDto =
     updated_at: string;
   };
 
+export type PatientMedicalHistoryReportExtractionDto = {
+  filename: string;
+  category: string;
+  title: string;
+  notes: string;
+  warning?: string | null;
+};
+
 export type LabValueDto = {
   lab_name: string;
   value: string;
