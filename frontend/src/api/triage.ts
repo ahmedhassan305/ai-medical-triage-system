@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type {
+  BodyDiagramTriageRequestDto,
   LabPdfExtractionResponseDto,
   LabValueDto,
   TriageRequestDto,
@@ -22,6 +23,16 @@ export async function triage(
     language,
   };
   const response = await api.post<TriageResponseDto>(apiPaths.triage, payload);
+  return response.data;
+}
+
+export async function triageBodyDiagram(
+  payload: BodyDiagramTriageRequestDto,
+): Promise<TriageResponseDto> {
+  const response = await api.post<TriageResponseDto>(
+    apiPaths.bodyDiagramTriage,
+    payload,
+  );
   return response.data;
 }
 

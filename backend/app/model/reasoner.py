@@ -105,7 +105,7 @@ class OllamaReasoner:
         self.host = (host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip(
             "/"
         )
-        self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
+        self.model = model or os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")
         self.timeout_seconds = timeout_seconds
 
     def ping(self) -> bool:
@@ -305,8 +305,14 @@ class OllamaReasoner:
             "the differential broad.\n"
             "- Gastroenterology is ONLY for: vomiting blood, blood in stool, "
             "jaundice/yellow skin, liver disease, severe abdominal pain, "
-            "colonoscopy-related, bowel disease. Weight loss, fatigue, "
-            "general stomach discomfort = Internal Medicine.\n"
+            "colonoscopy-related, bowel disease, and anorectal symptoms such "
+            "as rectal/anal pain with hard stools or straining. Weight loss, "
+            "fatigue, general stomach discomfort = Internal Medicine.\n"
+            "- Pain during or after hard bowel movements, straining, or stool "
+            "passing most strongly suggests anorectal causes such as "
+            "hemorrhoids or anal fissure. Do not call this hip pain, hip "
+            "dysplasia, or chronic pelvic pain unless the patient explicitly "
+            "describes hip/pelvic location or walking-related hip symptoms.\n"
             "- Jaundice/yellow eyes with abdominal swelling/ascites, dark urine, "
             "confusion, bleeding, severe abdominal pain, or heavy alcohol/liver "
             "context is potentially urgent. Do not describe it as needing "

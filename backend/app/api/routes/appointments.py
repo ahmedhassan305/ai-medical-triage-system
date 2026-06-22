@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
-from app.db.models import Appointment, AppointmentSlot, Clinic, User
+from app.db.models import Appointment, AppointmentSlot, Clinic, TriageAssessment, User
 from app.db.session import get_db
 from app.schemas.appointment import (
     AppointmentCreate,
     AppointmentResponse,
     AppointmentStatusUpdate,
+    AppointmentTriageSummary,
 )
 from app.schemas.doctor import AppointmentSlotResponse, ClinicResponse
 from app.services.access_control import (
@@ -53,6 +54,22 @@ def _serialize_slot(slot: AppointmentSlot | None) -> AppointmentSlotResponse | N
     )
 
 
+def _serialize_triage_summary(
+    assessment: TriageAssessment | None,
+) -> AppointmentTriageSummary | None:
+    if assessment is None:
+        return None
+    return AppointmentTriageSummary(
+        triage_level=assessment.triage_level,
+        urgency_level=assessment.urgency_level,
+        chief_complaint=assessment.query_text,
+        clinical_summary=assessment.clinical_summary,
+        recommended_specialty=assessment.recommended_specialty,
+        red_flags=assessment.red_flags or [],
+        suspected_conditions=assessment.suspected_conditions or [],
+    )
+
+
 def _serialize_appointment(appointment: Appointment) -> AppointmentResponse:
     clinic = appointment.clinic
     if clinic is None and appointment.slot and appointment.slot.doctor_clinic:
@@ -66,11 +83,33 @@ def _serialize_appointment(appointment: Appointment) -> AppointmentResponse:
         scheduled_for=appointment.scheduled_for,
         clinic_id=appointment.clinic_id,
         slot_id=appointment.slot_id,
+        visit_type=appointment.visit_type,
+        video_url=appointment.video_url,
         status=appointment.status,
         requested_at=appointment.requested_at,
         clinic=_serialize_clinic(clinic),
         slot=_serialize_slot(appointment.slot),
+        triage_summary=_serialize_triage_summary(appointment.triage_assessment),
     )
+
+
+def _link_latest_triage_assessment(db: Session, appointment: Appointment) -> None:
+    booking_context = f"{appointment.reason or ''} {appointment.notes or ''}".lower()
+    if "triage" not in booking_context and "فرز" not in booking_context:
+        return
+    assessment = (
+        db.query(TriageAssessment)
+        .filter(
+            TriageAssessment.patient_id == appointment.patient_id,
+            TriageAssessment.appointment_id.is_(None),
+        )
+        .order_by(TriageAssessment.created_at.desc())
+        .first()
+    )
+    if assessment is None:
+        return
+    assessment.appointment_id = appointment.id
+    db.flush()
 
 
 @router.post("/", response_model=AppointmentResponse)
@@ -117,11 +156,21 @@ def create_appointment(
                 notes=payload.notes,
                 slot_id=payload.slot_id,
                 clinic_id=payload.clinic_id,
+                visit_type=payload.visit_type,
+                video_url=payload.video_url,
             )
         except SlotBookingValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except SlotBookingConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        appointment = (
+            load_appointments_with_relations(db.query(Appointment))
+            .filter(Appointment.id == appointment.id)
+            .first()
+        )
+        assert appointment is not None
+        _link_latest_triage_assessment(db, appointment)
+        db.commit()
         appointment = (
             load_appointments_with_relations(db.query(Appointment))
             .filter(Appointment.id == appointment.id)
@@ -168,9 +217,25 @@ def create_appointment(
     appointment_status = (
         "approved" if payload.scheduled_for is not None else "requested"
     )
-    appointment = Appointment(**payload.model_dump(), status=appointment_status)
+    appointment_data = payload.model_dump()
+    if appointment_data.get("visit_type") == "video" and not appointment_data.get(
+        "video_url"
+    ):
+        appointment_data["video_url"] = (
+            "Video visit link will be shared before the appointment."
+        )
+
+    appointment = Appointment(**appointment_data, status=appointment_status)
     appointment.clinic_id = resolved_clinic_id
     db.add(appointment)
+    db.commit()
+    appointment = (
+        load_appointments_with_relations(db.query(Appointment))
+        .filter(Appointment.id == appointment.id)
+        .first()
+    )
+    assert appointment is not None
+    _link_latest_triage_assessment(db, appointment)
     db.commit()
     appointment = (
         load_appointments_with_relations(db.query(Appointment))

@@ -145,6 +145,10 @@ class DoctorProfile(Base):
     clinic: Mapped[str] = mapped_column(String(200))
     area: Mapped[str | None] = mapped_column(String(120), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    consultation_fee: Mapped[float | None] = mapped_column(Float, nullable=True)
+    insurance_providers: Mapped[list[str]] = mapped_column(JSON, default=list)
+    payment_methods: Mapped[list[str]] = mapped_column(JSON, default=list)
+    offers_telemedicine: Mapped[bool] = mapped_column(Boolean, default=False)
     source_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     booking_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -159,6 +163,10 @@ class DoctorProfile(Base):
     department: Mapped[Department | None] = relationship(back_populates="doctors")
     visits: Mapped[list["Visit"]] = relationship(back_populates="doctor")
     appointments: Mapped[list["Appointment"]] = relationship(back_populates="doctor")
+    reviews: Mapped[list["DoctorReview"]] = relationship(
+        back_populates="doctor",
+        cascade="all, delete-orphan",
+    )
     doctor_clinics: Mapped[list["DoctorClinic"]] = relationship(
         back_populates="doctor",
         cascade="all, delete-orphan",
@@ -265,6 +273,8 @@ class Appointment(Base):
     status: Mapped[str] = mapped_column(String(30), default="requested", index=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    visit_type: Mapped[str] = mapped_column(String(20), default="clinic", index=True)
+    video_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reason: Mapped[str] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -309,6 +319,8 @@ class Visit(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     prescriptions: Mapped[str | None] = mapped_column(Text, nullable=True)
     attachments: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    follow_up_recommendations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    follow_up_due_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     patient: Mapped[PatientProfile] = relationship(back_populates="visits")
@@ -318,6 +330,45 @@ class Visit(Base):
         back_populates="visit",
         uselist=False,
     )
+
+
+class DoctorReview(Base):
+    __tablename__ = "doctor_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("patient_profiles.id", ondelete="CASCADE"),
+        index=True,
+    )
+    doctor_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("doctor_profiles.id", ondelete="CASCADE"),
+        index=True,
+    )
+    appointment_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("appointments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    visit_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("visits.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    rating: Mapped[int] = mapped_column(Integer)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    patient: Mapped[PatientProfile] = relationship()
+    doctor: Mapped[DoctorProfile] = relationship(back_populates="reviews")
 
 
 class Symptom(Base):

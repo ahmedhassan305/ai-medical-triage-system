@@ -117,6 +117,12 @@ const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
   is_active: true,
 };
 
+function todayDateInputValue(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
 function toDoctorEditForm(doctor: DoctorProfileResponseDto): DoctorProfileUpsertDto {
   return {
     full_name: doctor.full_name,
@@ -124,7 +130,18 @@ function toDoctorEditForm(doctor: DoctorProfileResponseDto): DoctorProfileUpsert
     clinic: doctor.clinic,
     area: doctor.area ?? "",
     city: doctor.city ?? "",
+    consultation_fee: doctor.consultation_fee ?? null,
+    insurance_providers: doctor.insurance_providers ?? [],
+    payment_methods: doctor.payment_methods ?? [],
+    offers_telemedicine: doctor.offers_telemedicine ?? false,
   };
+}
+
+function splitCommaList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function formatDateTime(dateValue?: string | null): string {
@@ -141,6 +158,26 @@ function formatDateTime(dateValue?: string | null): string {
   } catch {
     return dateValue;
   }
+}
+
+function weekdayFromDateInput(dateValue: string): string {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  if (!year || !month || !day) {
+    return "sunday";
+  }
+  return WEEKDAY_OPTIONS[new Date(year, month - 1, day).getDay()] ?? "sunday";
+}
+
+function describeScheduleRule(schedule: DoctorScheduleDto): string {
+  const timeRange = `${schedule.start_time.slice(0, 5)}-${schedule.end_time.slice(0, 5)}`;
+  if (
+    schedule.valid_from &&
+    schedule.valid_to &&
+    schedule.valid_from === schedule.valid_to
+  ) {
+    return `${schedule.valid_from} · ${timeRange}`;
+  }
+  return `${schedule.day_of_week} · ${timeRange}`;
 }
 
 function summarize(text?: string | null, fallback = "No summary available."): string {
@@ -792,6 +829,20 @@ function AdminOperationsPanel({
                     <strong>{t("governoratePending")}</strong>
                     <span>{selectedDoctor.city || "Not specified"}</span>
                   </div>
+                  <div>
+                    <strong>Consultation fee</strong>
+                    <span>
+                      {selectedDoctor.consultation_fee != null
+                        ? `${selectedDoctor.consultation_fee} EGP`
+                        : "Not specified"}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Video visits</strong>
+                    <span>
+                      {selectedDoctor.offers_telemedicine ? "Available" : "Clinic only"}
+                    </span>
+                  </div>
                 </div>
 
                 {selectedDoctorEditForm ? (
@@ -903,6 +954,80 @@ function AdminOperationsPanel({
                         />
                       </div>
                     ) : null}
+                    <div className="field">
+                      <label htmlFor="admin-doctor-fee">Consultation fee</label>
+                      <input
+                        id="admin-doctor-fee"
+                        type="number"
+                        min="0"
+                        value={selectedDoctorEditForm.consultation_fee ?? ""}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              consultation_fee: event.target.value
+                                ? Number(event.target.value)
+                                : null,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-insurance">
+                        Accepted insurance
+                      </label>
+                      <input
+                        id="admin-doctor-insurance"
+                        value={selectedDoctorEditForm.insurance_providers.join(", ")}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              insurance_providers: splitCommaList(
+                                event.target.value,
+                              ),
+                            },
+                          })
+                        }
+                        placeholder="Bupa, Allianz,..."
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-payments">Payment methods</label>
+                      <input
+                        id="admin-doctor-payments"
+                        value={selectedDoctorEditForm.payment_methods.join(", ")}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              payment_methods: splitCommaList(event.target.value),
+                            },
+                          })
+                        }
+                        placeholder="Cash, Card, Insurance"
+                      />
+                    </div>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={selectedDoctorEditForm.offers_telemedicine}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              offers_telemedicine: event.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>Offers video consultations</span>
+                    </label>
                     <button
                       type="submit"
                       className="button button--primary"
@@ -932,6 +1057,35 @@ function AdminOperationsPanel({
 
                   <form className="form-grid" onSubmit={submitDoctorSchedule}>
                     <div className="field">
+                      <label htmlFor="schedule-specific-date">
+                        {t("specificDate")}
+                      </label>
+                      <input
+                        id="schedule-specific-date"
+                        type="date"
+                        min={todayDateInputValue()}
+                        value={
+                          scheduleForm.valid_from === scheduleForm.valid_to
+                            ? (scheduleForm.valid_from ?? "")
+                            : ""
+                        }
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setScheduleForm((current) => ({
+                            ...current,
+                            day_of_week: value
+                              ? weekdayFromDateInput(value)
+                              : current.day_of_week,
+                            valid_from: value || null,
+                            valid_to: value || null,
+                          }));
+                        }}
+                      />
+                      <small className="field__hint">
+                        {t("specificDateHint")}
+                      </small>
+                    </div>
+                    <div className="field">
                       <label htmlFor="schedule-day">{t("dayOfWeek")}</label>
                       <CustomSelect
                         id="schedule-day"
@@ -942,6 +1096,7 @@ function AdminOperationsPanel({
                             day_of_week: value,
                           }))
                         }
+                        disabled={Boolean(scheduleForm.valid_from)}
                         options={[
                           ...WEEKDAY_OPTIONS.map((day) => ({
                             value: day,
@@ -1031,7 +1186,7 @@ function AdminOperationsPanel({
                               {schedule.day_of_week} · {schedule.start_time.slice(0, 5)}
                               -{schedule.end_time.slice(0, 5)}
                             </strong>
-                            <p>
+                            <p title={describeScheduleRule(schedule)}>
                               {schedule.slot_minutes} {t("minutes")} ·{" "}
                               {schedule.location_label ||
                                 selectedDoctor?.clinic ||
@@ -1289,6 +1444,10 @@ export default function ProfilePanel({
           clinic: doctorProfile.clinic,
           area: doctorProfile.area ?? "",
           city: doctorProfile.city ?? "",
+          consultation_fee: doctorProfile.consultation_fee ?? null,
+          insurance_providers: doctorProfile.insurance_providers ?? [],
+          payment_methods: doctorProfile.payment_methods ?? [],
+          offers_telemedicine: doctorProfile.offers_telemedicine ?? false,
         }
       : {
           full_name: "",
@@ -1296,6 +1455,10 @@ export default function ProfilePanel({
           clinic: "",
           area: "",
           city: "",
+          consultation_fee: null,
+          insurance_providers: [],
+          payment_methods: [],
+          offers_telemedicine: false,
         },
   );
   const [ownScheduleWorkspace, setOwnScheduleWorkspace] =
@@ -1441,6 +1604,14 @@ export default function ProfilePanel({
       specialty,
       area: doctorForm.area?.trim() || null,
       city: doctorForm.city?.trim() || null,
+      consultation_fee:
+        doctorForm.consultation_fee === null ||
+        doctorForm.consultation_fee === undefined
+          ? null
+          : Number(doctorForm.consultation_fee),
+      insurance_providers: doctorForm.insurance_providers,
+      payment_methods: doctorForm.payment_methods,
+      offers_telemedicine: doctorForm.offers_telemedicine,
     });
   }
 
@@ -2098,6 +2269,69 @@ export default function ProfilePanel({
               />
             </div>
 
+            <div className="field">
+              <label htmlFor="doctor-consultation-fee">Consultation fee</label>
+              <input
+                id="doctor-consultation-fee"
+                type="number"
+                min="0"
+                value={doctorForm.consultation_fee ?? ""}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    consultation_fee: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  }))
+                }
+                placeholder="EGP"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-payment-methods">Payment methods</label>
+              <input
+                id="doctor-payment-methods"
+                value={doctorForm.payment_methods.join(", ")}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    payment_methods: splitCommaList(event.target.value),
+                  }))
+                }
+                placeholder="Cash, Card, Insurance"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-insurance">Accepted insurance</label>
+              <input
+                id="doctor-insurance"
+                value={doctorForm.insurance_providers.join(", ")}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    insurance_providers: splitCommaList(event.target.value),
+                  }))
+                }
+                placeholder="Bupa, Allianz,..."
+              />
+            </div>
+
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={doctorForm.offers_telemedicine}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    offers_telemedicine: event.target.checked,
+                  }))
+                }
+              />
+              <span>Offer video consultations</span>
+            </label>
+
             <div className="callout field--full">
               <p className="micro-label">{t("connected")}</p>
               <p>
@@ -2145,6 +2379,33 @@ export default function ProfilePanel({
 
             <form className="form-grid" onSubmit={submitOwnDoctorSchedule}>
               <div className="field">
+                <label htmlFor="own-schedule-specific-date">
+                  {t("specificDate")}
+                </label>
+                <input
+                  id="own-schedule-specific-date"
+                  type="date"
+                  min={todayDateInputValue()}
+                  value={
+                    ownScheduleForm.valid_from === ownScheduleForm.valid_to
+                      ? (ownScheduleForm.valid_from ?? "")
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      day_of_week: value
+                        ? weekdayFromDateInput(value)
+                        : current.day_of_week,
+                      valid_from: value || null,
+                      valid_to: value || null,
+                    }));
+                  }}
+                />
+                <small className="field__hint">{t("specificDateHint")}</small>
+              </div>
+              <div className="field">
                 <label htmlFor="own-schedule-day">{t("dayOfWeek")}</label>
                 <CustomSelect
                   id="own-schedule-day"
@@ -2155,6 +2416,7 @@ export default function ProfilePanel({
                       day_of_week: value,
                     }))
                   }
+                  disabled={Boolean(ownScheduleForm.valid_from)}
                   options={WEEKDAY_OPTIONS.map((day) => ({
                     value: day,
                     label: day,
@@ -2244,7 +2506,7 @@ export default function ProfilePanel({
                         {schedule.start_time.slice(0, 5)}-
                         {schedule.end_time.slice(0, 5)}
                       </strong>
-                      <p>
+                      <p title={describeScheduleRule(schedule)}>
                         {schedule.slot_minutes} {t("minutes")} ·{" "}
                         {schedule.location_label || doctorProfile.clinic}
                       </p>

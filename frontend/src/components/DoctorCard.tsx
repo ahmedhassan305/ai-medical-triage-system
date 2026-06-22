@@ -236,6 +236,22 @@ export default function DoctorCard({
         </p>
       ) : null}
 
+      <div className="doctor-card__service-strip">
+        {doctor.distance_km != null ? (
+          <span>{doctor.distance_km.toFixed(1)} km away</span>
+        ) : null}
+        {doctor.consultation_fee != null ? (
+          <span>{doctor.consultation_fee} EGP</span>
+        ) : null}
+        {doctor.offers_telemedicine ? <span>Video available</span> : null}
+        {(doctor.payment_methods ?? []).slice(0, 2).map((method) => (
+          <span key={`payment-${method}`}>{method}</span>
+        ))}
+        {(doctor.insurance_providers ?? []).slice(0, 2).map((provider) => (
+          <span key={`insurance-${provider}`}>{provider}</span>
+        ))}
+      </div>
+
       {reasons.length > 0 ? (
         <div className="doctor-card__why-recommended">
           <p className="micro-label">{t("whyRecommended")}</p>

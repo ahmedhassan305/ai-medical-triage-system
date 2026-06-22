@@ -15,6 +15,7 @@ from app.db.models import (
     DoctorProfile,
     DoctorSchedule,
 )
+from app.services.location_distance import coordinates_for_location
 
 DEFAULT_SLOT_WINDOW_DAYS = 14
 DEFAULT_SLOT_MINUTES = 30
@@ -107,10 +108,13 @@ def _ensure_demo_doctor_clinic(db: Session, doctor_id: int) -> DoctorClinic | No
         return None
 
     clinic_name = doctor.clinic or "Demo Clinic"
+    coords = coordinates_for_location(city=doctor.city, area=doctor.area)
     stored_clinic = Clinic(
         name=clinic_name,
         area=doctor.area,
         city=doctor.city,
+        latitude=coords[0] if coords else None,
+        longitude=coords[1] if coords else None,
         is_active=True,
     )
     db.add(stored_clinic)
@@ -222,10 +226,13 @@ def ensure_primary_doctor_clinic(db: Session, doctor: DoctorProfile) -> DoctorCl
     existing = get_primary_doctor_clinic(db, doctor.id)
     if existing is not None:
         return existing
+    coords = coordinates_for_location(city=doctor.city, area=doctor.area)
     clinic = Clinic(
         name=doctor.clinic or f"{doctor.full_name} Clinic",
         area=doctor.area,
         city=doctor.city,
+        latitude=coords[0] if coords else None,
+        longitude=coords[1] if coords else None,
         is_active=True,
     )
     db.add(clinic)
@@ -358,6 +365,8 @@ def reserve_slot_for_appointment(
     notes: str | None,
     slot_id: int,
     clinic_id: int | None = None,
+    visit_type: str = "clinic",
+    video_url: str | None = None,
 ) -> Appointment:
     slot = (
         db.query(AppointmentSlot)
@@ -395,6 +404,15 @@ def reserve_slot_for_appointment(
         slot_id=slot.id,
         status="approved",
         scheduled_for=slot.start_at,
+        visit_type=visit_type,
+        video_url=(
+            video_url
+            or (
+                "Video visit link will be shared before the appointment."
+                if visit_type == "video"
+                else None
+            )
+        ),
         reason=reason,
         notes=notes,
     )
@@ -457,6 +475,7 @@ def scheduled_time_is_available(
 def load_appointments_with_relations(query):
     return query.options(
         joinedload(Appointment.clinic),
+        joinedload(Appointment.triage_assessment),
         joinedload(Appointment.slot)
         .joinedload(AppointmentSlot.doctor_clinic)
         .joinedload(DoctorClinic.clinic),
