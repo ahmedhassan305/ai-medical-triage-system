@@ -328,11 +328,13 @@ export default function AppointmentsPanel({
       return;
     }
 
-    setDoctorId(currentDoctorId);
-    const ownDoctor = doctors.find((doctor) => doctor.id === currentDoctorId);
-    if (ownDoctor) {
-      setSelectedSpecialty(primarySpecialty(ownDoctor.specialty));
-    }
+    Promise.resolve().then(() => {
+      setDoctorId(currentDoctorId);
+      const ownDoctor = doctors.find((doctor) => doctor.id === currentDoctorId);
+      if (ownDoctor) {
+        setSelectedSpecialty(primarySpecialty(ownDoctor.specialty));
+      }
+    });
   }, [currentDoctorId, doctors, role]);
 
   useEffect(() => {
@@ -396,7 +398,7 @@ export default function AppointmentsPanel({
       selectedSlotId &&
       !filteredAvailableSlots.some((slot) => slot.id === Number(selectedSlotId))
     ) {
-      setSelectedSlotId("");
+      Promise.resolve().then(() => setSelectedSlotId(""));
     }
   }, [filteredAvailableSlots, selectedSlotId]);
 
@@ -405,7 +407,7 @@ export default function AppointmentsPanel({
       doctorId &&
       !filteredDoctors.some((doctor) => doctor.id === Number(doctorId))
     ) {
-      setDoctorId("");
+      Promise.resolve().then(() => setDoctorId(""));
     }
   }, [doctorId, filteredDoctors]);
 
@@ -414,7 +416,7 @@ export default function AppointmentsPanel({
       return;
     }
     if (selectedDoctor && !selectedDoctor.offers_telemedicine) {
-      setVisitType("clinic");
+      Promise.resolve().then(() => setVisitType("clinic"));
     }
   }, [selectedDoctor, visitType]);
 
