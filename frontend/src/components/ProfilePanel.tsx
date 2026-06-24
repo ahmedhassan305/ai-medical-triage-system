@@ -1515,21 +1515,26 @@ export default function ProfilePanel({
 
   useEffect(() => {
     if (role !== "doctor" || !doctorProfile) {
-      setOwnScheduleWorkspace(null);
+      Promise.resolve().then(() => setOwnScheduleWorkspace(null));
       return;
     }
 
     let cancelled = false;
-    setOwnScheduleWorkspace({
-      doctorId: doctorProfile.id,
-      schedules: [],
-      slots: [],
-      loading: true,
+    Promise.resolve().then(() => {
+      if (cancelled) {
+        return;
+      }
+      setOwnScheduleWorkspace({
+        doctorId: doctorProfile.id,
+        schedules: [],
+        slots: [],
+        loading: true,
+      });
+      setOwnScheduleForm((current) => ({
+        ...current,
+        location_label: current.location_label || doctorProfile.clinic,
+      }));
     });
-    setOwnScheduleForm((current) => ({
-      ...current,
-      location_label: current.location_label || doctorProfile.clinic,
-    }));
 
     Promise.all([
       listDoctorSchedules(doctorProfile.id),
