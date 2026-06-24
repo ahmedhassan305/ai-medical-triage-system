@@ -17,6 +17,9 @@ from app.services.specialties import TRIAGE_SPECIALTIES  # noqa: E402
 DATASET_PATH = ROOT / "triage_eval_all_specialties_cases.json"
 DIFFICULTIES = ("easy", "medium", "hard", "common_language", "controversial")
 URGENCY_VALUES = {"HIGH", "MEDIUM", "LOW"}
+CASES_PER_SPECIALTY = 60
+CASES_PER_SPECIALTY_DIFFICULTY = 12
+ENGLISH_VARIANTS = (0, 4, 5)
 REQUIRED_KEYS = {
     "case_id",
     "specialty_group",
@@ -35,7 +38,6 @@ REQUIRED_KEYS = {
 PREFIXES = {
     "Cardiology": "CARD",
     "Neurology": "NEUR",
-    "Neurosurgery": "NSGY",
     "Internal Medicine": "IMED",
     "Gastroenterology": "GAST",
     "Dermatology": "DERM",
@@ -160,42 +162,6 @@ CONCEPTS: dict[str, list[dict[str, Any]]] = {
             "urgency": "LOW",
             "hint": "possible migraine with aura",
             "reason": "Recurrent aura-like headache without red flags is lower urgency.",
-        },
-    ],
-    "Neurosurgery": [
-        {
-            "en": "low back pain with new weakness down one leg",
-            "ar": "ألم أسفل الظهر مع ضعف جديد نازل في ساق واحدة",
-            "eg": "وجع أسفل ضهري ومعاه ضعف جديد نازل في رجل واحدة",
-            "urgency": "HIGH",
-            "hint": "possible nerve compression",
-            "reason": "New limb weakness with back pain can indicate urgent nerve compression.",
-            "red_flag": True,
-        },
-        {
-            "en": "neck pain with numbness and weakness in one hand",
-            "ar": "ألم في الرقبة مع تنميل وضعف في يد واحدة",
-            "eg": "رقبتي واجعاني وإيدي بتنمل وضعفت",
-            "urgency": "MEDIUM",
-            "hint": "possible cervical nerve compression",
-            "reason": "Neck pain with neurologic arm symptoms needs specialist assessment.",
-        },
-        {
-            "en": "back pain with trouble controlling urine",
-            "ar": "ألم في الظهر مع صعوبة في التحكم في البول",
-            "eg": "ضهري واجعني ومش عارف أتحكم في البول كويس",
-            "urgency": "HIGH",
-            "hint": "possible cauda equina syndrome",
-            "reason": "Bladder control symptoms with back pain are emergency red flags.",
-            "red_flag": True,
-        },
-        {
-            "en": "pain shooting from the back to the foot with numb toes",
-            "ar": "ألم ممتد من الظهر إلى القدم مع تنميل الأصابع",
-            "eg": "وجع نازل من ضهري لحد رجلي وصوابع رجلي بتنمل",
-            "urgency": "MEDIUM",
-            "hint": "possible lumbar radiculopathy",
-            "reason": "Radiating back pain with sensory symptoms suggests nerve root involvement.",
         },
     ],
     "Internal Medicine": [
@@ -564,6 +530,8 @@ def render_input(concept: dict[str, Any], difficulty: str, variant: int) -> str:
         return f"{concept['eg']} {time_eg}. {note_eg}"
     if variant == 3:
         return f"عندي {concept['ar']} with {concept['en']} {time_en}. {note_en}"
+    if variant == 5:
+        return f"I am mainly worried about {concept['en']} {time_en}. {note_alt}"
     return f"{time_alt}, I noticed {concept['en']}. {note_alt}"
 
 
@@ -608,7 +576,7 @@ def build_cases() -> list[dict[str, Any]]:
         for difficulty in DIFFICULTIES:
             serial = 1
             for concept_index, concept in enumerate(concepts):
-                for variant in range(5):
+                for variant in ENGLISH_VARIANTS:
                     cases.append(
                         {
                             "case_id": f"{prefix}_{difficulty.upper()}_{serial:03d}",
@@ -756,6 +724,8 @@ def validate_cases(cases: list[dict[str, Any]]) -> None:
                 errors.append(f"{case_id}: {key} must be a non-empty string.")
 
         text = str(case.get("input_text", ""))
+        if any(ord(char) >= 128 for char in text):
+            errors.append(f"{case_id}: input_text must be English-only ASCII.")
         normalized_input = re.sub(r"\s+", " ", text.strip().lower())
         if normalized_input in inputs:
             errors.append(f"{case_id}: duplicate input_text.")
@@ -778,15 +748,15 @@ def validate_cases(cases: list[dict[str, Any]]) -> None:
         by_specialty_difficulty[(specialty, difficulty)] += 1
 
     for specialty in TRIAGE_SPECIALTIES:
-        if by_specialty[specialty] != 100:
+        if by_specialty[specialty] != CASES_PER_SPECIALTY:
             errors.append(
-                f"{specialty}: expected 100 cases, found {by_specialty[specialty]}."
+                f"{specialty}: expected {CASES_PER_SPECIALTY} cases, found {by_specialty[specialty]}."
             )
         for difficulty in DIFFICULTIES:
             count = by_specialty_difficulty[(specialty, difficulty)]
-            if count != 20:
+            if count != CASES_PER_SPECIALTY_DIFFICULTY:
                 errors.append(
-                    f"{specialty}/{difficulty}: expected 20 cases, found {count}."
+                    f"{specialty}/{difficulty}: expected {CASES_PER_SPECIALTY_DIFFICULTY} cases, found {count}."
                 )
 
     if errors:

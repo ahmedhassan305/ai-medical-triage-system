@@ -7,7 +7,6 @@
     "specialty_pages": {
       "Cardiology": "https://www.vezeeta.com/en/doctor/cardiology/alexandria",
       "Neurology": "https://www.vezeeta.com/en/doctor/neurology/alexandria",
-      "Neurosurgery": "https://www.vezeeta.com/en/doctor/neurosurgery/alexandria",
       "Internal Medicine": "https://www.vezeeta.com/en/doctor/internal-medicine/alexandria",
       "Gastroenterology": "https://www.vezeeta.com/en/doctor/adult-gastroenterology-and-endoscopy/alexandria",
       "Dermatology": "https://www.vezeeta.com/en/doctor/dermatology/alexandria",
@@ -559,7 +558,7 @@
     {
       "full_name": "EMAN Abd ELbadeaa",
       "specialty": "Neurology",
-      "clinic": "Specialist in Neurology, Neurosurgery and Psychiatry",
+      "clinic": "Specialist in Neurology and Psychiatry",
       "area": "Roshdy",
       "city": "Alexandria",
       "source_name": "Vezeeta public directory",
@@ -645,106 +644,6 @@
       "source_name": "Vezeeta public directory",
       "source_url": "https://www.vezeeta.com/en/dr/doctor-walid-ibrahem-neurology",
       "booking_url": "https://www.vezeeta.com/en/dr/doctor-walid-ibrahem-neurology"
-    },
-    {
-      "full_name": "Ahmed Abd Alla hablas",
-      "specialty": "Neurosurgery",
-      "clinic": "Professor of neurosurgery",
-      "area": "Mahatet El-Raml",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Abd-Alla-hablas-Neurology",
-      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Ahmed-Abd-Alla-hablas-Neurology"
-    },
-    {
-      "full_name": "Ghada Arafat Elsaidy",
-      "specialty": "Neurosurgery",
-      "clinic": "Consultant in Neurosurgery and Spine Surgery",
-      "area": "Mahatet El-Raml",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-ghada-elsaidy-neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ghada-elsaidy-neurosurgery"
-    },
-    {
-      "full_name": "Hesham Elemam",
-      "specialty": "Neurosurgery",
-      "clinic": "PhD and Consultant of Neurological Surgery",
-      "area": "Roshdy",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hesham-Mahmoud-Neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hesham-Mahmoud-Neurosurgery"
-    },
-    {
-      "full_name": "Hisham Aboul Enein",
-      "specialty": "Neurosurgery",
-      "clinic": "Professor Of Neurosurgery",
-      "area": "Smouha",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/Doctor-Hisham--Aboul-Enein--Neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/Doctor-Hisham--Aboul-Enein--Neurosurgery"
-    },
-    {
-      "full_name": "Ibrahim Mahmoud Hegazy",
-      "specialty": "Neurosurgery",
-      "clinic": "Consultant Neurosurgeon",
-      "area": "El-Agamy",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-ibrahim-mahmoud-hegazy-neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-ibrahim-mahmoud-hegazy-neurosurgery"
-    },
-    {
-      "full_name": "Moamen Mohamed Morsy",
-      "specialty": "Neurosurgery",
-      "clinic": "consultant Neurosurgery and Spine",
-      "area": "Miamy",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-moamen-mohamed-morsy-neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-moamen-mohamed-morsy-neurosurgery"
-    },
-    {
-      "full_name": "Mohamed Ali",
-      "specialty": "Neurosurgery",
-      "clinic": "Neurosurgery and Spine Consultant",
-      "area": "Sidy Bishr",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-ali-anwar-neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-ali-anwar-neurosurgery"
-    },
-    {
-      "full_name": "Mohamed Elmadawy",
-      "specialty": "Neurosurgery",
-      "clinic": "Neurosurgeon specialist",
-      "area": "Roshdy",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-elmadawy-neurosurgery-1",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-elmadawy-neurosurgery-1"
-    },
-    {
-      "full_name": "Mohamed Zoheiry",
-      "specialty": "Neurosurgery",
-      "clinic": "Neurosurgery and spine surgery consultant",
-      "area": "Miamy",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-zoheiry-neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-mohamed-zoheiry-neurosurgery"
-    },
-    {
-      "full_name": "abdou saleh",
-      "specialty": "Neurosurgery",
-      "clinic": "consultant in neurosurgery and spinal surgery",
-      "area": "Victoria",
-      "city": "Alexandria",
-      "source_name": "Vezeeta public directory",
-      "source_url": "https://www.vezeeta.com/en/dr/doctor-abdou-saleh-neurosurgery",
-      "booking_url": "https://www.vezeeta.com/en/dr/doctor-abdou-saleh-neurosurgery"
     },
     {
       "full_name": "Ahmed Sameer",

@@ -211,7 +211,7 @@ What it does:
 
 Public data source used in this branch:
 - Vezeeta public doctor directory/profile pages
-- specialty coverage in the canonical seed includes Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, and Family Medicine
+- specialty coverage in the canonical seed includes Cardiology, Neurology, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, Family Medicine, and Pulmonology
 
 ## Clean local demo dataset
 

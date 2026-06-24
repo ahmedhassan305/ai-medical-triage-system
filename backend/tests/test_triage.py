@@ -34,10 +34,12 @@ from app.services.clinical_features import (
 )
 from app.services.triage_service import (
     VALID_SPECIALTIES,
+    _calibrate_urgency_from_patterns,
     _filter_chunks_for_reasoner,
     _pediatric_specialty_override,
     _rag_expansion_terms,
     _specialty_from_body_systems,
+    _strong_specialty_override,
     _usable_reasoner_questions,
     get_suggested_doctors,
 )
@@ -486,7 +488,7 @@ def test_non_medical_query_ignores_patient_profile_risk_factors(
             "my belly hurts really bad on the right side and im running a fever",
             23,
             "high",
-            "General Surgery",
+            "Gastroenterology",
             "possible abdominal surgical emergency",
         ),
         (
@@ -500,7 +502,7 @@ def test_non_medical_query_ignores_patient_profile_risk_factors(
             "my side hurts like crazy and my pee is red",
             41,
             "medium",
-            "Urology",
+            "Internal Medicine",
             None,
         ),
         (
@@ -557,6 +559,63 @@ def test_bowel_movement_pain_extracts_anorectal_gi_features() -> None:
     expansion = _rag_expansion_terms(features)
     assert "hemorrhoids" in expansion
     assert "anal fissure" in expansion
+
+
+@pytest.mark.parametrize(
+    ("query", "age", "expected_specialty", "expected_urgency"),
+    [
+        (
+            "runny nose, mild sore throat, and low fever for three days",
+            31,
+            "Family Medicine",
+            "low",
+        ),
+        (
+            "my child has a barking cough and noisy breathing since yesterday",
+            5,
+            "Pediatrics",
+            "medium",
+        ),
+        (
+            "ear pain with reduced hearing and fever since yesterday",
+            42,
+            "ENT",
+            "medium",
+        ),
+        (
+            "hearing voices and feeling people are trying to harm me since yesterday",
+            24,
+            "Psychiatry",
+            "medium",
+        ),
+        (
+            "red warm painful patch spreading on my leg with fever since yesterday",
+            55,
+            "Dermatology",
+            "medium",
+        ),
+        (
+            "very thirsty all the time with frequent urination and weight loss "
+            "since yesterday",
+            42,
+            "Internal Medicine",
+            "medium",
+        ),
+    ],
+)
+def test_eval_drift_patterns_have_deterministic_specialty_and_urgency(
+    query: str,
+    age: int,
+    expected_specialty: str,
+    expected_urgency: str,
+) -> None:
+    features = extract_clinical_features(query, age=age)
+
+    assert _strong_specialty_override(query, features, age=age) == expected_specialty
+    assert (
+        _calibrate_urgency_from_patterns(query, "high", features, age=age)
+        == expected_urgency
+    )
 
 
 def test_bowel_movement_pain_uses_anorectal_clarification_questions() -> None:

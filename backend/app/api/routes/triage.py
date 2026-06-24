@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -248,16 +250,52 @@ def _build_body_diagram_query(payload: BodyDiagramTriageRequest) -> str:
         else "none selected"
     )
     free_text = payload.patient_free_text.strip() or "none"
+    positive_findings = [f"{region} region", *payload.main_symptoms]
+    if payload.associated_symptoms:
+        positive_findings.extend(payload.associated_symptoms)
+    route_hint = _body_region_specialty(payload)
+    emergency_pattern = _has_body_diagram_emergency_red_flag(payload)
+    structured_payload = {
+        "input_method": payload.input_method,
+        "selected_body_region": payload.selected_body_region,
+        "selected_body_region_label": region,
+        "chief_complaint": f"{region}: {', '.join(payload.main_symptoms)}",
+        "positive_findings": positive_findings,
+        "main_symptoms": payload.main_symptoms,
+        "severity": payload.severity,
+        "onset": payload.onset,
+        "duration": payload.duration,
+        "associated_symptoms": payload.associated_symptoms,
+        "patient_free_text": payload.patient_free_text.strip(),
+        "body_region_route_hint": route_hint,
+        "structured_emergency_pattern_detected": emergency_pattern,
+    }
     selected_parts = [
-        "Body selector report.",
-        f"Selected body region: {region}.",
-        f"Main symptoms: {', '.join(payload.main_symptoms)}.",
-        f"Severity: {payload.severity}.",
-        f"Onset: {payload.onset}.",
-        f"Duration: {payload.duration}.",
-        f"Associated symptoms: {associated}.",
+        "Body selector structured triage intake.",
+        "Interpretation rules:",
+        "- Treat the selected body region as the patient's strongest symptom location.",
+        "- Treat main symptoms, associated symptoms, and free text as reported "
+        "positives.",
+        "- Do not invent symptoms that were not selected or written by the patient.",
+        "- Unselected symptoms are not confirmed present; they are also not true "
+        "denials.",
+        "- Use severity, onset, and duration exactly as provided.",
+        "- Use the body-region route hint only as a weak hint; red flags and "
+        "symptom pattern win.",
+        "",
+        "Clinical intake summary:",
+        f"Chief complaint: {region}: {', '.join(payload.main_symptoms)}.",
+        f"Positive findings: {', '.join(positive_findings)}.",
+        "Severity/onset/duration: "
+        f"{payload.severity}; {payload.onset}; {payload.duration}.",
+        f"Associated symptoms selected: {associated}.",
         f"Patient free text: {free_text}.",
-        "No other symptoms were selected in the body diagram form.",
+        "Structured emergency pattern detected: "
+        f"{'yes' if emergency_pattern else 'no'}.",
+        f"Body-region route hint: {route_hint}.",
+        "",
+        "Machine-readable JSON:",
+        json.dumps(structured_payload, ensure_ascii=False, sort_keys=True),
     ]
     return "\n".join(selected_parts)
 
@@ -824,6 +862,7 @@ def triage_route(
             payload.query,
             patient_id=patient.id if patient else None,
             db=db,
+            age=payload.patient_age,
             lab_values=payload.lab_values,
             language=payload.language,
         )

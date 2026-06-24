@@ -166,6 +166,8 @@ export type RecordsImportResultDto = {
 export type TriageRequestDto = {
   query: string;
   patient_id?: number;
+  patient_age?: number | null;
+  patient_gender?: string | null;
   lab_values?: LabValueDto[];
   language?: "en" | "ar";
 };

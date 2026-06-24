@@ -46,6 +46,8 @@ def make_payload(case: dict[str, Any]) -> dict[str, Any]:
     return {
         "query": text,
         "language": "ar" if contains_arabic(text) else "en",
+        "patient_age": case.get("patient_age"),
+        "patient_gender": case.get("patient_gender"),
     }
 
 
@@ -56,6 +58,8 @@ def make_clarification_payload(
     return {
         "original_query": text,
         "language": "ar" if contains_arabic(text) else "en",
+        "patient_age": case.get("patient_age"),
+        "patient_gender": case.get("patient_gender"),
         "answers": build_answers_for_questions(case, questions),
     }
 

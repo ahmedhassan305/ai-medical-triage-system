@@ -33,7 +33,6 @@ type QuickAction = {
 const REQUIRED_SPECIALTIES = [
   "Cardiology",
   "Neurology",
-  "Neurosurgery",
   "Internal Medicine",
   "Gastroenterology",
   "Dermatology",

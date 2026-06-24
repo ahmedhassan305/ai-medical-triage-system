@@ -204,7 +204,7 @@
       "query": "acute appendicitis with right lower quadrant pain and fever",
       "age": 25,
       "expected_urgency": "HIGH",
-      "expected_specialty": "General Surgery",
+      "expected_specialty": "Gastroenterology",
       "expected_condition": "Appendicitis",
       "language_type": "professional",
       "category": "emergency_red_flag"
@@ -215,7 +215,7 @@
       "query": "my belly hurts really bad on the right side and im running a fever",
       "age": 23,
       "expected_urgency": "HIGH",
-      "expected_specialty": "General Surgery",
+      "expected_specialty": "Gastroenterology",
       "expected_condition": "Appendicitis",
       "language_type": "colloquial",
       "category": "emergency_red_flag"
@@ -281,7 +281,7 @@
       "query": "i got a runny nose and a sore throat",
       "age": 28,
       "expected_urgency": "LOW",
-      "expected_specialty": "General Practice",
+      "expected_specialty": "Family Medicine",
       "expected_condition": "Common cold",
       "language_type": "colloquial",
       "category": "routine_low_risk"
@@ -380,7 +380,7 @@
       "query": "acute cholecystitis with right upper quadrant pain after fatty meal",
       "age": 51,
       "expected_urgency": "HIGH",
-      "expected_specialty": "General Surgery",
+      "expected_specialty": "Gastroenterology",
       "expected_condition": "Cholecystitis",
       "language_type": "professional",
       "category": "emergency_red_flag"
@@ -391,7 +391,7 @@
       "query": "my right side hurts really bad after i ate greasy food",
       "age": 49,
       "expected_urgency": "HIGH",
-      "expected_specialty": "General Surgery",
+      "expected_specialty": "Gastroenterology",
       "expected_condition": "Cholecystitis",
       "language_type": "colloquial",
       "category": "emergency_red_flag"
@@ -402,7 +402,7 @@
       "query": "urinary tract infection with dysuria and frequency",
       "age": 45,
       "expected_urgency": "LOW",
-      "expected_specialty": "Urology",
+      "expected_specialty": "Internal Medicine",
       "expected_condition": "Urinary tract infection",
       "language_type": "professional",
       "category": "routine_low_risk"
@@ -413,7 +413,7 @@
       "query": "it burns when i pee and i gotta go all the time",
       "age": 42,
       "expected_urgency": "LOW",
-      "expected_specialty": "Urology",
+      "expected_specialty": "Internal Medicine",
       "expected_condition": "Urinary tract infection",
       "language_type": "colloquial",
       "category": "routine_low_risk"
@@ -622,7 +622,7 @@
       "query": "nephrolithiasis with flank pain and hematuria",
       "age": 44,
       "expected_urgency": "MEDIUM",
-      "expected_specialty": "Urology",
+      "expected_specialty": "Internal Medicine",
       "expected_condition": "Kidney stones",
       "language_type": "professional",
       "category": "routine_low_risk"
@@ -633,7 +633,7 @@
       "query": "my side hurts like crazy and my pee is red",
       "age": 41,
       "expected_urgency": "MEDIUM",
-      "expected_specialty": "Urology",
+      "expected_specialty": "Internal Medicine",
       "expected_condition": "Kidney stones",
       "language_type": "colloquial",
       "category": "routine_low_risk"
@@ -666,7 +666,7 @@
       "query": "acute sinusitis with facial pain and nasal congestion",
       "age": 38,
       "expected_urgency": "LOW",
-      "expected_specialty": "Otolaryngology",
+      "expected_specialty": "ENT",
       "expected_condition": "Sinusitis",
       "language_type": "professional",
       "category": "routine_low_risk"
@@ -677,7 +677,7 @@
       "query": "my face hurts and im so congested",
       "age": 35,
       "expected_urgency": "LOW",
-      "expected_specialty": "Otolaryngology",
+      "expected_specialty": "ENT",
       "expected_condition": "Sinusitis",
       "language_type": "colloquial",
       "category": "routine_low_risk"
@@ -688,7 +688,7 @@
       "query": "acute otitis media with ear pain and fever",
       "age": 7,
       "expected_urgency": "LOW",
-      "expected_specialty": "Otolaryngology",
+      "expected_specialty": "Pediatrics",
       "expected_condition": "Otitis media",
       "language_type": "professional",
       "category": "pediatrics"
@@ -699,7 +699,7 @@
       "query": "my ear hurts really bad",
       "age": 6,
       "expected_urgency": "LOW",
-      "expected_specialty": "Otolaryngology",
+      "expected_specialty": "ENT",
       "expected_condition": "Otitis media",
       "language_type": "colloquial",
       "category": "pediatrics"
@@ -710,7 +710,7 @@
       "query": "acute pharyngitis with sore throat and dysphagia",
       "age": 25,
       "expected_urgency": "LOW",
-      "expected_specialty": "Otolaryngology",
+      "expected_specialty": "ENT",
       "expected_condition": "Pharyngitis",
       "language_type": "professional",
       "category": "routine_low_risk"
@@ -721,7 +721,7 @@
       "query": "my throat is really sore and it hurts to swallow",
       "age": 23,
       "expected_urgency": "LOW",
-      "expected_specialty": "Otolaryngology",
+      "expected_specialty": "ENT",
       "expected_condition": "Pharyngitis",
       "language_type": "colloquial",
       "category": "routine_low_risk"
@@ -754,7 +754,7 @@
       "query": "severe thermal burns covering 30% of body surface",
       "age": 45,
       "expected_urgency": "HIGH",
-      "expected_specialty": "Surgery",
+      "expected_specialty": "Dermatology",
       "expected_condition": "Severe burns",
       "language_type": "professional",
       "category": "emergency_red_flag"
@@ -765,7 +765,7 @@
       "query": "suspected opioid overdose with altered mental status",
       "age": 31,
       "expected_urgency": "HIGH",
-      "expected_specialty": "Emergency Medicine",
+      "expected_specialty": "Internal Medicine",
       "expected_condition": "Drug overdose",
       "language_type": "professional",
       "category": "emergency_red_flag"

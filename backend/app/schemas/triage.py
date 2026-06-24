@@ -54,6 +54,8 @@ class SuspectedCondition(BaseModel):
 class TriageRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     patient_id: int | None = None
+    patient_age: int | None = Field(default=None, ge=0, le=130)
+    patient_gender: str | None = Field(default=None, max_length=20)
     lab_values: list[dict[str, str | None]] = Field(default_factory=list)
     language: Language = "en"
 
@@ -158,6 +160,8 @@ class ClarificationRequest(BaseModel):
     original_query: str
     answers: list[ClarificationAnswer]
     patient_id: int | None = None
+    patient_age: int | None = Field(default=None, ge=0, le=130)
+    patient_gender: str | None = Field(default=None, max_length=20)
     language: Language = "en"
 
 
