@@ -16,16 +16,22 @@ import {
   formatLocalizedSlotLabel,
   localizeAppointmentStatus,
 } from "../lib/localizedDisplay";
+import { splitResidenceLocation } from "../lib/egyptianLocations";
 import SectionPanel from "./SectionPanel";
 import CustomSelect from "./CustomSelect";
 
 const ADMIN_APPOINTMENTS_PAGE_SIZE = 6;
+type DistanceFilter = "any" | "same_governorate" | "same_area";
+type VisitType = "clinic" | "video";
+type PaymentFilter = "" | "cash" | "card";
 
 type AppointmentsPanelProps = {
   role: RoleType;
   doctors: DoctorProfileResponseDto[];
   patients: PatientProfileResponseDto[];
   currentPatientId: number | null;
+  currentPatientProfile?: PatientProfileResponseDto | null;
+  currentDoctorId?: number | null;
   appointments: AppointmentResponseDto[];
   loading: boolean;
   error: string | null;
@@ -34,9 +40,9 @@ type AppointmentsPanelProps = {
     doctor_id: number;
     reason: string;
     notes?: string;
-    scheduled_for?: string | null;
-    clinic_id?: number | null;
     slot_id?: number | null;
+    visit_type: VisitType;
+    video_url?: string | null;
   }) => Promise<void>;
   onUpdateStatus: (
     appointmentId: number,
@@ -89,11 +95,113 @@ function formatRequestedAt(
   return new Date(value).toLocaleString(language === "ar" ? "ar-EG" : "en-US");
 }
 
+function primarySpecialty(value: string): string {
+  return value.split(" - ")[0]?.trim() || value;
+}
+
+function todayDateInputValue(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function dateInputValueAfterDays(startDate: string, days: number): string {
+  const date = new Date(`${startDate}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function normalizeLocation(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function clinicMatchesDistance(
+  clinic: { area?: string | null; city?: string | null } | null | undefined,
+  patient: PatientProfileResponseDto | null,
+  distanceFilter: DistanceFilter,
+): boolean {
+  if (distanceFilter === "any" || !patient) {
+    return true;
+  }
+  const patientLocation = splitResidenceLocation(
+    patient.current_governorate || patient.inferred_governorate,
+  );
+  const patientGovernorate = normalizeLocation(patientLocation.governorate);
+  const patientArea = normalizeLocation(patientLocation.area);
+  const clinicCity = normalizeLocation(clinic?.city);
+  const clinicArea = normalizeLocation(clinic?.area);
+
+  if (distanceFilter === "same_area") {
+    return Boolean(
+      patientGovernorate &&
+        patientArea &&
+        clinicCity === patientGovernorate &&
+        clinicArea === patientArea,
+    );
+  }
+  return Boolean(patientGovernorate && clinicCity === patientGovernorate);
+}
+
+function doctorMatchesDistance(
+  doctor: DoctorProfileResponseDto,
+  patient: PatientProfileResponseDto | null,
+  distanceFilter: DistanceFilter,
+): boolean {
+  return clinicMatchesDistance(
+    { area: doctor.area, city: doctor.city },
+    patient,
+    distanceFilter,
+  );
+}
+
+function slotMatchesDate(slot: AppointmentSlotDto, dateFilter: string): boolean {
+  if (!dateFilter) {
+    return true;
+  }
+  return slot.start_at.slice(0, 10) >= dateFilter;
+}
+
+function doctorMatchesPayments(
+  doctor: DoctorProfileResponseDto,
+  paymentFilter: PaymentFilter,
+): boolean {
+  if (!paymentFilter) {
+    return true;
+  }
+  const methods = (doctor.payment_methods ?? [])
+    .map((method) => method.toLowerCase())
+    .filter(Boolean);
+  if (methods.length === 0) {
+    return true;
+  }
+  return methods.some((method) => method.includes(paymentFilter));
+}
+
+function doctorMatchesMaximumFee(
+  doctor: DoctorProfileResponseDto,
+  maxFeeFilter: string,
+): boolean {
+  if (!maxFeeFilter) {
+    return true;
+  }
+  const maxFee = Number(maxFeeFilter);
+  if (!Number.isFinite(maxFee)) {
+    return true;
+  }
+  if (doctor.consultation_fee == null) {
+    return true;
+  }
+  return doctor.consultation_fee <= maxFee;
+}
+
 export default function AppointmentsPanel({
   role,
   doctors,
   patients,
   currentPatientId,
+  currentPatientProfile = null,
+  currentDoctorId = null,
   appointments,
   loading,
   error,
@@ -105,7 +213,7 @@ export default function AppointmentsPanel({
   const { t, language } = useLanguage();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [doctorId, setDoctorId] = useState<number | "">(
-    preFill?.doctorId ?? "",
+    preFill?.doctorId ?? currentDoctorId ?? "",
   );
   const [patientId, setPatientId] = useState<number | "">(
     currentPatientId ?? "",
@@ -124,6 +232,12 @@ export default function AppointmentsPanel({
     [],
   );
   const [selectedSlotId, setSelectedSlotId] = useState<number | "">("");
+  const [slotDateFilter, setSlotDateFilter] = useState("");
+  const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>("any");
+  const [visitType, setVisitType] = useState<VisitType>("clinic");
+  const [insuranceFilter, setInsuranceFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("");
+  const [maxFeeFilter, setMaxFeeFilter] = useState("");
   const [slotLoading, setSlotLoading] = useState(false);
   const [slotError, setSlotError] = useState<string | null>(null);
   const [reason, setReason] = useState(preFill?.reason ?? "");
@@ -151,20 +265,53 @@ export default function AppointmentsPanel({
   const specialties = useMemo(
     () =>
       Array.from(
-        new Set(doctors.map((doctor) => doctor.specialty).filter(Boolean)),
+        new Set(
+          doctors
+            .map((doctor) => primarySpecialty(doctor.specialty))
+            .filter(Boolean),
+        ),
       ).sort(),
     [doctors],
   );
-  const filteredDoctors = selectedSpecialty
-    ? doctors.filter((doctor) => doctor.specialty === selectedSpecialty)
-    : doctors;
+  const bookableDoctors =
+    role === "doctor" && currentDoctorId
+      ? doctors.filter((doctor) => doctor.id === currentDoctorId)
+      : doctors;
+  const activePatient =
+    resolvedPatient ||
+    patients.find((patient) => patient.id === Number(patientId)) ||
+    currentPatientProfile ||
+    patients.find((patient) => patient.id === Number(currentPatientId)) ||
+    null;
+  const filteredDoctors = bookableDoctors.filter((doctor) => {
+    if (
+      selectedSpecialty &&
+      primarySpecialty(doctor.specialty) !== selectedSpecialty
+    ) {
+      return false;
+    }
+    if (!doctorMatchesDistance(doctor, activePatient, distanceFilter)) {
+      return false;
+    }
+    if (visitType === "video" && !doctor.offers_telemedicine) {
+      return false;
+    }
+    if (!doctorMatchesPayments(doctor, paymentFilter)) {
+      return false;
+    }
+    if (!doctorMatchesMaximumFee(doctor, maxFeeFilter)) {
+      return false;
+    }
+    return true;
+  });
   const selectedDoctor = doctors.find(
     (doctor) => doctor.id === Number(doctorId),
   );
-  const selectedSlot = availableSlots.find(
-    (slot) => slot.id === Number(selectedSlotId),
+  const filteredAvailableSlots = availableSlots.filter(
+    (slot) =>
+      slotMatchesDate(slot, slotDateFilter) &&
+      clinicMatchesDistance(slot.clinic, activePatient, distanceFilter),
   );
-
   useEffect(() => {
     if (!preFill) {
       return;
@@ -175,6 +322,18 @@ export default function AppointmentsPanel({
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [preFill]);
+
+  useEffect(() => {
+    if (role !== "doctor" || !currentDoctorId) {
+      return;
+    }
+
+    setDoctorId(currentDoctorId);
+    const ownDoctor = doctors.find((doctor) => doctor.id === currentDoctorId);
+    if (ownDoctor) {
+      setSelectedSpecialty(primarySpecialty(ownDoctor.specialty));
+    }
+  }, [currentDoctorId, doctors, role]);
 
   useEffect(() => {
     if (!doctorId) {
@@ -194,10 +353,25 @@ export default function AppointmentsPanel({
       }
     });
 
-    listDoctorSlots(Number(doctorId))
+    listDoctorSlots(
+      Number(doctorId),
+      slotDateFilter
+        ? {
+            startDate: slotDateFilter,
+            endDate: dateInputValueAfterDays(slotDateFilter, 60),
+          }
+        : {},
+    )
       .then((slots) => {
         if (!cancelled) {
-          setAvailableSlots(slots.filter((slot) => slot.status === "open"));
+          const now = Date.now();
+          setAvailableSlots(
+            slots.filter(
+              (slot) =>
+                slot.status === "open" &&
+                new Date(slot.start_at).getTime() > now,
+            ),
+          );
         }
       })
       .catch(() => {
@@ -215,7 +389,34 @@ export default function AppointmentsPanel({
     return () => {
       cancelled = true;
     };
-  }, [doctorId, t]);
+  }, [doctorId, slotDateFilter, t]);
+
+  useEffect(() => {
+    if (
+      selectedSlotId &&
+      !filteredAvailableSlots.some((slot) => slot.id === Number(selectedSlotId))
+    ) {
+      setSelectedSlotId("");
+    }
+  }, [filteredAvailableSlots, selectedSlotId]);
+
+  useEffect(() => {
+    if (
+      doctorId &&
+      !filteredDoctors.some((doctor) => doctor.id === Number(doctorId))
+    ) {
+      setDoctorId("");
+    }
+  }, [doctorId, filteredDoctors]);
+
+  useEffect(() => {
+    if (visitType !== "video") {
+      return;
+    }
+    if (selectedDoctor && !selectedDoctor.offers_telemedicine) {
+      setVisitType("clinic");
+    }
+  }, [selectedDoctor, visitType]);
 
   async function handleLookupPatient() {
     const nationalId = patientNationalId.trim();
@@ -251,9 +452,9 @@ export default function AppointmentsPanel({
       doctor_id: Number(doctorId),
       reason: reason.trim(),
       notes: notes.trim() || undefined,
-      scheduled_for: selectedSlot?.start_at ?? null,
-      clinic_id: selectedSlot?.clinic?.id ?? null,
       slot_id: Number(selectedSlotId),
+      visit_type: visitType,
+      video_url: null,
     });
     setReason("");
     setNotes("");
@@ -314,6 +515,20 @@ export default function AppointmentsPanel({
     ...completedAppointments,
     ...rejectedAppointments,
   ];
+  const doctorScheduleText =
+    language === "ar"
+      ? {
+          title: "جدول الطبيب الأسبوعي",
+          eyebrow: "هذا الأسبوع",
+          empty: "لا توجد مواعيد مؤكدة في هذا الأسبوع.",
+          legacyPending: "طلبات قديمة تحتاج متابعة",
+        }
+      : {
+          title: "Doctor weekly schedule",
+          eyebrow: "This week",
+          empty: "No confirmed appointments this week.",
+          legacyPending: "Legacy requests needing follow-up",
+        };
 
   function handleSortByChange(value: "date" | "id") {
     setSortBy(value);
@@ -390,6 +605,15 @@ export default function AppointmentsPanel({
       patients.find((patient) => patient.id === appointment.patient_id)
         ?.full_name ?? `${t("patientNumber")} #${appointment.patient_id}`
     );
+  }
+
+  function getShortPatientName(appointment: AppointmentResponseDto): string {
+    const patientName = getPatientName(appointment);
+    const parts = patientName.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0]} ${parts[1]}`;
+    }
+    return patientName;
   }
 
   function getDoctorName(appointment: AppointmentResponseDto): string {
@@ -521,6 +745,10 @@ export default function AppointmentsPanel({
             <strong>{t("clinicReview")}</strong>
             <span>{formatClinic(appointment, t)}</span>
           </div>
+          <div>
+            <strong>Visit type</strong>
+            <span>{appointment.visit_type === "video" ? "Video" : "Clinic"}</span>
+          </div>
         </div>
 
         <p className="muted-copy">
@@ -531,6 +759,19 @@ export default function AppointmentsPanel({
           <p className="muted-copy" dir="auto">
             {appointment.notes}
           </p>
+        ) : null}
+
+        {appointment.triage_summary ? (
+          <div className="appointment-triage-summary">
+            <p className="micro-label">Triage handoff</p>
+            <strong>{appointment.triage_summary.urgency_level.toUpperCase()}</strong>
+            <p dir="auto">{appointment.triage_summary.clinical_summary}</p>
+            {appointment.triage_summary.red_flags.length > 0 ? (
+              <p className="muted-copy" dir="auto">
+                Red flags: {appointment.triage_summary.red_flags.join(", ")}
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         {showReviewForm ? (
@@ -686,6 +927,106 @@ export default function AppointmentsPanel({
     );
   }
 
+  function renderDoctorWeeklySchedule() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(today);
+      day.setDate(today.getDate() + index);
+      return day;
+    });
+    const weekEnd = new Date(today);
+    weekEnd.setDate(today.getDate() + 7);
+    const appointmentsThisWeek = confirmedAppointments
+      .filter((appointment) => {
+        if (!appointment.scheduled_for) {
+          return false;
+        }
+        const scheduled = new Date(appointment.scheduled_for);
+        return scheduled >= today && scheduled < weekEnd;
+      })
+      .sort(
+        (left, right) =>
+          new Date(left.scheduled_for ?? "").getTime() -
+          new Date(right.scheduled_for ?? "").getTime(),
+      );
+
+    return (
+      <section className="workspace-card workspace-card--compact">
+        <div className="workspace-card__header">
+          <div>
+            <p className="micro-label">{doctorScheduleText.eyebrow}</p>
+            <h3>{doctorScheduleText.title}</h3>
+          </div>
+          <span className="badge badge--status-approved">
+            {appointmentsThisWeek.length} {t("upcomingBookings")}
+          </span>
+        </div>
+
+        <div className="doctor-week-calendar">
+          {days.map((day) => {
+            const dayKey = day.toDateString();
+            const dayAppointments = appointmentsThisWeek.filter(
+              (appointment) =>
+                appointment.scheduled_for &&
+                new Date(appointment.scheduled_for).toDateString() === dayKey,
+            );
+            return (
+              <div key={dayKey} className="doctor-week-calendar__day">
+                <div className="doctor-week-calendar__date">
+                  <strong>
+                    {day.toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
+                      weekday: "short",
+                    })}
+                  </strong>
+                  <span>
+                    {day.toLocaleDateString(language === "ar" ? "ar-EG" : "en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+                <div className="doctor-week-calendar__items">
+                  {dayAppointments.length === 0 ? (
+                    <span className="doctor-week-calendar__empty">-</span>
+                  ) : (
+                    dayAppointments.map((appointment) => (
+                      <button
+                        key={appointment.id}
+                        type="button"
+                        className="doctor-week-calendar__booking"
+                        onClick={() => openDetails(appointment)}
+                      >
+                        <strong>
+                          {new Date(
+                            appointment.scheduled_for ?? appointment.requested_at,
+                          ).toLocaleTimeString(
+                            language === "ar" ? "ar-EG" : "en-US",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </strong>
+                        <span title={getPatientName(appointment)}>
+                          {getShortPatientName(appointment)}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {appointmentsThisWeek.length === 0 ? (
+          <div className="empty-state">{doctorScheduleText.empty}</div>
+        ) : null}
+      </section>
+    );
+  }
+
   function renderAppointmentDetails() {
     if (!selectedAppointment) {
       return null;
@@ -739,6 +1080,12 @@ export default function AppointmentsPanel({
               <span>{formatClinic(selectedAppointment, t)}</span>
             </div>
             <div>
+              <strong>Visit type</strong>
+              <span>
+                {selectedAppointment.visit_type === "video" ? "Video" : "Clinic"}
+              </span>
+            </div>
+            <div>
               <strong>{t("scheduled")}</strong>
               <span>
                 {formatDateTime(selectedAppointment.scheduled_for, language)}
@@ -771,6 +1118,29 @@ export default function AppointmentsPanel({
               <span>{t("notSeparatelyRecorded")}</span>
             </div>
           </div>
+
+          {selectedAppointment.triage_summary ? (
+            <section className="appointment-triage-summary appointment-triage-summary--drawer">
+              <p className="micro-label">Doctor-facing triage summary</p>
+              <h4>
+                {selectedAppointment.triage_summary.urgency_level.toUpperCase()}{" "}
+                urgency
+              </h4>
+              <p dir="auto">
+                <strong>Chief complaint:</strong>{" "}
+                {selectedAppointment.triage_summary.chief_complaint}
+              </p>
+              <p dir="auto">
+                {selectedAppointment.triage_summary.clinical_summary}
+              </p>
+              {selectedAppointment.triage_summary.red_flags.length > 0 ? (
+                <p className="muted-copy" dir="auto">
+                  Red flags:{" "}
+                  {selectedAppointment.triage_summary.red_flags.join(", ")}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
 
           {role === "admin" ? (
             <div className="appointment-admin-actions">
@@ -819,7 +1189,7 @@ export default function AppointmentsPanel({
       title={t("appointmentsTitle")}
       description={t("appointmentsPanelDescription")}
     >
-      {role !== "doctor" ? (
+      {role !== "doctor" || currentDoctorId ? (
         <div className="stack-md">
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">
@@ -828,7 +1198,9 @@ export default function AppointmentsPanel({
                 <h3>
                   {role === "admin"
                     ? t("createAppointmentRequest")
-                    : t("bookAFollowUpAppointment")}
+                    : role === "doctor"
+                      ? "Book selected patient"
+                      : t("bookAFollowUpAppointment")}
                 </h3>
               </div>
             </div>
@@ -896,6 +1268,117 @@ export default function AppointmentsPanel({
                 </div>
               ) : null}
 
+              {role !== "doctor" ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="appointment-availability-date">
+                      {t("availabilityDate")}
+                    </label>
+                    <input
+                      id="appointment-availability-date"
+                      type="date"
+                      min={todayDateInputValue()}
+                      value={slotDateFilter}
+                      onChange={(event) => setSlotDateFilter(event.target.value)}
+                    />
+                    <small className="field__hint">
+                      Show appointment times on this date or later.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="appointment-distance-filter">
+                      {t("distanceFromPatient")}
+                    </label>
+                    <CustomSelect
+                      id="appointment-distance-filter"
+                      value={distanceFilter}
+                      onChange={(value) =>
+                        setDistanceFilter(value as DistanceFilter)
+                      }
+                      options={[
+                        { value: "any", label: t("anyDistance") },
+                        {
+                          value: "same_governorate",
+                          label: t("sameGovernorate"),
+                        },
+                        { value: "same_area", label: t("sameArea") },
+                      ]}
+                    />
+                    <small className="field__hint">
+                      {activePatient
+                        ? activePatient.current_governorate ||
+                          activePatient.inferred_governorate ||
+                          t("locationNotSet")
+                        : t("locationNotSet")}
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="appointment-visit-type">Visit type</label>
+                    <CustomSelect
+                      id="appointment-visit-type"
+                      value={visitType}
+                      onChange={(value) => setVisitType(value as VisitType)}
+                      options={[
+                        { value: "clinic", label: "Clinic visit" },
+                        { value: "video", label: "Video consultation" },
+                      ]}
+                    />
+                    <small className="field__hint">
+                      Video only shows doctors who offer online consultations.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="appointment-max-fee">Maximum fee</label>
+                    <input
+                      id="appointment-max-fee"
+                      type="number"
+                      min="0"
+                      value={maxFeeFilter}
+                      onChange={(event) => setMaxFeeFilter(event.target.value)}
+                      placeholder="Any fee"
+                    />
+                    <small className="field__hint">
+                      Doctors without a listed fee stay visible for now.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="appointment-insurance-filter">
+                      Insurance
+                    </label>
+                    <input
+                      id="appointment-insurance-filter"
+                      value={insuranceFilter}
+                      onChange={(event) => setInsuranceFilter(event.target.value)}
+                      placeholder="Any insurance"
+                    />
+                    <small className="field__hint">
+                      Optional note only for now; it will not hide doctors.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="appointment-payment-filter">Payment</label>
+                    <CustomSelect
+                      id="appointment-payment-filter"
+                      value={paymentFilter}
+                      onChange={(value) => setPaymentFilter(value as PaymentFilter)}
+                      options={[
+                        { value: "", label: "Any payment" },
+                        { value: "cash", label: "Cash" },
+                        { value: "card", label: "Card" },
+                      ]}
+                    />
+                    <small className="field__hint">
+                      If a doctor has no payment data yet, they remain visible.
+                    </small>
+                  </div>
+                </>
+              ) : null}
+
               <div className="field">
                 <label htmlFor="appointment-specialty">{t("specialty")}</label>
                 <CustomSelect
@@ -903,8 +1386,11 @@ export default function AppointmentsPanel({
                   value={selectedSpecialty}
                   onChange={(value) => {
                     setSelectedSpecialty(value);
-                    setDoctorId("");
+                    if (role !== "doctor") {
+                      setDoctorId("");
+                    }
                   }}
+                  disabled={role === "doctor"}
                   options={[
                     { value: "", label: t("allSpecialties") },
                     ...specialties.map((specialty) => ({
@@ -921,6 +1407,7 @@ export default function AppointmentsPanel({
                   id="appointment-doctor"
                   value={String(doctorId)}
                   onChange={(value) => setDoctorId(value ? Number(value) : "")}
+                  disabled={role === "doctor"}
                   options={[
                     { value: "", label: t("selectDoctor") },
                     ...filteredDoctors.map((doctor) => ({
@@ -956,7 +1443,7 @@ export default function AppointmentsPanel({
                         ? t("loadingSlots")
                         : t("selectAvailableTime"),
                     },
-                    ...availableSlots.map((slot) => ({
+                    ...filteredAvailableSlots.map((slot) => ({
                       value: String(slot.id),
                       label: formatLocalizedSlotLabel(slot, language),
                     })),
@@ -965,7 +1452,7 @@ export default function AppointmentsPanel({
                 {slotError ? (
                   <small className="field__error">{slotError}</small>
                 ) : null}
-                {!slotLoading && doctorId && availableSlots.length === 0 ? (
+                {!slotLoading && doctorId && filteredAvailableSlots.length === 0 ? (
                   <small className="field__hint">
                     {t("noOpenSlotsAvailable")}
                   </small>
@@ -1112,30 +1599,26 @@ export default function AppointmentsPanel({
 
       {role === "doctor" ? (
         <div className="stack-md">
-          <section className="workspace-card workspace-card--compact">
-            <div className="workspace-card__header">
-              <div>
-                <p className="micro-label">{t("pendingApprovals")}</p>
-                <h3>
-                  {pendingAppointments.length} {t("requestsNeedDecision")}
-                </h3>
-              </div>
-            </div>
-            <div className="stack-md">
-              {pendingAppointments.length === 0 ? (
-                <div className="empty-state">
-                  {t("noPendingApprovalsRightNow")}
+          {renderDoctorWeeklySchedule()}
+
+          {pendingAppointments.length > 0 ? (
+            <section className="workspace-card workspace-card--compact">
+              <div className="workspace-card__header">
+                <div>
+                  <p className="micro-label">{t("pendingApprovals")}</p>
+                  <h3>{doctorScheduleText.legacyPending}</h3>
                 </div>
-              ) : (
-                pendingAppointments.map((appointment) =>
+              </div>
+              <div className="stack-md">
+                {pendingAppointments.map((appointment) =>
                   renderAppointmentCard(appointment, {
                     showWorkflowActions: true,
                     showDetailsAction: true,
                   }),
-                )
-              )}
-            </div>
-          </section>
+                )}
+              </div>
+            </section>
+          ) : null}
 
           <section className="workspace-card workspace-card--compact">
             <div className="workspace-card__header">

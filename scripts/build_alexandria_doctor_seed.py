@@ -24,7 +24,6 @@ SOURCE_NAME = "Vezeeta public directory"
 SPECIALTY_PAGES = {
     "Cardiology": "https://www.vezeeta.com/en/doctor/cardiology/alexandria",
     "Neurology": "https://www.vezeeta.com/en/doctor/neurology/alexandria",
-    "Neurosurgery": "https://www.vezeeta.com/en/doctor/neurosurgery/alexandria",
     "Internal Medicine": "https://www.vezeeta.com/en/doctor/internal-medicine/alexandria",
     "Gastroenterology": "https://www.vezeeta.com/en/doctor/adult-gastroenterology-and-endoscopy/alexandria",
     "Dermatology": "https://www.vezeeta.com/en/doctor/dermatology/alexandria",

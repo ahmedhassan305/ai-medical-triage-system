@@ -409,6 +409,28 @@ SMART_QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
             ],
         ),
     ],
+    "gastroenterology_anorectal": [
+        ClarificationQuestion(
+            id="anorectal_bleeding",
+            question="Have you noticed bleeding or black stool with bowel movements?",
+            options=[
+                "Bright red blood on toilet paper",
+                "Blood mixed with stool",
+                "Black stool",
+                "No bleeding",
+            ],
+        ),
+        ClarificationQuestion(
+            id="anorectal_pain_pattern",
+            question="When does the pain happen around bowel movements?",
+            options=[
+                "During passing stool",
+                "After passing stool",
+                "Only with hard stool or straining",
+                "Pain is constant",
+            ],
+        ),
+    ],
     "ent": [
         ClarificationQuestion(
             id="ent_swallowing_breathing",
@@ -426,6 +448,16 @@ SMART_QUESTION_BANK: dict[str, list[ClarificationQuestion]] = {
         ),
     ],
     "dermatology": [
+        ClarificationQuestion(
+            id="skin_itch_severity",
+            question="How severe is the itching or skin discomfort?",
+            options=[
+                "Mild - noticeable but not disruptive",
+                "Moderate - uncomfortable or distracting",
+                "Severe - intense or affecting sleep/function",
+                "Not itchy",
+            ],
+        ),
         ClarificationQuestion(
             id="skin_blanching_spread",
             question=(
@@ -487,6 +519,107 @@ def _condition_names(summary: object | None) -> str:
 
 def _has_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term in text for term in terms)
+
+
+BREATHING_SEVERITY_OPTION_MARKERS = (
+    "can talk normally",
+    "short sentences",
+    "barely speak",
+)
+
+ANORECTAL_SYMPTOMS = frozenset(
+    {
+        "painful bowel movement",
+        "constipation",
+    }
+)
+
+PAIN_SEVERITY_OPTIONS = [
+    "Mild - noticeable but not limiting activity",
+    "Moderate - limits some activities",
+    "Severe - hard to move or function",
+]
+
+SKIN_SEVERITY_OPTIONS = [
+    "Mild - noticeable but not disruptive",
+    "Moderate - uncomfortable or distracting",
+    "Severe - intense or affecting sleep/function",
+]
+
+GENERAL_SEVERITY_OPTIONS = [
+    "Mild - barely noticeable",
+    "Moderate - affecting daily life",
+    "Severe - can barely function",
+]
+
+
+def _has_breathing_severity_options(question: ClarificationQuestion) -> bool:
+    option_text = " ".join(question.options or []).lower()
+    return any(marker in option_text for marker in BREATHING_SEVERITY_OPTION_MARKERS)
+
+
+def _is_broad_abdominal_question(question: ClarificationQuestion) -> bool:
+    question_text = question.question.lower()
+    option_text = " ".join(question.options or []).lower()
+    return any(
+        marker in f"{question_text} {option_text}"
+        for marker in (
+            "abdominal discomfort",
+            "abdominal pain",
+            "upper right",
+            "upper middle",
+            "lower right",
+            "lower left",
+            "blood in vomit",
+            "yellow eyes",
+            "yellow skin",
+            "severe dehydration",
+        )
+    )
+
+
+def _severity_options_for_features(
+    clinical_features: ClinicalFeatures | None,
+) -> list[str]:
+    symptoms = set(clinical_features.symptoms if clinical_features else [])
+    body_systems = set(clinical_features.body_systems if clinical_features else [])
+    if "skin" in body_systems or {"rash", "hives", "itching"}.intersection(symptoms):
+        return SKIN_SEVERITY_OPTIONS
+    if "musculoskeletal" in body_systems or {
+        "back pain",
+        "neck pain",
+        "joint pain",
+        "abdominal pain",
+        "headache",
+    }.intersection(symptoms):
+        return PAIN_SEVERITY_OPTIONS
+    return GENERAL_SEVERITY_OPTIONS
+
+
+def sanitize_clarification_questions(
+    questions: list[ClarificationQuestion],
+    clinical_features: ClinicalFeatures | None,
+) -> list[ClarificationQuestion]:
+    symptoms = set(clinical_features.symptoms if clinical_features else [])
+    body_systems = set(clinical_features.body_systems if clinical_features else [])
+    breathing_case = "breathing difficulty" in symptoms or "respiratory" in body_systems
+    anorectal_case = bool(ANORECTAL_SYMPTOMS.intersection(symptoms))
+
+    sanitized: list[ClarificationQuestion] = []
+    for question in questions:
+        if anorectal_case and _is_broad_abdominal_question(question):
+            _add_unique(sanitized, SMART_QUESTION_BANK["gastroenterology_anorectal"])
+        elif _has_breathing_severity_options(question) and not breathing_case:
+            sanitized.append(
+                ClarificationQuestion(
+                    id=question.id,
+                    question=question.question,
+                    options=_severity_options_for_features(clinical_features),
+                )
+            )
+        else:
+            sanitized.append(question)
+    return sanitized
 
 
 def _summarize_conditions(summary: object | None) -> list[dict[str, str]]:
@@ -720,8 +853,10 @@ def _fallback_clarification_questions(
     )
     symptoms = set(clinical_features.symptoms if clinical_features else [])
     body_systems = set(clinical_features.body_systems if clinical_features else [])
+    anorectal_symptoms = {"painful bowel movement", "constipation"}
+    has_anorectal_pattern = bool(anorectal_symptoms.intersection(symptoms))
 
-    if "where the pain is strongest" in missing_details:
+    if "where the pain is strongest" in missing_details and not has_anorectal_pattern:
         _add_unique(questions, SMART_QUESTION_BANK["gastroenterology"])
     if (
         "whether activity makes it worse" in missing_details
@@ -769,7 +904,10 @@ def _fallback_clarification_questions(
     if "neurologic" in body_systems:
         _add_unique(questions, SMART_QUESTION_BANK["neurology"][:2])
     if "gastrointestinal" in body_systems:
-        _add_unique(questions, SMART_QUESTION_BANK["gastroenterology"])
+        if has_anorectal_pattern:
+            _add_unique(questions, SMART_QUESTION_BANK["gastroenterology_anorectal"])
+        else:
+            _add_unique(questions, SMART_QUESTION_BANK["gastroenterology"])
     if "ent" in body_systems:
         _add_unique(questions, SMART_QUESTION_BANK["ent"])
     if "skin" in body_systems:
@@ -802,7 +940,10 @@ def get_clarification_questions(
             language=language,
         )
         if llm_questions:
-            return localize_questions(llm_questions, language)
+            return localize_questions(
+                sanitize_clarification_questions(llm_questions, clinical_features),
+                language,
+            )
 
     fallback_questions = _fallback_clarification_questions(
         query,
@@ -812,7 +953,10 @@ def get_clarification_questions(
         clinical_features=clinical_features,
         language=language,
     )
-    return localize_questions(fallback_questions, language)
+    return localize_questions(
+        sanitize_clarification_questions(fallback_questions, clinical_features),
+        language,
+    )
 
 
 def build_enriched_query(original_query: str, answers: list) -> str:

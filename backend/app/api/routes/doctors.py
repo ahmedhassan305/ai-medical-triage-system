@@ -3,17 +3,20 @@ from __future__ import annotations
 from datetime import date, datetime, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.db.models import (
+    Appointment,
     AppointmentSlot,
     Clinic,
     DoctorClinic,
     DoctorProfile,
+    DoctorReview,
     DoctorSchedule,
     User,
+    Visit,
 )
 from app.db.session import get_db
 from app.schemas.doctor import (
@@ -21,8 +24,14 @@ from app.schemas.doctor import (
     ClinicResponse,
     DoctorProfileResponse,
     DoctorProfileUpsert,
+    DoctorReviewCreate,
+    DoctorReviewResponse,
     DoctorScheduleCreate,
     DoctorScheduleResponse,
+)
+from app.services.access_control import (
+    get_linked_patient_profile,
+    require_linked_doctor_profile,
 )
 from app.services.clinical_records import assign_department_to_doctor
 from app.services.slot_booking import (
@@ -37,6 +46,9 @@ router = APIRouter(prefix="/doctors", tags=["doctors"])
 def _serialize_doctor(profile: DoctorProfile) -> DoctorProfileResponse:
     payload = DoctorProfileResponse.model_validate(profile, from_attributes=True)
     payload.department_name = profile.department.name if profile.department else None
+    ratings = [review.rating for review in profile.reviews]
+    payload.review_count = len(ratings)
+    payload.rating = round(sum(ratings) / len(ratings), 1) if ratings else None
     return payload
 
 
@@ -79,6 +91,21 @@ def _clear_future_open_slots(db: Session, doctor_id: int) -> None:
         )
         .delete(synchronize_session=False)
     )
+
+
+def _ensure_doctor_schedule_access(
+    db: Session,
+    current_user: User,
+    doctor_id: int,
+) -> None:
+    if current_user.role == "admin":
+        return
+    linked_doctor = require_linked_doctor_profile(db, current_user)
+    if linked_doctor.id != doctor_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Doctors can only manage their own schedule.",
+        )
 
 
 @router.get("/", response_model=list[DoctorProfileResponse])
@@ -141,6 +168,88 @@ def get_my_profile(
     return _serialize_doctor(profile)
 
 
+@router.post(
+    "/reviews",
+    response_model=DoctorReviewResponse,
+    status_code=201,
+)
+def create_doctor_review(
+    payload: DoctorReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("patient")),
+) -> DoctorReviewResponse:
+    patient = get_linked_patient_profile(db, current_user)
+    if patient is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Patient profile is required before reviewing doctors.",
+        )
+    if (
+        db.query(DoctorProfile).filter(DoctorProfile.id == payload.doctor_id).first()
+        is None
+    ):
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    if payload.appointment_id is not None:
+        appointment = (
+            db.query(Appointment)
+            .filter(Appointment.id == payload.appointment_id)
+            .first()
+        )
+        if (
+            appointment is None
+            or appointment.patient_id != patient.id
+            or appointment.doctor_id != payload.doctor_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Patients can only review doctors from their own bookings.",
+            )
+    if payload.visit_id is not None:
+        visit = db.query(Visit).filter(Visit.id == payload.visit_id).first()
+        if (
+            visit is None
+            or visit.patient_id != patient.id
+            or visit.doctor_id != payload.doctor_id
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Patients can only review doctors from their own visits.",
+            )
+
+    review = DoctorReview(
+        patient_id=patient.id,
+        doctor_id=payload.doctor_id,
+        appointment_id=payload.appointment_id,
+        visit_id=payload.visit_id,
+        rating=payload.rating,
+        comment=payload.comment,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return DoctorReviewResponse.model_validate(review, from_attributes=True)
+
+
+@router.get("/{doctor_id}/rating")
+def get_doctor_rating(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> dict[str, float | int | None]:
+    if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
+        raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    average, count = (
+        db.query(func.avg(DoctorReview.rating), func.count(DoctorReview.id))
+        .filter(DoctorReview.doctor_id == doctor_id)
+        .one()
+    )
+    return {
+        "doctor_id": doctor_id,
+        "rating": round(float(average), 1) if average is not None else None,
+        "review_count": int(count or 0),
+    }
+
+
 @router.get("/{doctor_id}", response_model=DoctorProfileResponse)
 def get_doctor(
     doctor_id: int,
@@ -175,10 +284,11 @@ def update_doctor(
 def list_doctor_schedules(
     doctor_id: int,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("doctor", "admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> list[DoctorScheduleResponse]:
     if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    _ensure_doctor_schedule_access(db, current_user, doctor_id)
     schedules = (
         db.query(DoctorSchedule)
         .filter(DoctorSchedule.doctor_id == doctor_id)
@@ -200,10 +310,11 @@ def create_doctor_schedule(
     doctor_id: int,
     payload: DoctorScheduleCreate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> DoctorScheduleResponse:
     if db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first() is None:
         raise HTTPException(status_code=404, detail="Doctor profile not found.")
+    _ensure_doctor_schedule_access(db, current_user, doctor_id)
     schedule_data = payload.model_dump()
     if schedule_data.get("doctor_clinic_id") is None:
         schedule_data["doctor_clinic_id"] = _default_doctor_clinic_id(db, doctor_id)
@@ -224,8 +335,9 @@ def update_doctor_schedule(
     schedule_id: int,
     payload: DoctorScheduleCreate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles("admin")),
+    current_user: User = Depends(require_roles("doctor", "admin")),
 ) -> DoctorScheduleResponse:
+    _ensure_doctor_schedule_access(db, current_user, doctor_id)
     schedule = (
         db.query(DoctorSchedule)
         .filter(

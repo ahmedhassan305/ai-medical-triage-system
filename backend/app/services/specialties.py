@@ -5,7 +5,6 @@ import re
 TRIAGE_SPECIALTIES: tuple[str, ...] = (
     "Cardiology",
     "Neurology",
-    "Neurosurgery",
     "Internal Medicine",
     "Gastroenterology",
     "Dermatology",
@@ -28,8 +27,6 @@ SPECIALTY_ALIASES: dict[str, str] = {
     "neurologist": "Neurology",
     "neurology": "Neurology",
     "brain": "Neurology",
-    "neurosurgeon": "Neurosurgery",
-    "neurosurgery": "Neurosurgery",
     "internist": "Internal Medicine",
     "internal medicine": "Internal Medicine",
     "general medicine": "Internal Medicine",

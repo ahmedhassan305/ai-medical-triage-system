@@ -33,7 +33,6 @@ type QuickAction = {
 const REQUIRED_SPECIALTIES = [
   "Cardiology",
   "Neurology",
-  "Neurosurgery",
   "Internal Medicine",
   "Gastroenterology",
   "Dermatology",
@@ -427,7 +426,7 @@ function PatientOverview({
                   <span>{formatDateTime(nextAppointment.scheduled_for)}</span>
                 </div>
               </div>
-              <div className="detail-list">
+              <div className="detail-list detail-list--appointment-summary">
                 <div>
                   <span>{t("doctor")}</span>
                   <strong>
@@ -438,7 +437,7 @@ function PatientOverview({
                   <span>{t("specialty")}</span>
                   <strong>{nextDoctor?.specialty || "Specialty pending"}</strong>
                 </div>
-                <div>
+                <div className="detail-list__wide">
                   <span>{t("reason")}</span>
                   <strong>{summarize(nextAppointment.reason)}</strong>
                 </div>

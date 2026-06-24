@@ -175,7 +175,7 @@ docker compose --profile backend up --build backend postgres ollama
 ### Change Model (Ollama)
 Edit root `.env`:
 ```env
-OLLAMA_MODEL=llama3.2
+OLLAMA_MODEL=llama3:8b-instruct-q4_K_M
 ```
 Then restart:
 ```powershell
@@ -211,7 +211,7 @@ What it does:
 
 Public data source used in this branch:
 - Vezeeta public doctor directory/profile pages
-- specialty coverage in the canonical seed includes Cardiology, Neurology, Neurosurgery, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, and Family Medicine
+- specialty coverage in the canonical seed includes Cardiology, Neurology, Internal Medicine, Gastroenterology, Dermatology, Psychiatry, Ophthalmology, Orthopedics, ENT, Pediatrics, Family Medicine, and Pulmonology
 
 ## Clean local demo dataset
 
@@ -335,7 +335,7 @@ Legacy compatibility:
 - `RAG_RETRIEVER=stub` (`stub`, `tfidf`, `embedding`)
 - `RAG_TOP_K=3`
 - `OLLAMA_HOST=http://localhost:11434`
-- `OLLAMA_MODEL=llama3.2`
+- `OLLAMA_MODEL=llama3:8b-instruct-q4_K_M`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
 - `TFIDF_MAX_FEATURES=1000`
@@ -353,7 +353,7 @@ Legacy compatibility:
 - `VITE_API_BASE_URL=http://localhost:19001`
 
 ### Root `.env` (for Docker Compose)
-- `OLLAMA_MODEL=llama3.2`
+- `OLLAMA_MODEL=llama3:8b-instruct-q4_K_M`
 - `REASONER_MODE=ollama`
 - `STRICT_REASONER=false`
 - `RAG_REBUILD_INDEX=false`

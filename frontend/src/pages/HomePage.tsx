@@ -21,10 +21,17 @@ import {
   upsertMyPatientProfile,
 } from "../api/patients";
 import { importRecords } from "../api/records";
-import { extractLabPdf, triage, type TriageResponse } from "../api/triage";
+import {
+  extractLabPdf,
+  triage,
+  triageBodyDiagram,
+  type TriageResponse,
+} from "../api/triage";
 import { createVisit, listPatientVisits, listWorkspaceVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
+  BodyDiagramTriageRequestDto,
+  DoctorProfileUpsertDto,
   DoctorSuggestionDto,
   DoctorProfileResponseDto,
   LabValueDto,
@@ -49,6 +56,7 @@ import {
   buildAppointmentPrefill,
   type AppointmentPrefill,
 } from "../lib/appointmentPrefill";
+import { summarizeBodyDiagramInput } from "../lib/bodySymptomMap";
 import { useLanguage } from "../i18n/useLanguage";
 import { clearSession, readSession, writeSession } from "../lib/session";
 
@@ -343,13 +351,7 @@ export default function HomePage() {
     }
   }
 
-  async function handleSaveDoctorProfile(payload: {
-    full_name: string;
-    specialty: string;
-    clinic: string;
-    area?: string | null;
-    city?: string | null;
-  }) {
+  async function handleSaveDoctorProfile(payload: DoctorProfileUpsertDto) {
     if (!session) {
       return;
     }
@@ -380,6 +382,25 @@ export default function HomePage() {
       setTriageResult(result);
     } catch (error) {
       setTriageError(getErrorMessage(error, "Failed to run triage."));
+    } finally {
+      setTriageLoading(false);
+    }
+  }
+
+  async function handleRunBodyDiagramTriage(
+    payload: BodyDiagramTriageRequestDto,
+  ) {
+    setTriageLoading(true);
+    setTriageError(null);
+    setTriageResult(null);
+    setTriageQuery(summarizeBodyDiagramInput(payload));
+    try {
+      const result = await triageBodyDiagram(payload);
+      setTriageResult(result);
+    } catch (error) {
+      setTriageError(
+        getErrorMessage(error, "Failed to run body symptom triage."),
+      );
     } finally {
       setTriageLoading(false);
     }
@@ -474,10 +495,28 @@ export default function HomePage() {
     doctor_id: number;
     reason: string;
     notes?: string;
-    scheduled_for?: string | null;
-    clinic_id?: number | null;
     slot_id?: number | null;
+    visit_type: "clinic" | "video";
+    video_url?: string | null;
   }) {
+    if (user?.role === "doctor" && payload.doctor_id !== doctorProfile?.id) {
+      setAppointmentsError(
+        "Doctors can only book patients into their own schedule.",
+      );
+      return;
+    }
+
+    if (
+      user?.role !== "patient" &&
+      user?.role !== "admin" &&
+      user?.role !== "doctor"
+    ) {
+      setAppointmentsError(
+        "Only patient, doctor, and admin accounts can create bookings.",
+      );
+      return;
+    }
+
     setAppointmentsLoading(true);
     setAppointmentsError(null);
     try {
@@ -561,6 +600,14 @@ export default function HomePage() {
     if (currentUser.role === "patient" && tab === "records") {
       startTransition(() => setSelectedTab("overview"));
       return;
+    }
+    if (tab === "appointments") {
+      void listDoctors()
+        .then(setDoctors)
+        .catch(() => undefined);
+      void listAppointments()
+        .then(setAppointments)
+        .catch(() => undefined);
     }
     startTransition(() => setSelectedTab(tab));
   }
@@ -698,6 +745,7 @@ export default function HomePage() {
             onClearLinkedPatient={handleClearLinkedTriagePatient}
             onCreatePatientProfile={handleCreateManagedPatientProfile}
             onSubmit={handleRunTriage}
+            onBodyDiagramSubmit={handleRunBodyDiagramTriage}
             onClarificationComplete={setTriageResult}
             onReserveAppointment={
               currentUser.role === "doctor" ? undefined : handleReserveAppointment
@@ -712,6 +760,8 @@ export default function HomePage() {
             doctors={doctors}
             patients={patients}
             currentPatientId={currentPatientId}
+            currentPatientProfile={patientProfile}
+            currentDoctorId={doctorProfile?.id ?? null}
             appointments={appointments}
             loading={appointmentsLoading}
             error={appointmentsError}

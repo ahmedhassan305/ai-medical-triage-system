@@ -157,7 +157,6 @@ ARABIC_QUERY_HINTS = (
 SPECIALTY_AR: dict[str, str] = {
     "Cardiology": "أمراض القلب",
     "Neurology": "المخ والأعصاب",
-    "Neurosurgery": "جراحة المخ والأعصاب",
     "Internal Medicine": "الباطنة",
     "Gastroenterology": "الجهاز الهضمي والكبد",
     "Dermatology": "الجلدية",
@@ -324,7 +323,6 @@ SPECIALTY_AR.update(
     {
         "Cardiology": "أمراض القلب",
         "Neurology": "المخ والأعصاب",
-        "Neurosurgery": "جراحة المخ والأعصاب",
         "Internal Medicine": "الباطنة",
         "Gastroenterology": "الجهاز الهضمي والكبد",
         "Dermatology": "الجلدية",

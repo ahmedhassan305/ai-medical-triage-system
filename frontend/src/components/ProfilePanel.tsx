@@ -22,10 +22,17 @@ import {
 } from "../api/doctors";
 import {
   createPatientMedicalHistoryEntry,
+  extractPatientMedicalHistoryReport,
   listPatientMedicalHistory,
 } from "../api/patients";
 import { useLanguage } from "../i18n/useLanguage";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import {
+  ALEXANDRIA_AREAS,
+  composeResidenceLocation,
+  EGYPTIAN_GOVERNORATES,
+  splitResidenceLocation,
+} from "../lib/egyptianLocations";
 import {
   localizeAppointmentStatus,
   localizeSlotStatus,
@@ -88,6 +95,15 @@ const EMPTY_PATIENT_FORM: PatientProfileFormState = {
 
 const ADMIN_PROFILE_PAGE_SIZE = 8;
 const ADMIN_RELATED_RECORD_LIMIT = 5;
+const WEEKDAY_OPTIONS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
 
 const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
   doctor_clinic_id: null,
@@ -101,6 +117,12 @@ const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
   is_active: true,
 };
 
+function todayDateInputValue(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
 function toDoctorEditForm(doctor: DoctorProfileResponseDto): DoctorProfileUpsertDto {
   return {
     full_name: doctor.full_name,
@@ -108,7 +130,18 @@ function toDoctorEditForm(doctor: DoctorProfileResponseDto): DoctorProfileUpsert
     clinic: doctor.clinic,
     area: doctor.area ?? "",
     city: doctor.city ?? "",
+    consultation_fee: doctor.consultation_fee ?? null,
+    insurance_providers: doctor.insurance_providers ?? [],
+    payment_methods: doctor.payment_methods ?? [],
+    offers_telemedicine: doctor.offers_telemedicine ?? false,
   };
+}
+
+function splitCommaList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function formatDateTime(dateValue?: string | null): string {
@@ -125,6 +158,26 @@ function formatDateTime(dateValue?: string | null): string {
   } catch {
     return dateValue;
   }
+}
+
+function weekdayFromDateInput(dateValue: string): string {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  if (!year || !month || !day) {
+    return "sunday";
+  }
+  return WEEKDAY_OPTIONS[new Date(year, month - 1, day).getDay()] ?? "sunday";
+}
+
+function describeScheduleRule(schedule: DoctorScheduleDto): string {
+  const timeRange = `${schedule.start_time.slice(0, 5)}-${schedule.end_time.slice(0, 5)}`;
+  if (
+    schedule.valid_from &&
+    schedule.valid_to &&
+    schedule.valid_from === schedule.valid_to
+  ) {
+    return `${schedule.valid_from} · ${timeRange}`;
+  }
+  return `${schedule.day_of_week} · ${timeRange}`;
 }
 
 function summarize(text?: string | null, fallback = "No summary available."): string {
@@ -776,6 +829,20 @@ function AdminOperationsPanel({
                     <strong>{t("governoratePending")}</strong>
                     <span>{selectedDoctor.city || "Not specified"}</span>
                   </div>
+                  <div>
+                    <strong>Consultation fee</strong>
+                    <span>
+                      {selectedDoctor.consultation_fee != null
+                        ? `${selectedDoctor.consultation_fee} EGP`
+                        : "Not specified"}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Video visits</strong>
+                    <span>
+                      {selectedDoctor.offers_telemedicine ? "Available" : "Clinic only"}
+                    </span>
+                  </div>
                 </div>
 
                 {selectedDoctorEditForm ? (
@@ -836,37 +903,131 @@ function AdminOperationsPanel({
                       />
                     </div>
                     <div className="field">
-                      <label htmlFor="admin-doctor-area">{t("area")}</label>
+                      <label htmlFor="admin-doctor-city">{t("city")}</label>
+                      <CustomSelect
+                        id="admin-doctor-city"
+                        value={selectedDoctorEditForm.city ?? ""}
+                        onChange={(value) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              city: value,
+                              area:
+                                value === "Alexandria"
+                                  ? selectedDoctorEditForm.area
+                                  : "",
+                            },
+                          })
+                        }
+                        options={[
+                          { value: "", label: "Select governorate" },
+                          ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                            value: governorate,
+                            label: governorate,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    {selectedDoctorEditForm.city === "Alexandria" ? (
+                      <div className="field">
+                        <label htmlFor="admin-doctor-area">{t("area")}</label>
+                        <CustomSelect
+                          id="admin-doctor-area"
+                          value={selectedDoctorEditForm.area ?? ""}
+                          onChange={(value) =>
+                            setDoctorEditForm({
+                              doctorId: selectedDoctor.id,
+                              values: {
+                                ...selectedDoctorEditForm,
+                                area: value,
+                              },
+                            })
+                          }
+                          options={[
+                            { value: "", label: "Select area" },
+                            ...ALEXANDRIA_AREAS.map((area) => ({
+                              value: area,
+                              label: area,
+                            })),
+                          ]}
+                        />
+                      </div>
+                    ) : null}
+                    <div className="field">
+                      <label htmlFor="admin-doctor-fee">Consultation fee</label>
                       <input
-                        id="admin-doctor-area"
-                        value={selectedDoctorEditForm.area ?? ""}
+                        id="admin-doctor-fee"
+                        type="number"
+                        min="0"
+                        value={selectedDoctorEditForm.consultation_fee ?? ""}
                         onChange={(event) =>
                           setDoctorEditForm({
                             doctorId: selectedDoctor.id,
                             values: {
                               ...selectedDoctorEditForm,
-                              area: event.target.value,
+                              consultation_fee: event.target.value
+                                ? Number(event.target.value)
+                                : null,
                             },
                           })
                         }
                       />
                     </div>
                     <div className="field">
-                      <label htmlFor="admin-doctor-city">{t("city")}</label>
+                      <label htmlFor="admin-doctor-insurance">
+                        Accepted insurance
+                      </label>
                       <input
-                        id="admin-doctor-city"
-                        value={selectedDoctorEditForm.city ?? ""}
+                        id="admin-doctor-insurance"
+                        value={selectedDoctorEditForm.insurance_providers.join(", ")}
                         onChange={(event) =>
                           setDoctorEditForm({
                             doctorId: selectedDoctor.id,
                             values: {
                               ...selectedDoctorEditForm,
-                              city: event.target.value,
+                              insurance_providers: splitCommaList(
+                                event.target.value,
+                              ),
+                            },
+                          })
+                        }
+                        placeholder="Bupa, Allianz,..."
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-payments">Payment methods</label>
+                      <input
+                        id="admin-doctor-payments"
+                        value={selectedDoctorEditForm.payment_methods.join(", ")}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              payment_methods: splitCommaList(event.target.value),
+                            },
+                          })
+                        }
+                        placeholder="Cash, Card, Insurance"
+                      />
+                    </div>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={selectedDoctorEditForm.offers_telemedicine}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              offers_telemedicine: event.target.checked,
                             },
                           })
                         }
                       />
-                    </div>
+                      <span>Offers video consultations</span>
+                    </label>
                     <button
                       type="submit"
                       className="button button--primary"
@@ -896,6 +1057,35 @@ function AdminOperationsPanel({
 
                   <form className="form-grid" onSubmit={submitDoctorSchedule}>
                     <div className="field">
+                      <label htmlFor="schedule-specific-date">
+                        {t("specificDate")}
+                      </label>
+                      <input
+                        id="schedule-specific-date"
+                        type="date"
+                        min={todayDateInputValue()}
+                        value={
+                          scheduleForm.valid_from === scheduleForm.valid_to
+                            ? (scheduleForm.valid_from ?? "")
+                            : ""
+                        }
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setScheduleForm((current) => ({
+                            ...current,
+                            day_of_week: value
+                              ? weekdayFromDateInput(value)
+                              : current.day_of_week,
+                            valid_from: value || null,
+                            valid_to: value || null,
+                          }));
+                        }}
+                      />
+                      <small className="field__hint">
+                        {t("specificDateHint")}
+                      </small>
+                    </div>
+                    <div className="field">
                       <label htmlFor="schedule-day">{t("dayOfWeek")}</label>
                       <CustomSelect
                         id="schedule-day"
@@ -906,14 +1096,12 @@ function AdminOperationsPanel({
                             day_of_week: value,
                           }))
                         }
+                        disabled={Boolean(scheduleForm.valid_from)}
                         options={[
-                          { value: "sunday", label: "sunday" },
-                          { value: "monday", label: "monday" },
-                          { value: "tuesday", label: "tuesday" },
-                          { value: "wednesday", label: "wednesday" },
-                          { value: "thursday", label: "thursday" },
-                          { value: "friday", label: "friday" },
-                          { value: "saturday", label: "saturday" },
+                          ...WEEKDAY_OPTIONS.map((day) => ({
+                            value: day,
+                            label: day,
+                          })),
                         ]}
                       />
                     </div>
@@ -998,7 +1186,7 @@ function AdminOperationsPanel({
                               {schedule.day_of_week} · {schedule.start_time.slice(0, 5)}
                               -{schedule.end_time.slice(0, 5)}
                             </strong>
-                            <p>
+                            <p title={describeScheduleRule(schedule)}>
                               {schedule.slot_minutes} {t("minutes")} ·{" "}
                               {schedule.location_label ||
                                 selectedDoctor?.clinic ||
@@ -1256,6 +1444,10 @@ export default function ProfilePanel({
           clinic: doctorProfile.clinic,
           area: doctorProfile.area ?? "",
           city: doctorProfile.city ?? "",
+          consultation_fee: doctorProfile.consultation_fee ?? null,
+          insurance_providers: doctorProfile.insurance_providers ?? [],
+          payment_methods: doctorProfile.payment_methods ?? [],
+          offers_telemedicine: doctorProfile.offers_telemedicine ?? false,
         }
       : {
           full_name: "",
@@ -1263,7 +1455,21 @@ export default function ProfilePanel({
           clinic: "",
           area: "",
           city: "",
+          consultation_fee: null,
+          insurance_providers: [],
+          payment_methods: [],
+          offers_telemedicine: false,
         },
+  );
+  const [ownScheduleWorkspace, setOwnScheduleWorkspace] =
+    useState<DoctorScheduleWorkspaceState | null>(null);
+  const [ownScheduleForm, setOwnScheduleForm] =
+    useState<DoctorScheduleCreateDto>({
+      ...EMPTY_SCHEDULE_FORM,
+      location_label: doctorProfile?.clinic ?? "",
+    });
+  const [ownScheduleMessage, setOwnScheduleMessage] = useState<string | null>(
+    null,
   );
   const [chronicConditionsInput, setChronicConditionsInput] = useState(
     patientProfile?.chronic_conditions.join(", ") ?? "",
@@ -1272,6 +1478,7 @@ export default function ProfilePanel({
   const [historyTitle, setHistoryTitle] = useState("");
   const [historyNotes, setHistoryNotes] = useState("");
   const [historySaving, setHistorySaving] = useState(false);
+  const [historyReportLoading, setHistoryReportLoading] = useState(false);
   const [historyMessage, setHistoryMessage] = useState<string | null>(null);
   const [patientHistory, setPatientHistory] =
     useState<PatientHistoryState | null>(null);
@@ -1305,6 +1512,55 @@ export default function ProfilePanel({
       cancelled = true;
     };
   }, [patientProfile, role]);
+
+  useEffect(() => {
+    if (role !== "doctor" || !doctorProfile) {
+      setOwnScheduleWorkspace(null);
+      return;
+    }
+
+    let cancelled = false;
+    setOwnScheduleWorkspace({
+      doctorId: doctorProfile.id,
+      schedules: [],
+      slots: [],
+      loading: true,
+    });
+    setOwnScheduleForm((current) => ({
+      ...current,
+      location_label: current.location_label || doctorProfile.clinic,
+    }));
+
+    Promise.all([
+      listDoctorSchedules(doctorProfile.id),
+      listDoctorSlots(doctorProfile.id),
+    ])
+      .then(([schedules, slots]) => {
+        if (!cancelled) {
+          setOwnScheduleWorkspace({
+            doctorId: doctorProfile.id,
+            schedules,
+            slots,
+            loading: false,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOwnScheduleWorkspace({
+            doctorId: doctorProfile.id,
+            schedules: [],
+            slots: [],
+            loading: false,
+          });
+          setOwnScheduleMessage("Could not load your schedule.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doctorProfile, role]);
 
   const parsedNationalId = useMemo(
     () =>
@@ -1348,7 +1604,105 @@ export default function ProfilePanel({
       specialty,
       area: doctorForm.area?.trim() || null,
       city: doctorForm.city?.trim() || null,
+      consultation_fee:
+        doctorForm.consultation_fee === null ||
+        doctorForm.consultation_fee === undefined
+          ? null
+          : Number(doctorForm.consultation_fee),
+      insurance_providers: doctorForm.insurance_providers,
+      payment_methods: doctorForm.payment_methods,
+      offers_telemedicine: doctorForm.offers_telemedicine,
     });
+  }
+
+  async function refreshOwnScheduleWorkspace(doctorId: number) {
+    const [schedules, slots] = await Promise.all([
+      listDoctorSchedules(doctorId),
+      listDoctorSlots(doctorId),
+    ]);
+    setOwnScheduleWorkspace({
+      doctorId,
+      schedules,
+      slots,
+      loading: false,
+    });
+  }
+
+  async function submitOwnDoctorSchedule(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!doctorProfile) {
+      return;
+    }
+    setOwnScheduleWorkspace((current) => ({
+      doctorId: doctorProfile.id,
+      schedules:
+        current?.doctorId === doctorProfile.id ? current.schedules : [],
+      slots: current?.doctorId === doctorProfile.id ? current.slots : [],
+      loading: true,
+    }));
+    setOwnScheduleMessage(null);
+    try {
+      await createDoctorSchedule(doctorProfile.id, {
+        ...ownScheduleForm,
+        location_label: ownScheduleForm.location_label || doctorProfile.clinic,
+      });
+      await refreshOwnScheduleWorkspace(doctorProfile.id);
+      setOwnScheduleForm({
+        ...EMPTY_SCHEDULE_FORM,
+        location_label: doctorProfile.clinic,
+      });
+      setOwnScheduleMessage("Availability added and appointment slots refreshed.");
+    } catch {
+      setOwnScheduleMessage("Could not add availability.");
+    } finally {
+      setOwnScheduleWorkspace((current) =>
+        current?.doctorId === doctorProfile.id
+          ? { ...current, loading: false }
+          : current,
+      );
+    }
+  }
+
+  async function toggleOwnSchedule(
+    schedule: DoctorScheduleDto,
+    isActive: boolean,
+  ) {
+    if (!doctorProfile) {
+      return;
+    }
+    setOwnScheduleWorkspace((current) => ({
+      doctorId: doctorProfile.id,
+      schedules:
+        current?.doctorId === doctorProfile.id ? current.schedules : [],
+      slots: current?.doctorId === doctorProfile.id ? current.slots : [],
+      loading: true,
+    }));
+    setOwnScheduleMessage(null);
+    try {
+      await updateDoctorSchedule(doctorProfile.id, schedule.id, {
+        doctor_clinic_id: schedule.doctor_clinic_id ?? null,
+        day_of_week: schedule.day_of_week,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        slot_minutes: schedule.slot_minutes,
+        valid_from: schedule.valid_from ?? null,
+        valid_to: schedule.valid_to ?? null,
+        location_label: schedule.location_label ?? doctorProfile.clinic,
+        is_active: isActive,
+      });
+      await refreshOwnScheduleWorkspace(doctorProfile.id);
+      setOwnScheduleMessage(
+        isActive ? "Availability activated." : "Availability deactivated.",
+      );
+    } catch {
+      setOwnScheduleMessage("Could not update availability.");
+    } finally {
+      setOwnScheduleWorkspace((current) =>
+        current?.doctorId === doctorProfile.id
+          ? { ...current, loading: false }
+          : current,
+      );
+    }
   }
 
   async function submitMedicalHistoryEntry(
@@ -1384,6 +1738,38 @@ export default function ProfilePanel({
     }
   }
 
+  async function handleMedicalHistoryReportUpload(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !patientProfile) {
+      return;
+    }
+
+    setHistoryReportLoading(true);
+    setHistoryMessage(null);
+    try {
+      const extracted = await extractPatientMedicalHistoryReport(
+        patientProfile.id,
+        file,
+      );
+      setHistoryCategory(extracted.category);
+      setHistoryTitle(extracted.title);
+      setHistoryNotes(extracted.notes);
+      setHistoryMessage(
+        extracted.warning ||
+          "Report read successfully. Review the fields before saving.",
+      );
+    } catch {
+      setHistoryMessage(
+        "Could not read this report. Try a text PDF, or enter the details manually.",
+      );
+    } finally {
+      setHistoryReportLoading(false);
+    }
+  }
+
   const dateOfBirth =
     parsedNationalId?.dateOfBirth ??
     patientProfile?.date_of_birth ??
@@ -1392,8 +1778,25 @@ export default function ProfilePanel({
     parsedNationalId?.governorate ??
     patientProfile?.inferred_governorate ??
     "Will be inferred from the national ID";
+  const patientResidence = splitResidenceLocation(
+    patientForm.current_governorate,
+  );
   const nationalIdHasValue = Boolean(patientForm.national_id?.trim());
   const nationalIdInvalid = nationalIdHasValue && !parsedNationalId;
+  const ownDoctorSchedules =
+    doctorProfile && ownScheduleWorkspace?.doctorId === doctorProfile.id
+      ? ownScheduleWorkspace.schedules
+      : [];
+  const ownDoctorSlots =
+    doctorProfile && ownScheduleWorkspace?.doctorId === doctorProfile.id
+      ? ownScheduleWorkspace.slots
+      : [];
+  const ownScheduleLoading = Boolean(
+    doctorProfile &&
+      (!ownScheduleWorkspace ||
+        ownScheduleWorkspace.doctorId !== doctorProfile.id ||
+        ownScheduleWorkspace.loading),
+  );
 
   if (role === "admin") {
     return (
@@ -1520,17 +1923,50 @@ export default function ProfilePanel({
               <label htmlFor="patient-current-governorate">
                 Current governorate / residence
               </label>
-              <input
+              <CustomSelect
                 id="patient-current-governorate"
-                value={patientForm.current_governorate ?? ""}
-                onChange={(event) =>
+                value={patientResidence.governorate}
+                onChange={(value) =>
                   setPatientForm((current) => ({
                     ...current,
-                    current_governorate: event.target.value,
+                    current_governorate: composeResidenceLocation(value, ""),
                   }))
                 }
+                options={[
+                  { value: "", label: "Select governorate" },
+                  ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                    value: governorate,
+                    label: governorate,
+                  })),
+                ]}
               />
             </div>
+
+            {patientResidence.governorate === "Alexandria" ? (
+              <div className="field">
+                <label htmlFor="patient-current-area">Area</label>
+                <CustomSelect
+                  id="patient-current-area"
+                  value={patientResidence.area}
+                  onChange={(value) =>
+                    setPatientForm((current) => ({
+                      ...current,
+                      current_governorate: composeResidenceLocation(
+                        "Alexandria",
+                        value,
+                      ),
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "Select area" },
+                    ...ALEXANDRIA_AREAS.map((area) => ({
+                      value: area,
+                      label: area,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
 
             <div className="field field--full">
               <label htmlFor="patient-conditions">{t("medicalHistory")}</label>
@@ -1600,6 +2036,24 @@ export default function ProfilePanel({
           description="Add structured details that should inform future triage, such as diagnosed conditions, injuries, surgeries, allergies, medications, hospitalizations, and family history."
         >
           <form className="form-grid" onSubmit={submitMedicalHistoryEntry}>
+            <div className="field field--full">
+              <label htmlFor="history-report-upload">
+                Doctor report photo or PDF
+              </label>
+              <input
+                id="history-report-upload"
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+                onChange={handleMedicalHistoryReportUpload}
+                disabled={historyReportLoading}
+              />
+              <small className="field__hint">
+                {historyReportLoading
+                  ? "Reading report..."
+                  : "Upload a text PDF, or an image if OCR is available, to draft the fields below."}
+              </small>
+            </div>
+
             <div className="field">
               <label htmlFor="history-category">{t("status")}</label>
               <CustomSelect
@@ -1647,7 +2101,9 @@ export default function ProfilePanel({
             <button
               type="submit"
               className="button button--primary"
-              disabled={historySaving || !historyTitle.trim()}
+              disabled={
+                historySaving || historyReportLoading || !historyTitle.trim()
+              }
             >
               {historySaving ? "Saving..." : "Add history entry"}
             </button>
@@ -1729,50 +2185,75 @@ export default function ProfilePanel({
               <label htmlFor="doctor-specialty-scope">
                 Specific scope (optional)
               </label>
-              <input
+              <CustomSelect
                 id="doctor-specialty-scope"
-                list="doctor-specialty-scope-options"
                 value={doctorSpecialtyScope}
-                onChange={(event) => setDoctorSpecialtyScope(event.target.value)}
+                onChange={(value) => {
+                  setDoctorSpecialtyScope(value);
+                  setDoctorForm((current) => ({
+                    ...current,
+                    specialty: composeDoctorSpecialty(
+                      doctorPrimarySpecialty,
+                      value,
+                    ),
+                  }));
+                }}
+                options={[
+                  { value: "", label: "No specific scope" },
+                  ...specialtyOptions.map((scope) => ({
+                    value: scope,
+                    label: scope,
+                  })),
+                ]}
                 placeholder="Optional narrower scope"
                 disabled={!doctorPrimarySpecialty}
               />
-              <datalist id="doctor-specialty-scope-options">
-                {specialtyOptions.map((scope) => (
-                  <option key={scope} value={scope} />
-                ))}
-              </datalist>
             </div>
 
             <div className="field">
               <label htmlFor="doctor-city">{t("governoratePending")}</label>
-              <input
+              <CustomSelect
                 id="doctor-city"
                 value={doctorForm.city ?? ""}
-                onChange={(event) =>
+                onChange={(value) =>
                   setDoctorForm((current) => ({
                     ...current,
-                    city: event.target.value,
+                    city: value,
+                    area: value === "Alexandria" ? current.area : "",
                   }))
                 }
-                placeholder="Alexandria"
+                options={[
+                  { value: "", label: "Select governorate" },
+                  ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                    value: governorate,
+                    label: governorate,
+                  })),
+                ]}
               />
             </div>
 
-            <div className="field">
-              <label htmlFor="doctor-area">Area</label>
-              <input
-                id="doctor-area"
-                value={doctorForm.area ?? ""}
-                onChange={(event) =>
-                  setDoctorForm((current) => ({
-                    ...current,
-                    area: event.target.value,
-                  }))
-                }
-                placeholder="Smouha"
-              />
-            </div>
+            {doctorForm.city === "Alexandria" ? (
+              <div className="field">
+                <label htmlFor="doctor-area">Area</label>
+                <CustomSelect
+                  id="doctor-area"
+                  value={doctorForm.area ?? ""}
+                  onChange={(value) =>
+                    setDoctorForm((current) => ({
+                      ...current,
+                      area: value,
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "Select area" },
+                    ...ALEXANDRIA_AREAS.map((area) => ({
+                      value: area,
+                      label: area,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
 
             <div className="field field--full">
               <label htmlFor="doctor-clinic">Clinic / hospital</label>
@@ -1787,6 +2268,69 @@ export default function ProfilePanel({
                 }
               />
             </div>
+
+            <div className="field">
+              <label htmlFor="doctor-consultation-fee">Consultation fee</label>
+              <input
+                id="doctor-consultation-fee"
+                type="number"
+                min="0"
+                value={doctorForm.consultation_fee ?? ""}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    consultation_fee: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  }))
+                }
+                placeholder="EGP"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-payment-methods">Payment methods</label>
+              <input
+                id="doctor-payment-methods"
+                value={doctorForm.payment_methods.join(", ")}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    payment_methods: splitCommaList(event.target.value),
+                  }))
+                }
+                placeholder="Cash, Card, Insurance"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-insurance">Accepted insurance</label>
+              <input
+                id="doctor-insurance"
+                value={doctorForm.insurance_providers.join(", ")}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    insurance_providers: splitCommaList(event.target.value),
+                  }))
+                }
+                placeholder="Bupa, Allianz,..."
+              />
+            </div>
+
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={doctorForm.offers_telemedicine}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    offers_telemedicine: event.target.checked,
+                  }))
+                }
+              />
+              <span>Offer video consultations</span>
+            </label>
 
             <div className="callout field--full">
               <p className="micro-label">{t("connected")}</p>
@@ -1809,6 +2353,214 @@ export default function ProfilePanel({
               {savingDoctor ? "Saving..." : "Save doctor profile"}
             </button>
           </form>
+        </SectionPanel>
+      ) : null}
+
+      {role === "doctor" && doctorProfile ? (
+        <SectionPanel
+          eyebrow={t("doctorSchedules")}
+          title={t("scheduleManagement")}
+          description="Add your clinic availability so patients can book real confirmed appointment slots."
+        >
+          <div className="schedule-management-panel">
+            <div className="workspace-card__header">
+              <div>
+                <p className="micro-label">{t("availableSlots")}</p>
+                <h3>{doctorProfile.clinic}</h3>
+              </div>
+              <span className="badge">
+                {ownDoctorSlots.length} {t("availableSlots")}
+              </span>
+            </div>
+
+            {ownScheduleMessage ? (
+              <div className="notice">{ownScheduleMessage}</div>
+            ) : null}
+
+            <form className="form-grid" onSubmit={submitOwnDoctorSchedule}>
+              <div className="field">
+                <label htmlFor="own-schedule-specific-date">
+                  {t("specificDate")}
+                </label>
+                <input
+                  id="own-schedule-specific-date"
+                  type="date"
+                  min={todayDateInputValue()}
+                  value={
+                    ownScheduleForm.valid_from === ownScheduleForm.valid_to
+                      ? (ownScheduleForm.valid_from ?? "")
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      day_of_week: value
+                        ? weekdayFromDateInput(value)
+                        : current.day_of_week,
+                      valid_from: value || null,
+                      valid_to: value || null,
+                    }));
+                  }}
+                />
+                <small className="field__hint">{t("specificDateHint")}</small>
+              </div>
+              <div className="field">
+                <label htmlFor="own-schedule-day">{t("dayOfWeek")}</label>
+                <CustomSelect
+                  id="own-schedule-day"
+                  value={ownScheduleForm.day_of_week}
+                  onChange={(value) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      day_of_week: value,
+                    }))
+                  }
+                  disabled={Boolean(ownScheduleForm.valid_from)}
+                  options={WEEKDAY_OPTIONS.map((day) => ({
+                    value: day,
+                    label: day,
+                  }))}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-start">{t("startTime")}</label>
+                <input
+                  id="own-schedule-start"
+                  type="time"
+                  value={ownScheduleForm.start_time.slice(0, 5)}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      start_time: `${event.target.value}:00`,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-end">{t("endTime")}</label>
+                <input
+                  id="own-schedule-end"
+                  type="time"
+                  value={ownScheduleForm.end_time.slice(0, 5)}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      end_time: `${event.target.value}:00`,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-minutes">{t("slotMinutes")}</label>
+                <input
+                  id="own-schedule-minutes"
+                  type="number"
+                  min={5}
+                  max={240}
+                  value={ownScheduleForm.slot_minutes}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      slot_minutes: Number(event.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-location">{t("clinicReview")}</label>
+                <input
+                  id="own-schedule-location"
+                  value={ownScheduleForm.location_label ?? ""}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      location_label: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="button button--primary"
+                disabled={ownScheduleLoading}
+              >
+                {ownScheduleLoading ? t("working") : t("addSchedule")}
+              </button>
+            </form>
+
+            <div className="activity-list compact">
+              {ownDoctorSchedules.length === 0 ? (
+                <div className="empty-state">{t("noSchedulesRecorded")}</div>
+              ) : (
+                ownDoctorSchedules.map((schedule) => (
+                  <article key={schedule.id} className="activity-item">
+                    <div>
+                      <strong>
+                        {schedule.day_of_week} ·{" "}
+                        {schedule.start_time.slice(0, 5)}-
+                        {schedule.end_time.slice(0, 5)}
+                      </strong>
+                      <p title={describeScheduleRule(schedule)}>
+                        {schedule.slot_minutes} {t("minutes")} ·{" "}
+                        {schedule.location_label || doctorProfile.clinic}
+                      </p>
+                    </div>
+                    <div className="activity-meta">
+                      <span
+                        className={`badge ${
+                          schedule.is_active
+                            ? "badge--status-approved"
+                            : "badge--status-rejected"
+                        }`}
+                      >
+                        {schedule.is_active ? t("active") : t("inactive")}
+                      </span>
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        disabled={ownScheduleLoading}
+                        onClick={() =>
+                          toggleOwnSchedule(schedule, !schedule.is_active)
+                        }
+                      >
+                        {schedule.is_active ? t("deactivate") : t("activate")}
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+
+            <div className="activity-list compact">
+              <p className="micro-label">{t("availableSlots")}</p>
+              {ownDoctorSlots.length === 0 ? (
+                <div className="empty-state">{t("noSlotsAvailable")}</div>
+              ) : (
+                ownDoctorSlots.slice(0, 8).map((slot) => (
+                  <article key={slot.id} className="activity-item">
+                    <div>
+                      <strong>{formatDateTime(slot.start_at)}</strong>
+                      <p>
+                        {slot.clinic?.name || doctorProfile.clinic} ·{" "}
+                        {slot.clinic?.area || doctorProfile.area}
+                      </p>
+                    </div>
+                    <div className="activity-meta">
+                      <span className="badge">
+                        {localizeSlotStatus(slot.status, t)}
+                      </span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
         </SectionPanel>
       ) : null}
     </div>

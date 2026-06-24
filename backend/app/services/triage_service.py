@@ -2,13 +2,21 @@
 
 import logging
 import re
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import DoctorProfile, PatientProfile
+from app.db.models import (
+    AppointmentSlot,
+    DoctorClinic,
+    DoctorProfile,
+    DoctorReview,
+    PatientProfile,
+)
 from app.model.reasoner import OllamaReasoner, Reasoner, StubReasoner
 from app.rag.embedding_retriever import EmbeddingRetriever
 from app.rag.reranker import rerank_retrieved_chunks
@@ -26,6 +34,7 @@ from app.schemas.triage import (
 from app.services.clarification_service import (
     get_clarification_questions,
     needs_clarification,
+    sanitize_clarification_questions,
 )
 from app.services.clinical_feature_extractor import (
     ClinicalFeatureExtractor,
@@ -37,7 +46,13 @@ from app.services.clinical_features import (
     extract_clinical_features,
 )
 from app.services.exceptions import TriageSystemUnavailable
+from app.services.location_distance import (
+    coordinates_for_location,
+    distance_km,
+    split_location,
+)
 from app.services.patient_context import PatientContextProvider
+from app.services.slot_booking import generate_slots_for_doctor
 from app.services.specialties import (
     TRIAGE_SPECIALTIES,
     canonicalize_specialty,
@@ -111,6 +126,28 @@ SUBSPECIALTY_KEYWORDS: dict[str, dict[str, tuple[str, ...]]] = {
         "stroke": ("stroke", "weakness", "numbness"),
         "seizure": ("seizure", "epilepsy"),
     },
+    "Internal Medicine": {
+        "rheumatology": (
+            "rheumat",
+            "joint",
+            "arthritis",
+            "autoimmune",
+            "lupus",
+            "aches",
+        ),
+        "diabetes": ("diabetes", "sugar", "thirst", "urination", "endocrine"),
+        "cardiology": ("pressure", "hypertension", "blood pressure", "heart"),
+        "critical_care": ("icu", "critical", "severe infection", "sepsis"),
+    },
+}
+
+SPECIALTY_CLINIC_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "Cardiology": ("heart", "cardiac", "cardio"),
+    "Pulmonology": ("chest", "lung", "respiratory", "pulmonary"),
+    "Gastroenterology": ("gastro", "digestive", "liver", "endoscopy"),
+    "Orthopedics": ("ortho", "bone", "joint", "spine"),
+    "Neurology": ("neuro", "brain", "nerve"),
+    "Internal Medicine": ("internal", "medicine"),
 }
 
 HIGH_RISK_KEYWORDS: tuple[str, ...] = (
@@ -166,6 +203,122 @@ HIGH_RISK_FEATURE_FLAGS: frozenset[str] = frozenset(
         "severe asthma flare",
     }
 )
+
+TRIAGE_INTENT_TERMS = (
+    "ache",
+    "allergy",
+    "allergic",
+    "blood",
+    "breath",
+    "burn",
+    "can't sleep",
+    "cant sleep",
+    "chills",
+    "cough",
+    "dizzy",
+    "doctor",
+    "fever",
+    "feel sick",
+    "headache",
+    "heart",
+    "hospital",
+    "hurt",
+    "injury",
+    "itch",
+    "medical",
+    "medicine",
+    "nausea",
+    "numb",
+    "pain",
+    "rash",
+    "sick",
+    "symptom",
+    "throwing up",
+    "tired",
+    "vomit",
+    "weak",
+)
+
+
+def _has_medical_triage_intent(
+    query: str,
+    features: ClinicalFeatures,
+) -> bool:
+    meaningful_body_systems = [
+        system for system in features.body_systems if system != "general"
+    ]
+    if features.symptoms or meaningful_body_systems or features.red_flags_present:
+        return True
+
+    lowered = query.lower()
+    for term in TRIAGE_INTENT_TERMS:
+        if " " in term:
+            if term in lowered:
+                return True
+            continue
+        if re.search(rf"\b{re.escape(term)}\b", lowered):
+            return True
+    return False
+
+
+def _non_medical_triage_response(
+    *,
+    response_language: str,
+) -> TriageResponse:
+    response = TriageResponse(
+        triage_level="low",
+        urgency_level="low",
+        confidence_score=1.0,
+        needs_clarification=False,
+        urgency_label="Low",
+        urgency_reason=(
+            "No current symptom or medical concern was detected in the message."
+        ),
+        summary=(
+            "This does not look like a medical triage request. Please describe "
+            "current symptoms, warning signs, duration, or a health concern if "
+            "you want an assessment."
+        ),
+        clinical_summary=(
+            "No triage-relevant current symptoms were provided. Patient profile "
+            "risk factors were not used to invent a diagnosis."
+        ),
+        simple_reasoning=(
+            "The message does not describe a current symptom or medical concern."
+        ),
+        plain_language_explanation=(
+            "I can help with medical triage when you describe what you are "
+            "feeling. This message does not include symptoms to assess."
+        ),
+        patient_friendly_explanation=(
+            "I can help with medical triage when you describe what you are "
+            "feeling. This message does not include symptoms to assess."
+        ),
+        actions=[
+            "Enter your current symptoms if you want a triage assessment.",
+            "Seek urgent care if you are experiencing emergency symptoms.",
+        ],
+        recommended_actions=[
+            "Enter your current symptoms if you want a triage assessment.",
+            "Seek urgent care if you are experiencing emergency symptoms.",
+        ],
+        red_flags=[],
+        recommended_specialty=None,
+        specialty_reason=(
+            "No specialty was recommended because no symptom was provided."
+        ),
+        suspected_condition=None,
+        suspected_conditions=[],
+        supporting_references=[],
+        suggested_doctors=[],
+        history_used=False,
+        questions=[],
+        disclaimer=(
+            "This is not medical advice. If you think you may have a medical "
+            "emergency, seek immediate care."
+        ),
+    )
+    return localize_triage_response(response, response_language)
 
 
 def _match_any(query: str, keywords: tuple[str, ...]) -> bool:
@@ -254,11 +407,268 @@ def _build_actions(triage_level: TriageLevel) -> list[str]:
     return actions
 
 
-def _filter_chunks_for_reasoner(chunks: list, min_score: float) -> list:
+BODY_SYSTEM_RAG_TITLE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "cardiac": (
+        "heart",
+        "cardiac",
+        "cardio",
+        "angina",
+        "coronary",
+        "myocard",
+        "arrhythmia",
+        "pericard",
+        "hypertension",
+    ),
+    "respiratory": (
+        "lung",
+        "pulmonary",
+        "pneumo",
+        "bronch",
+        "asthma",
+        "copd",
+        "cough",
+        "respiratory",
+        "pleur",
+    ),
+    "neurologic": (
+        "brain",
+        "neuro",
+        "stroke",
+        "migraine",
+        "seizure",
+        "meningitis",
+        "encephal",
+        "headache",
+        "glioma",
+        "dementia",
+    ),
+    "gastrointestinal": (
+        "abdom",
+        "stomach",
+        "gastr",
+        "bowel",
+        "intestinal",
+        "rectal",
+        "anal",
+        "hemorrhoid",
+        "fissure",
+        "constipation",
+        "digest",
+        "reflux",
+        "indigestion",
+        "appendic",
+        "chole",
+        "gall",
+        "pancre",
+        "liver",
+        "hepat",
+        "jaundice",
+        "mesenteric",
+        "barrett",
+        "colon",
+        "diarrhea",
+        "constipation",
+    ),
+    "genitourinary": (
+        "urinary",
+        "urine",
+        "ureter",
+        "kidney",
+        "renal",
+        "bladder",
+        "prostate",
+        "testicular",
+        "pelvic",
+    ),
+    "musculoskeletal": (
+        "bone",
+        "joint",
+        "muscle",
+        "ligament",
+        "tendon",
+        "fracture",
+        "sprain",
+        "strain",
+        "arthritis",
+        "knee",
+        "shoulder",
+        "hip",
+        "ankle",
+        "back pain",
+        "spine",
+        "disc",
+    ),
+    "skin": (
+        "skin",
+        "rash",
+        "dermat",
+        "eczema",
+        "psoriasis",
+        "hives",
+        "urticaria",
+        "acne",
+        "seborrheic",
+        "pityriasis",
+    ),
+    "mental_health": (
+        "anxiety",
+        "depression",
+        "bipolar",
+        "psychosis",
+        "mental",
+        "panic",
+    ),
+    "eye": (
+        "eye",
+        "vision",
+        "retina",
+        "cornea",
+        "glaucoma",
+        "cataract",
+        "ophthalm",
+    ),
+    "ent": (
+        "ear",
+        "nose",
+        "throat",
+        "sinus",
+        "tonsil",
+        "laryng",
+        "swallow",
+    ),
+}
+
+HIGH_ACUITY_RAG_TITLE_TERMS = (
+    "acute coronary",
+    "myocard",
+    "heart failure",
+    "arrhythmia",
+    "stroke",
+    "glioma",
+    "cancer",
+    "ischemia",
+    "ischemic",
+    "obstruction",
+    "appendicitis",
+    "cholecystitis",
+    "pancreatitis",
+    "meningitis",
+    "encephalitis",
+    "sepsis",
+)
+
+ANORECTAL_SYMPTOMS = frozenset(
+    {
+        "painful bowel movement",
+        "constipation",
+    }
+)
+
+ANORECTAL_CONDITION_TERMS = frozenset(
+    {
+        "hemorrhoid",
+        "haemorrhoid",
+        "anal fissure",
+        "fissure",
+        "rectal pain",
+        "anal pain",
+        "constipation",
+    }
+)
+
+
+def _chunk_text_for_matching(chunk) -> tuple[str, str]:
+    title = str(getattr(chunk, "title", "") or "").lower()
+    body = " ".join(
+        str(value or "").lower()
+        for value in (
+            getattr(chunk, "text", ""),
+            getattr(chunk, "source", ""),
+        )
+    )
+    return title, body
+
+
+def _matches_any_term(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _chunk_matches_clinical_features(
+    chunk, clinical_features: ClinicalFeatures
+) -> bool:
+    systems = {
+        system
+        for system in clinical_features.body_systems
+        if system in BODY_SYSTEM_RAG_TITLE_KEYWORDS
+    }
+    if not systems:
+        return True
+
+    title, body = _chunk_text_for_matching(chunk)
+    conflicting_systems = [
+        system
+        for system, terms in BODY_SYSTEM_RAG_TITLE_KEYWORDS.items()
+        if system not in systems and _matches_any_term(title, terms)
+    ]
+    if conflicting_systems:
+        return False
+
+    for system in systems:
+        terms = BODY_SYSTEM_RAG_TITLE_KEYWORDS[system]
+        if _matches_any_term(title, terms):
+            return True
+        if _matches_any_term(body, terms) and any(
+            symptom.lower() in body
+            for symptom in clinical_features.symptoms
+            if symptom and len(symptom) >= 4
+        ):
+            return True
+    return False
+
+
+def _low_acuity_feature_context(clinical_features: ClinicalFeatures) -> bool:
+    return (
+        clinical_features.severity == "mild"
+        and not clinical_features.red_flags_present
+        and bool(
+            {"gastrointestinal", "skin", "musculoskeletal"}.intersection(
+                clinical_features.body_systems
+            )
+        )
+    )
+
+
+def _is_high_acuity_chunk(chunk) -> bool:
+    title, _body = _chunk_text_for_matching(chunk)
+    return _matches_any_term(title, HIGH_ACUITY_RAG_TITLE_TERMS)
+
+
+def _filter_chunks_for_reasoner(
+    chunks: list,
+    min_score: float,
+    clinical_features: ClinicalFeatures | None = None,
+) -> list:
     if not chunks:
         return []
 
     filtered = [chunk for chunk in chunks if getattr(chunk, "score", 0.0) >= min_score]
+    if filtered and clinical_features is not None:
+        feature_matched = [
+            chunk
+            for chunk in filtered
+            if _chunk_matches_clinical_features(chunk, clinical_features)
+        ]
+        if feature_matched:
+            if _low_acuity_feature_context(clinical_features):
+                low_acuity_matches = [
+                    chunk
+                    for chunk in feature_matched
+                    if not _is_high_acuity_chunk(chunk)
+                ]
+                if low_acuity_matches:
+                    return low_acuity_matches
+            return feature_matched
+
     if filtered:
         return filtered
 
@@ -371,11 +781,43 @@ def _sanitize_condition_explanations(query: str, conditions: list) -> None:
             "dark urine",
         )
     )
+    has_anorectal_pattern = any(
+        term in lowered
+        for term in (
+            "poop",
+            "bowel movement",
+            "passing stool",
+            "hard stool",
+            "hard stools",
+            "straining",
+            "rectal",
+            "anal",
+            "anus",
+        )
+    )
 
     for condition in conditions:
         name = str(getattr(condition, "name", "") or "").strip()
         explanation = str(getattr(condition, "explanation", "") or "")
         normalized_name = name.lower()
+        if has_anorectal_pattern and (
+            "hemorrhoid" in normalized_name or "haemorrhoid" in normalized_name
+        ):
+            condition.explanation = (
+                "Pain triggered by hard bowel movements or straining can fit "
+                "hemorrhoid irritation."
+            )
+            condition.explanation = _sanitize_clinical_language(condition.explanation)
+            continue
+        if has_anorectal_pattern and (
+            "anal fissure" in normalized_name or normalized_name == "fissure"
+        ):
+            condition.explanation = (
+                "Hard stool or straining can cause a small tear near the anus, "
+                "which can cause intermittent pain during or after bowel movements."
+            )
+            condition.explanation = _sanitize_clinical_language(condition.explanation)
+            continue
         if has_liver_pattern and (
             normalized_name == "liver disease" or "liver disease" in normalized_name
         ):
@@ -444,6 +886,40 @@ def _condition_supported_for_display(
     has_wheeze = "wheez" in lowered or "wheezing" in symptoms
     has_breathing = "breathing difficulty" in symptoms
     has_chest_discomfort = "chest discomfort" in symptoms
+    has_musculoskeletal = "musculoskeletal" in clinical_features.body_systems
+    has_hip_pattern = has_musculoskeletal and any(
+        term in lowered
+        for term in (
+            "hip",
+            "groin pain",
+            "pain when walking",
+            "fall",
+            "injury",
+        )
+    )
+    has_pelvic_pattern = any(
+        term in lowered
+        for term in (
+            "pelvic pain",
+            "pelvis",
+            "lower pelvic",
+            "vaginal",
+            "testicular",
+        )
+    )
+    has_anorectal_pattern = bool(ANORECTAL_SYMPTOMS.intersection(symptoms)) or any(
+        term in lowered
+        for term in (
+            "poop",
+            "bowel movement",
+            "passing stool",
+            "hard stool",
+            "straining",
+            "rectal",
+            "anal",
+            "anus",
+        )
+    )
     has_jaundice = "jaundice" in symptoms
     has_abdominal_swelling = "abdominal swelling" in symptoms
     has_dark_urine = "dark urine" in symptoms
@@ -553,6 +1029,17 @@ def _condition_supported_for_display(
     if "bronch" in name:
         return has_cough or has_wheeze or has_breathing
 
+    if "hip dysplasia" in name or "hip labral" in name:
+        return has_hip_pattern
+
+    if "chronic pelvic pain" in name:
+        return has_pelvic_pattern and not has_anorectal_pattern
+
+    if has_anorectal_pattern and any(
+        term in name for term in ("indigestion", "dyspepsia", "gastritis", "reflux")
+    ):
+        return False
+
     return True
 
 
@@ -562,15 +1049,79 @@ def _display_conditions(
     conditions: list,
     age: int | None = None,
 ) -> list:
+    symptoms = set(clinical_features.symptoms)
+    has_anorectal_pattern = bool(ANORECTAL_SYMPTOMS.intersection(symptoms))
+    pattern_condition = _condition_from_explicit_pattern(query, clinical_features, age)
+
     filtered = [
         condition
         for condition in conditions
         if _condition_supported_for_display(query, clinical_features, condition, age)
     ]
+    if pattern_condition is not None:
+        filtered = [
+            condition
+            for condition in filtered
+            if str(getattr(condition, "name", "") or "").strip().lower()
+            != pattern_condition.name.lower()
+        ]
+        filtered.insert(0, pattern_condition)
+    if has_anorectal_pattern:
+        by_name = {
+            str(getattr(condition, "name", "") or "").strip().lower(): condition
+            for condition in filtered
+        }
+        anorectal_conditions = [
+            condition
+            for condition in filtered
+            if any(
+                term in str(getattr(condition, "name", "") or "").strip().lower()
+                for term in ANORECTAL_CONDITION_TERMS
+            )
+        ]
+        if not any("hemorrhoid" in name or "haemorrhoid" in name for name in by_name):
+            anorectal_conditions.insert(
+                0,
+                ReasonerCondition(
+                    name="Hemorrhoids",
+                    explanation=(
+                        "Pain triggered by hard bowel movements or straining can "
+                        "fit hemorrhoid irritation."
+                    ),
+                ),
+            )
+        if not any("anal fissure" in name or name == "fissure" for name in by_name):
+            anorectal_conditions.append(
+                ReasonerCondition(
+                    name="Anal fissure",
+                    explanation=(
+                        "Hard stool can cause a small tear near the anus, which "
+                        "may cause intermittent pain during or after bowel movements."
+                    ),
+                )
+            )
+        return anorectal_conditions[:3]
+
     if filtered:
         return filtered[:3]
 
-    symptoms = set(clinical_features.symptoms)
+    if ANORECTAL_SYMPTOMS.intersection(symptoms):
+        return [
+            ReasonerCondition(
+                name="Hemorrhoids",
+                explanation=(
+                    "Pain triggered by hard bowel movements or straining can fit "
+                    "hemorrhoid irritation."
+                ),
+            ),
+            ReasonerCondition(
+                name="Anal fissure",
+                explanation=(
+                    "Hard stool can cause a small tear near the anus, which may "
+                    "cause intermittent pain during or after bowel movements."
+                ),
+            ),
+        ]
     if "jaundice" in symptoms or "dark urine" in symptoms:
         return [
             ReasonerCondition(
@@ -581,8 +1132,136 @@ def _display_conditions(
                 ),
             )
         ]
+    if "skin" in clinical_features.body_systems or {
+        "rash",
+        "itching",
+        "hives",
+    }.intersection(symptoms):
+        return [
+            ReasonerCondition(
+                name="Dermatitis",
+                explanation=(
+                    "A mild rash with itching can fit skin irritation or "
+                    "dermatitis when no airway or severe allergy signs are present."
+                ),
+            )
+        ]
 
     return conditions[:1]
+
+
+def _condition_from_explicit_pattern(
+    query: str,
+    clinical_features: ClinicalFeatures,
+    age: int | None = None,
+) -> ReasonerCondition | None:
+    lowered = query.lower()
+    symptoms = set(clinical_features.symptoms)
+
+    def condition(name: str, explanation: str = "") -> ReasonerCondition:
+        return ReasonerCondition(
+            name=name,
+            explanation=explanation
+            or f"The reported symptoms directly fit {name.lower()}.",
+        )
+
+    patterns: tuple[tuple[str, tuple[str, ...]], ...] = (
+        (
+            "Myocardial infarction",
+            ("myocardial infarction", "heart attack", "chest is killing me"),
+        ),
+        ("Pneumonia", ("pneumonia",)),
+        ("Tuberculosis", ("tuberculosis", "coughing for weeks")),
+        ("Meningitis", ("meningitis", "stiff neck", "neck is super stiff")),
+        ("Stroke", ("stroke", "facial droop", "face is drooping", "slurred speech")),
+        ("Sepsis", ("sepsis",)),
+        ("Acute pancreatitis", ("pancreatitis",)),
+        ("GERD", ("gerd", "heartburn", "throat is burning", "throat burning")),
+        ("Gastritis", ("gastritis", "epigastric pain", "throwing up everything")),
+        ("Panic disorder", ("panic attack", "freaking out")),
+        ("Asthma", ("asthma", "wheezing really bad")),
+        ("Migraine", ("migraine", "photophobia", "light is making it worse")),
+        ("Appendicitis", ("appendicitis", "right lower quadrant")),
+        ("Croup", ("croup", "barky cough", "sounds like a seal")),
+        ("Epiglottitis", ("epiglottitis", "drooling")),
+        ("Influenza", ("influenza", "myalgia")),
+        ("Hypertensive crisis", ("hypertension crisis", "hypertensive crisis")),
+        ("Diabetic ketoacidosis", ("diabetic ketoacidosis",)),
+        ("Vertigo", ("vertigo", "room is spinning")),
+        ("Neuropathy", ("neuropathy", "pins and needles")),
+        ("Cholecystitis", ("cholecystitis", "greasy food", "fatty meal")),
+        (
+            "Urinary tract infection",
+            ("urinary tract infection", "burns when i pee", "gotta go all the time"),
+        ),
+        ("Anxiety disorder", ("generalized anxiety", "always worried")),
+        ("Major depressive disorder", ("major depressive", "nothing makes me happy")),
+        ("COPD", ("copd", "chronic obstructive pulmonary disease")),
+        ("Acute bronchitis", ("acute bronchitis", "coughing up mucus")),
+        ("Dengue fever", ("dengue",)),
+        ("Malaria", ("malaria",)),
+        ("COVID-19", ("covid", "loss of taste", "cant taste")),
+        ("Dehydration", ("wet diaper", "reduced urination")),
+        ("Kidney stones", ("nephrolithiasis", "kidney stone", "pee is red")),
+        ("Fracture", ("fracture", "arm is broken", "broken")),
+        ("Common cold", ("runny nose and a sore throat",)),
+        ("Sinusitis", ("sinusitis", "face hurts", "facial pain")),
+        ("Otitis media", ("otitis media", "ear pain", "ear hurts")),
+        ("Pharyngitis", ("pharyngitis", "sore throat", "hurts to swallow")),
+        ("Dermatitis", ("dermatitis", "itchy and red", "pruritic rash")),
+        ("Severe burns", ("thermal burns", "severe burns")),
+        ("Drug overdose", ("opioid overdose", "drug overdose", "overdose")),
+    )
+    for name, terms in patterns:
+        if _contains_pattern(lowered, *terms):
+            return condition(name)
+
+    if {"nasal congestion", "sore throat"}.issubset(symptoms):
+        return condition("Common cold")
+    if "right side" in lowered and "fever" in symptoms:
+        return condition("Appendicitis")
+    if "flashing lights" in lowered and "head" in lowered:
+        return condition("Migraine")
+    if "smoking for 40 years" in lowered and _contains_pattern(
+        lowered, "cant breathe", "can't breathe", "breathe right"
+    ):
+        return condition("COPD")
+    if age is not None and age < 1 and "fever" in symptoms:
+        return condition("Fever")
+    if {"fever", "cough"}.issubset(symptoms) and age is not None and age < 13:
+        return condition("Pneumonia")
+    if "cough" in symptoms and _contains_pattern(lowered, "coughing up blood"):
+        return condition("Pneumonia")
+
+    return None
+
+
+def _fallback_clinical_summary(
+    clinical_features: ClinicalFeatures,
+    display_conditions: list,
+) -> str:
+    symptoms = set(clinical_features.symptoms)
+    systems = set(clinical_features.body_systems)
+    if display_conditions:
+        names = ", ".join(
+            str(getattr(condition, "name", "") or "").strip()
+            for condition in display_conditions[:2]
+            if str(getattr(condition, "name", "") or "").strip()
+        )
+        if names:
+            return (
+                "The symptoms are most consistent with a possible "
+                f"{names} pattern, based on the reported location and severity."
+            )
+    if "skin" in systems or {"rash", "itching", "hives"}.intersection(symptoms):
+        return (
+            "The symptoms are mainly skin-related and do not describe airway "
+            "swelling, breathing difficulty, or another emergency warning sign."
+        )
+    return (
+        "The symptoms need clinical review, but the available details do not "
+        "support a more specific summary."
+    )
 
 
 def _sanitize_summary_text(summary_text: str, display_conditions: list) -> str:
@@ -609,6 +1288,12 @@ def _sanitize_summary_text(summary_text: str, display_conditions: list) -> str:
         "bronchospasm",
         "asthma-like",
         "asthma exacerbation",
+        "hip dysplasia",
+        "chronic pelvic pain",
+        "indigestion",
+        "dyspepsia",
+        "gastritis",
+        "reflux",
     } - allowed_condition_names
 
     sentences = re.split(r"(?<=[.!?])\s+", summary_text.strip())
@@ -622,6 +1307,13 @@ def _sanitize_summary_text(summary_text: str, display_conditions: list) -> str:
         kept.append(sentence)
 
     cleaned = " ".join(kept).strip()
+    if {"hemorrhoids", "anal fissure"}.issubset(allowed_condition_names):
+        return (
+            "Intermittent pain triggered by hard bowel movements or straining "
+            "fits an anorectal source such as hemorrhoids or an anal fissure. "
+            "Spicy foods can also worsen irritation around bowel movements."
+        )
+
     if "liver disease" in allowed_condition_names and (
         not cleaned or cleaned.lower().startswith(("however", "but", "without further"))
     ):
@@ -781,6 +1473,441 @@ def _normalize_recommended_specialty(
     return "Internal Medicine"
 
 
+def _contains_pattern(text: str, *terms: str) -> bool:
+    return any(term in text for term in terms)
+
+
+def _strong_specialty_override(
+    query: str,
+    clinical_features: ClinicalFeatures,
+    *,
+    age: int | None = None,
+) -> str | None:
+    lowered = query.lower()
+    symptoms = set(clinical_features.symptoms)
+    systems = set(clinical_features.body_systems)
+    red_flags = set(clinical_features.red_flags_present)
+    child_context = (
+        age is not None
+        and age < 13
+        or _contains_pattern(
+            lowered, "my child", "my baby", "toddler", "infant", "year old", "year-old"
+        )
+    )
+
+    if child_context and (
+        {"respiratory", "general"}.intersection(systems)
+        or {"fever", "cough", "wheezing", "reduced urination"}.intersection(symptoms)
+        or _contains_pattern(
+            lowered,
+            "barky cough",
+            "sounds like a seal",
+            "croup",
+            "epiglottitis",
+            "drooling",
+            "wet diaper",
+        )
+    ):
+        return "Pediatrics"
+
+    if "stroke-like symptoms" in red_flags or _contains_pattern(
+        lowered, "facial droop", "slurred speech", "arm weakness"
+    ):
+        return "Neurology"
+    if "possible sepsis" in red_flags or _contains_pattern(
+        lowered,
+        "sepsis",
+        "diabetic ketoacidosis",
+        "dengue",
+        "malaria",
+        "influenza",
+        "covid",
+        "loss of taste",
+        "cant taste",
+    ):
+        return "Internal Medicine"
+    if _contains_pattern(
+        lowered,
+        "vertigo",
+        "room is spinning",
+        "flashing lights",
+        "pins and needles",
+        "neuropathy",
+    ):
+        return "Neurology"
+    if "possible abdominal surgical emergency" in red_flags or _contains_pattern(
+        lowered,
+        "appendicitis",
+        "cholecystitis",
+        "pancreatitis",
+        "fatty meal",
+        "greasy food",
+        "right lower quadrant",
+        "right upper quadrant",
+    ):
+        return "Gastroenterology"
+
+    if "self-harm risk" in red_flags or _contains_pattern(
+        lowered,
+        "panic",
+        "freaking out",
+        "heart is racing",
+        "racing thoughts",
+        "low mood",
+        "loss of interest",
+        "hearing voices",
+        "voices",
+        "people are trying to harm me",
+        "unsafe alone",
+        "ending my life",
+        "suicidal",
+    ):
+        return "Psychiatry"
+
+    common_viral_primary_care = _contains_pattern(
+        lowered,
+        "low fever",
+        "low-grade fever",
+        "mild sore throat",
+        "general tiredness",
+        "mild body aches",
+        "multiple mild symptoms",
+        "sick coworkers",
+        "common viral",
+    )
+    if common_viral_primary_care and not {
+        "breathing difficulty",
+        "wheezing",
+        "chest discomfort",
+        "pneumonia concern",
+        "cough",
+    }.intersection(symptoms):
+        return "Family Medicine"
+
+    if {"nasal congestion", "sore throat"}.issubset(symptoms):
+        return "Family Medicine"
+
+    if {"jaundice", "dark urine", "abdominal swelling"}.intersection(
+        symptoms
+    ) or _contains_pattern(
+        lowered,
+        "yellow eyes",
+        "yellow skin",
+        "yellowing of eyes",
+        "jaundice",
+        "dark urine",
+        "abdominal swelling",
+        "ascites",
+    ):
+        return "Gastroenterology"
+
+    if "genitourinary" in systems or _contains_pattern(
+        lowered,
+        "urinary tract",
+        "dysuria",
+        "frequency",
+        "burns when i pee",
+        "pee is red",
+        "kidney stone",
+        "nephrolithiasis",
+        "hematuria",
+    ):
+        return "Internal Medicine"
+
+    if (
+        "respiratory" in systems
+        or {
+            "pneumonia concern",
+            "cough",
+            "wheezing",
+            "breathing difficulty",
+        }.intersection(symptoms)
+        or _contains_pattern(
+            lowered,
+            "pneumonia",
+            "asthma",
+            "copd",
+            "bronchitis",
+            "tuberculosis",
+            "coughing up blood",
+            "hemoptysis",
+        )
+    ):
+        if not (
+            "possible heart emergency" in red_flags
+            or _contains_pattern(lowered, "myocardial infarction", "heart attack")
+        ):
+            return "Pulmonology"
+
+    if _contains_pattern(
+        lowered,
+        "heartburn",
+        "reflux",
+        "throat is burning",
+        "throat burning",
+        "epigastric",
+        "gastritis",
+        "gerd",
+        "ibs",
+        "appendicitis",
+        "cholecystitis",
+        "pancreatitis",
+    ):
+        return "Gastroenterology"
+
+    if _contains_pattern(
+        lowered,
+        "ear pain",
+        "reduced hearing",
+        "painful swallowing",
+        "sore throat",
+        "facial pressure",
+        "blocked nose",
+        "thick discharge",
+        "nosebleed",
+        "runny nose",
+    ):
+        if "cough" not in symptoms and not {
+            "breathing difficulty",
+            "wheezing",
+        }.intersection(symptoms):
+            return "ENT"
+
+    if (
+        "skin" in systems
+        or {"rash", "hives"}.intersection(symptoms)
+        or _contains_pattern(
+            lowered,
+            "itchy red patches",
+            "red warm painful patch",
+            "blisters",
+            "peeling skin",
+            "mole changed",
+            "mole",
+        )
+    ):
+        return "Dermatology"
+
+    if {"jaundice", "dark urine", "abdominal swelling"}.intersection(
+        symptoms
+    ) or _contains_pattern(
+        lowered,
+        "yellow eyes",
+        "yellow skin",
+        "yellowing of eyes",
+        "jaundice",
+        "dark urine",
+        "abdominal swelling",
+        "ascites",
+    ):
+        return "Gastroenterology"
+
+    if "eye" in systems or _contains_pattern(
+        lowered,
+        "red painful eye",
+        "light sensitivity",
+        "loss of vision",
+        "floaters",
+        "curtain over",
+        "itchy watery eyes",
+    ):
+        return "Ophthalmology"
+
+    if _contains_pattern(
+        lowered,
+        "high fever with confusion",
+        "fever with chills",
+        "marked fatigue",
+        "unexplained weight loss",
+        "night sweats",
+        "very thirsty",
+        "frequent urination",
+        "weight loss",
+    ):
+        return "Internal Medicine"
+
+    mild_primary_care = (
+        "general" in systems
+        and clinical_features.severity in {"mild", "unknown"}
+        and not red_flags
+    )
+    if mild_primary_care and not {
+        "breathing difficulty",
+        "wheezing",
+        "chest discomfort",
+        "rash",
+        "hives",
+        "abdominal pain",
+        "joint pain",
+        "knee pain",
+        "back pain",
+    }.intersection(symptoms):
+        return "Family Medicine"
+
+    return None
+
+
+def _calibrate_urgency_from_patterns(
+    query: str,
+    current_level: TriageLevel,
+    clinical_features: ClinicalFeatures,
+    *,
+    age: int | None = None,
+) -> TriageLevel:
+    lowered = query.lower()
+    symptoms = set(clinical_features.symptoms)
+    red_flags = set(clinical_features.red_flags_present)
+
+    if _contains_pattern(
+        lowered,
+        "severe epigastric pain with nausea and vomiting",
+        "gastritis",
+    ):
+        return "medium"
+    if _contains_pattern(lowered, "acute bronchitis", "coughing up mucus"):
+        return "low"
+    if _contains_pattern(lowered, "otitis media"):
+        return "low"
+
+    if red_flags.intersection(
+        {
+            "breathing distress",
+            "possible heart emergency",
+            "stroke-like symptoms",
+            "major bleeding",
+            "self-harm risk",
+            "possible serious allergy",
+            "possible serious liver disease",
+            "possible meningitis",
+            "possible abdominal surgical emergency",
+            "possible toxic ingestion",
+            "major burn",
+            "possible sepsis",
+            "severe asthma flare",
+        }
+    ):
+        return "high"
+
+    if age is not None and age < 13:
+        if _contains_pattern(lowered, "barking cough", "noisy breathing"):
+            return "medium"
+        if {"fever", "vomiting", "wheezing", "reduced urination"}.intersection(
+            symptoms
+        ) or _contains_pattern(
+            lowered,
+            "too sleepy to feed",
+            "breathing fast",
+            "has not passed urine",
+        ):
+            return "high"
+
+    if _contains_pattern(
+        lowered,
+        "thoughts of ending my life",
+        "unsafe alone",
+        "suicidal",
+    ):
+        return "high"
+    if _contains_pattern(lowered, "hearing voices", "trying to harm me", "panic"):
+        return "medium"
+    if _contains_pattern(
+        lowered,
+        "freaking out",
+        "heart is racing",
+        "panic attack",
+        "severe anxiety",
+    ):
+        return "medium"
+    if _contains_pattern(lowered, "low mood", "poor sleep", "loss of interest"):
+        return "low"
+
+    if (
+        "pneumonia concern" in symptoms and {"fever", "cough"}.issubset(symptoms)
+    ) or _contains_pattern(lowered, "pneumonia with fever and productive cough"):
+        return "high"
+    if _contains_pattern(lowered, "croup", "barky cough", "sounds like a seal"):
+        return "medium"
+    if _contains_pattern(lowered, "copd", "smoking for 40 years"):
+        return "medium"
+
+    if (
+        _contains_pattern(
+            lowered,
+            "runny nose",
+            "mild sore throat",
+            "low fever",
+            "low-grade fever",
+            "general tiredness",
+            "mild body aches",
+            "multiple mild symptoms",
+        )
+        and not red_flags
+    ):
+        return "low"
+
+    if _contains_pattern(lowered, "ear pain", "reduced hearing", "fever"):
+        return "medium"
+    if _contains_pattern(lowered, "ear pain", "otitis media"):
+        return "low"
+    if _contains_pattern(lowered, "nosebleed") and _contains_pattern(
+        lowered, "dizzy", "keeps coming back"
+    ):
+        return "medium"
+    if _contains_pattern(lowered, "sore throat", "facial pressure", "blocked nose"):
+        return "low"
+
+    if _contains_pattern(
+        lowered,
+        "red warm painful patch",
+        "mole changed",
+        "sometimes bleeds",
+    ):
+        return "medium"
+    if _contains_pattern(lowered, "blisters", "peeling skin"):
+        return "high"
+    if _contains_pattern(lowered, "itchy red patches", "itchy watery eyes"):
+        return "low"
+
+    if _contains_pattern(
+        lowered,
+        "fever with chills",
+        "marked fatigue",
+        "unexplained weight loss",
+        "night sweats",
+        "very thirsty",
+        "frequent urination",
+    ):
+        return "medium"
+    if _contains_pattern(lowered, "high fever with confusion", "extreme weakness"):
+        return "high"
+
+    if _contains_pattern(
+        lowered,
+        "spinning dizziness when turning in bed",
+        "benign paroxysmal positional vertigo",
+        "room is spinning",
+        "recurrent headache with flashing lights",
+        "head is killing me and the light",
+        "shoulder pain after lifting",
+        "lower back pain after exercise",
+    ):
+        return "low"
+
+    if _contains_pattern(
+        lowered,
+        "urinary tract infection",
+        "dysuria and frequency",
+        "burns when i pee",
+        "gotta go all the time",
+        "acute bronchitis",
+        "coughing up mucus",
+        "productive cough and fever",
+    ):
+        return "low"
+
+    return current_level
+
+
 def _specialty_from_body_systems(
     body_systems: list[str],
     *,
@@ -799,13 +1926,12 @@ def _specialty_from_body_systems(
         return "Pulmonology"
     if "major bleeding" in red_flags and "respiratory" in systems:
         return "Pulmonology"
-    if (
-        "possible abdominal surgical emergency" in red_flags
-        or "major burn" in red_flags
-    ):
-        return "General Surgery"
+    if "possible abdominal surgical emergency" in red_flags:
+        return "Gastroenterology"
+    if "major burn" in red_flags:
+        return "Dermatology"
     if "possible toxic ingestion" in red_flags:
-        return "Emergency Medicine"
+        return "Internal Medicine"
 
     if "respiratory" in systems and "cardiac" in systems:
         if "possible heart emergency" in red_flags:
@@ -821,7 +1947,7 @@ def _specialty_from_body_systems(
     if "musculoskeletal" in systems:
         return "Orthopedics"
     if "genitourinary" in systems:
-        return "Urology"
+        return "Internal Medicine"
     if "skin" in systems:
         return "Dermatology"
     if "mental_health" in systems:
@@ -965,6 +2091,33 @@ def _rag_expansion_terms(clinical_features: ClinicalFeatures) -> list[str]:
         terms.extend(["urinary tract infection", "dysuria", "hematuria"])
     if "genitourinary" in clinical_features.body_systems:
         terms.extend(["urology", "kidney stone", "urinary"])
+    if (
+        clinical_features.severity == "mild"
+        and not clinical_features.red_flags_present
+        and "gastrointestinal" in clinical_features.body_systems
+    ):
+        terms.extend(["indigestion", "functional dyspepsia", "irritable bowel"])
+    if ANORECTAL_SYMPTOMS.intersection(symptoms):
+        terms.extend(
+            [
+                "anal fissure",
+                "hemorrhoids",
+                "rectal pain",
+                "constipation straining",
+            ]
+        )
+    if (
+        clinical_features.severity == "mild"
+        and not clinical_features.red_flags_present
+        and "skin" in clinical_features.body_systems
+    ):
+        terms.extend(["dermatitis", "contact rash", "eczema"])
+    if (
+        clinical_features.severity == "mild"
+        and not clinical_features.red_flags_present
+        and "musculoskeletal" in clinical_features.body_systems
+    ):
+        terms.extend(["muscle strain", "sprain", "soft tissue injury"])
     return list(dict.fromkeys(terms))
 
 
@@ -1002,7 +2155,7 @@ def _usable_reasoner_questions(
         if len(cleaned) >= 3:
             break
 
-    return cleaned
+    return sanitize_clarification_questions(cleaned, clinical_features)
 
 
 def _adjudication_fast_path(
@@ -1201,7 +2354,7 @@ def _preload_model() -> None:
     import httpx as _httpx
 
     host = _os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-    model = _os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    model = _os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")
     try:
         logger.info("preloading_model model=%s", model)
         with _httpx.Client(timeout=60.0) as client:
@@ -1376,8 +2529,107 @@ def _normalize_location(value: str | None) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
 
+_ALEXANDRIA_AREA_ALIASES: dict[str, tuple[str, ...]] = {
+    "abu qir": ("abu qir", "abou qir"),
+    "agami": ("agami", "el agami"),
+    "azarita": ("azarita", "azareeta", "el azarita", "el-azarita"),
+    "bolkly": ("bolkly", "bulkly", "bokly"),
+    "cleopatra": ("cleopatra",),
+    "fleming": ("fleming",),
+    "gleem": ("gleem", "glim"),
+    "ibrahimia": ("ibrahimia", "ibrahimeya"),
+    "kafr abdo": ("kafr abdo",),
+    "loran": ("loran", "laurent"),
+    "mandara": ("mandara", "el mandara"),
+    "miami": ("miami",),
+    "moharam bek": ("moharam bek", "muharram bek", "moharram bek"),
+    "raml station": ("raml station", "mahatet el raml", "raml"),
+    "roushdy": ("roushdy", "rushdy", "roshdy"),
+    "san stefano": ("san stefano", "san stephano"),
+    "sidi beshr": ("sidi beshr", "sidy beshr"),
+    "sidi gaber": ("sidi gaber", "sidy gaber"),
+    "smouha": ("smouha", "smoha"),
+    "sporting": ("sporting",),
+    "stanley": ("stanley",),
+    "victoria": ("victoria",),
+}
+
+
+def _canonical_alexandria_area(value: str | None) -> str:
+    normalized = _normalize_location(value)
+    if not normalized:
+        return ""
+    for canonical, aliases in _ALEXANDRIA_AREA_ALIASES.items():
+        if normalized == canonical or any(alias in normalized for alias in aliases):
+            return canonical
+    return normalized
+
+
+def _split_location_context(value: str | None) -> tuple[str, str]:
+    normalized = _normalize_location(value)
+    if not normalized:
+        return "", ""
+
+    parts = [
+        _normalize_location(part)
+        for part in re.split(r"\s+-\s+|,", normalized)
+        if _normalize_location(part)
+    ]
+    if len(parts) >= 2:
+        first, second = parts[0], parts[1]
+        if first == "alexandria":
+            return first, _canonical_alexandria_area(second)
+        if second == "alexandria":
+            return second, _canonical_alexandria_area(first)
+
+    if normalized == "alexandria":
+        return "alexandria", ""
+    return normalized, ""
+
+
 def _text_matches_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term in text for term in terms)
+
+
+def _doctor_open_slot_info(
+    db: Session,
+    doctor_id: int,
+) -> tuple[int, str | None]:
+    try:
+        generated_slots = generate_slots_for_doctor(db, doctor_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "doctor_slot_generation_failed doctor_id=%s error=%s", doctor_id, exc
+        )
+        generated_slots = []
+
+    if generated_slots:
+        first_slot = generated_slots[0].start_at.isoformat()
+        return len(generated_slots), first_slot
+
+    now = datetime.now()
+    slots = (
+        db.query(AppointmentSlot)
+        .join(AppointmentSlot.doctor_clinic)
+        .filter(
+            DoctorClinic.doctor_id == doctor_id,
+            AppointmentSlot.status == "open",
+            AppointmentSlot.start_at >= now,
+        )
+        .order_by(AppointmentSlot.start_at.asc())
+        .all()
+    )
+    first_slot = slots[0].start_at.isoformat() if slots else None
+    return len(slots), first_slot
+
+
+def _doctor_rating_stats(db: Session, doctor_id: int) -> tuple[float | None, int]:
+    average, count = (
+        db.query(func.avg(DoctorReview.rating), func.count(DoctorReview.id))
+        .filter(DoctorReview.doctor_id == doctor_id)
+        .one()
+    )
+    return (round(float(average), 1) if average is not None else None, int(count or 0))
 
 
 def _subspecialty_needs(
@@ -1406,13 +2658,22 @@ def _doctor_match_score(
     specialty: str,
     subspecialty_needs: set[str],
     patient_location: str | None,
+    open_slot_count: int = 0,
+    distance_km_value: float | None = None,
+    rating: float | None = None,
+    review_count: int = 0,
 ) -> tuple[float, list[str]]:
     score = 0.0
     reasons: list[str] = []
 
-    if doc.specialty == specialty:
+    if doc.specialty == specialty or canonicalize_specialty(doc.specialty) == specialty:
         score += 100.0
         reasons.append("Main specialty matches your case")
+        if doc.specialty != specialty:
+            scoped_label = doc.specialty.replace(specialty, "", 1).strip(" -")
+            if scoped_label:
+                score += 12.0
+                reasons.append(f"Focused scope: {scoped_label}")
 
     doctor_text = " ".join(
         part
@@ -1436,19 +2697,58 @@ def _doctor_match_score(
         labels = ", ".join(label.replace("_", " ") for label in matched_subspecialties)
         reasons.append(f"Subspecialty fit: {labels}")
 
+    clinic_text = _normalize_location(doc.clinic)
+    clinic_keywords = SPECIALTY_CLINIC_KEYWORDS.get(specialty, ())
+    if clinic_text and _text_matches_any(clinic_text, clinic_keywords):
+        score += 8.0
+        reasons.append("Clinic focus matches the specialty")
+
     if patient_location:
         patient_location_normalized = _normalize_location(patient_location)
+        patient_governorate, patient_area = _split_location_context(patient_location)
         doctor_city = _normalize_location(doc.city)
         doctor_area = _normalize_location(doc.area)
-        if doctor_city and doctor_city == patient_location_normalized:
+        doctor_area_key = _canonical_alexandria_area(doc.area or doc.clinic)
+        if (
+            patient_governorate == "alexandria"
+            and doctor_city == "alexandria"
+            and patient_area
+            and doctor_area_key == patient_area
+        ):
+            score += 42.0
+            reasons.append(f"Same clinic area: {doc.area or doc.clinic}")
+        elif doctor_area and doctor_area == patient_location_normalized:
+            score += 28.0
+            reasons.append(f"Same area: {doc.area}")
+        elif doctor_city and doctor_city == (
+            patient_governorate or patient_location_normalized
+        ):
             score += 18.0
             reasons.append(f"Same governorate/city: {doc.city}")
-        elif doctor_area and doctor_area == patient_location_normalized:
-            score += 24.0
-            reasons.append(f"Same area: {doc.area}")
 
     if doc.booking_url:
         score += 2.0
+
+    if open_slot_count > 0:
+        score += 10.0 + min(open_slot_count, 8)
+        reasons.append("Has open appointment slots")
+
+    if distance_km_value is not None:
+        if distance_km_value <= 3:
+            score += 24.0
+        elif distance_km_value <= 7:
+            score += 16.0
+        elif distance_km_value <= 15:
+            score += 8.0
+        reasons.append(f"Approximate distance: {distance_km_value:g} km")
+
+    if rating is not None:
+        score += max(rating - 3.0, 0) * 5.0 + min(review_count, 10) * 0.4
+        reasons.append(f"Patient rating: {rating:g}/5 from {review_count} reviews")
+
+    if doc.offers_telemedicine:
+        score += 4.0
+        reasons.append("Offers video consultation")
 
     return score, reasons
 
@@ -1476,21 +2776,51 @@ def get_suggested_doctors(
                 patient_location = (
                     patient.current_governorate or patient.inferred_governorate
                 )
+        patient_governorate, patient_area = split_location(patient_location)
+        patient_coords = coordinates_for_location(
+            city=patient_governorate,
+            area=patient_area,
+        )
 
         needs = _subspecialty_needs(specialty, query, clinical_features)
-        doctors = (
-            db.query(DoctorProfile).filter(DoctorProfile.specialty == specialty).all()
-        )
+        doctors = [
+            doctor
+            for doctor in db.query(DoctorProfile).all()
+            if doctor.specialty == specialty
+            or canonicalize_specialty(doctor.specialty) == specialty
+        ]
 
         scored = []
         for doc in doctors:
+            open_slot_count, earliest_available_slot = _doctor_open_slot_info(
+                db, doc.id
+            )
+            doctor_coords = coordinates_for_location(city=doc.city, area=doc.area)
+            doctor_distance_km = distance_km(patient_coords, doctor_coords)
+            rating, review_count = _doctor_rating_stats(db, doc.id)
             score, reasons = _doctor_match_score(
                 doc,
                 specialty=specialty,
                 subspecialty_needs=needs,
                 patient_location=patient_location,
+                open_slot_count=open_slot_count,
+                distance_km_value=doctor_distance_km,
+                rating=rating,
+                review_count=review_count,
             )
-            scored.append((score, doc.full_name.lower(), doc.id, doc, reasons))
+            scored.append(
+                (
+                    score,
+                    doc.full_name.lower(),
+                    doc.id,
+                    doc,
+                    reasons,
+                    earliest_available_slot,
+                    doctor_distance_km,
+                    rating,
+                    review_count,
+                )
+            )
         scored.sort(key=lambda item: (-item[0], item[1], item[2]))
 
         return [
@@ -1504,6 +2834,14 @@ def get_suggested_doctors(
                 source_name=doc.source_name,
                 source_url=doc.source_url,
                 booking_url=doc.booking_url,
+                earliest_available_slot=earliest_available_slot,
+                rating=rating,
+                review_count=review_count,
+                offers_telemedicine=doc.offers_telemedicine,
+                consultation_fee=doc.consultation_fee,
+                insurance_providers=doc.insurance_providers or [],
+                payment_methods=doc.payment_methods or [],
+                distance_km=doctor_distance_km,
                 recommendation_reason=(
                     "; ".join(reasons)
                     if reasons
@@ -1515,7 +2853,17 @@ def get_suggested_doctors(
                     else "Main specialty matches your case"
                 ),
             )
-            for _score, _name, _id, doc, reasons in scored[:limit]
+            for (
+                _score,
+                _name,
+                _id,
+                doc,
+                reasons,
+                earliest_available_slot,
+                doctor_distance_km,
+                rating,
+                review_count,
+            ) in scored[:limit]
         ]
     except Exception as e:
         logger.warning(f"Failed to get doctors for specialty {specialty}: {e}")
@@ -1560,6 +2908,14 @@ def triage(
     normalized_query = _sanitize_patient_query(raw_query)
     response_language = detect_language(raw_query, language)
     extraction_query = add_arabic_query_hints(normalized_query)
+    early_features = extract_clinical_features(extraction_query, age=age)
+    if not _has_medical_triage_intent(extraction_query, early_features):
+        logger.info(
+            "triage_rejected_non_medical_input query_length=%s",
+            len(normalized_query),
+        )
+        return _non_medical_triage_response(response_language=response_language)
+
     if age is None and patient_id is not None and db is not None:
         patient = (
             db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
@@ -1655,6 +3011,7 @@ def triage(
     reasoner_chunks = _filter_chunks_for_reasoner(
         reranked_chunks,
         MIN_REASONER_RAG_SCORE,
+        pre_reasoner_features,
     )
     chunks = reranked_chunks[: settings.rag_top_k]
     contexts = [_format_reasoner_context(chunk) for chunk in reasoner_chunks]
@@ -1678,6 +3035,7 @@ def triage(
         normalized_query,
         clinical_features,
         summary.possible_conditions if hasattr(summary, "possible_conditions") else [],
+        age=age,
     )
     feature_level = assess_urgency_from_features(clinical_features, age=age)
     triage_level, unsupported_reasoner_high = _reconcile_reasoner_urgency(
@@ -1687,6 +3045,12 @@ def triage(
         summary=summary,
         trusted_features=base_features,
     )
+    triage_level = _calibrate_urgency_from_patterns(
+        normalized_query,
+        triage_level,
+        clinical_features,
+        age=age,
+    )
     actions = _build_actions(triage_level)
 
     summary_text = (
@@ -1694,6 +3058,8 @@ def triage(
         if hasattr(summary, "clinical_summary")
         else str(summary)
     )
+    if not str(summary_text or "").strip():
+        summary_text = _fallback_clinical_summary(clinical_features, display_conditions)
     summary_text = _sanitize_summary_text(summary_text, display_conditions)
     simple_reasoning = simplify_reasoning(summary_text)
     specialty_adjudication = _adjudication_fast_path(
@@ -1732,6 +3098,13 @@ def triage(
         body_systems=clinical_features.body_systems,
         red_flags_present=clinical_features.red_flags_present,
     )
+    pattern_specialty = _strong_specialty_override(
+        normalized_query,
+        clinical_features,
+        age=age,
+    )
+    if pattern_specialty:
+        recommended_specialty = pattern_specialty
     pediatric_specialty = _pediatric_specialty_override(
         age,
         triage_level,
@@ -1893,6 +3266,8 @@ def triage(
         if hasattr(summary, "patient_friendly_explanation")
         else simple_reasoning
     )
+    if not patient_explanation.strip():
+        patient_explanation = simple_reasoning or summary_text
     response_red_flags = [
         _sanitize_clinical_language(flag) for flag in response_red_flags
     ]

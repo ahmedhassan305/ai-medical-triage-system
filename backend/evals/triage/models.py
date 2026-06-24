@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, model_validator
 Specialty = Literal[
     "Cardiology",
     "Neurology",
-    "Neurosurgery",
     "Internal Medicine",
     "Gastroenterology",
     "Dermatology",

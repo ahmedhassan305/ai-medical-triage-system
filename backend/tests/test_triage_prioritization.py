@@ -20,6 +20,7 @@ import pytest
 
 from app.core.config import get_settings
 from app.schemas.triage import TriageResponse
+from app.services.specialties import canonicalize_specialty
 from app.services.triage_service import clear_runtime_state, triage
 
 
@@ -188,6 +189,10 @@ class TriageEvaluation:
 
         actual_lower = actual.lower()
         expected_lower = expected.lower()
+        actual_canonical = canonicalize_specialty(actual)
+        expected_canonical = canonicalize_specialty(expected)
+        if actual_canonical and expected_canonical:
+            return actual_canonical == expected_canonical
 
         # Exact match
         if actual_lower == expected_lower:

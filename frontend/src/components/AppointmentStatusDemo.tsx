@@ -72,7 +72,15 @@ const PROTOTYPE_DOCTORS: DoctorProfileResponseDto[] = [
     created_at: "2024-01-15T10:00:00Z",
     updated_at: "2024-01-15T10:00:00Z",
   },
-];
+].map((doctor) => ({
+  consultation_fee: null,
+  insurance_providers: [],
+  payment_methods: ["Cash"],
+  offers_telemedicine: false,
+  rating: null,
+  review_count: 0,
+  ...doctor,
+}));
 
 // Prototype patients
 const PROTOTYPE_PATIENTS: PatientProfileResponseDto[] = [
@@ -220,7 +228,14 @@ function createPrototypeAppointments(): AppointmentResponseDto[] {
       scheduled_for: nextWeek.toISOString(),
       requested_at: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     },
-  ];
+  ].map((appointment) => ({
+    clinic_id: null,
+    slot_id: null,
+    visit_type: "clinic" as const,
+    video_url: null,
+    triage_summary: null,
+    ...appointment,
+  }));
 }
 
 type DemoViewType = "all" | "patient" | "doctor" | "admin";

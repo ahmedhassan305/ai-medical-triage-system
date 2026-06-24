@@ -7,6 +7,9 @@ from fastapi.testclient import TestClient
 from app.db.models import AppointmentSlot, DoctorProfile
 from app.db.session import SessionLocal
 from app.services.lab_pdf_extraction import extract_lab_values_from_text
+from app.services.medical_report_extraction import (
+    draft_medical_history_from_report_text,
+)
 from app.services.slot_booking import (
     ensure_demo_availability_for_all_doctors,
     generate_slots_for_doctor,
@@ -117,6 +120,54 @@ def test_lab_pdf_extraction_and_upload(client: TestClient) -> None:
     assert rejected.status_code == 422
 
 
+def test_medical_history_report_pdf_extracts_draft(client: TestClient) -> None:
+    headers = _register_and_login(client, "report-patient@example.com", "patient")
+    patient = _my_patient(client, headers)
+
+    pdf_bytes = (
+        b"%PDF-1.4\nDoctor report\nDiagnosis: Asthma. "
+        b"Notes: intermittent wheezing, uses inhaler.\n%%EOF"
+    )
+    response = client.post(
+        f"/api/v1/patients/{patient['id']}/medical-history/extract-report",
+        headers=headers,
+        files={"file": ("doctor-report.pdf", pdf_bytes, "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["category"] == "diagnosed_condition"
+    assert payload["title"] == "Asthma"
+    assert "wheezing" in payload["notes"]
+
+
+def test_medical_history_report_notes_skip_administrative_preamble() -> None:
+    report_text = (
+        "Case: MD 09 Physician: MD Date: August 8, 2009 "
+        "Medical Consultant: MD 1. Detailed Chronological Analysis: "
+        "The complaint initiated by the Arizona Medical Board alleges that "
+        "there was a failure to evaluate a patient, with syncope and a "
+        "thoracic aneurysm for an abdominal aneurysm. The patient was a "
+        "73 year old female with a history of hypertension, hypothyroidism "
+        "and depression who presented to the Hospital emergency department "
+        "on 03/16/2006 with the chief complaint of syncope. Two days prior "
+        "to admission, the patient passed out as she was getting out of "
+        "the shower. She admitted to experiencing at least one similar "
+        "episode previously. She also admitted to never having a medical "
+        "workup for this."
+    )
+
+    draft = draft_medical_history_from_report_text(report_text)
+
+    assert draft.category == "hospitalization"
+    assert draft.title == "syncope"
+    assert draft.notes.startswith("73-year-old female with history of hypertension")
+    assert "Emergency department visit" in draft.notes
+    assert "Fainting episode occurred" in draft.notes
+    assert "no previous medical workup documented" in draft.notes
+    assert "Arizona Medical Board" not in draft.notes
+
+
 def test_admin_can_edit_doctor_and_schedule(client: TestClient) -> None:
     admin_headers = _register_and_login(client, "schedule-admin@example.com", "admin")
     doctor_headers = _register_and_login(client, "schedule-doc@example.com", "doctor")
@@ -156,6 +207,55 @@ def test_admin_can_edit_doctor_and_schedule(client: TestClient) -> None:
     )
     assert schedules.status_code == 200
     assert schedules.json()[0]["start_time"] == "09:00:00"
+
+
+def test_doctor_can_manage_own_schedule_but_not_another_doctors_schedule(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client, "own-schedule-doc@example.com", "doctor"
+    )
+    doctor = _create_doctor(client, doctor_headers)
+    other_doctor_headers = _register_and_login(
+        client, "other-schedule-doc@example.com", "doctor"
+    )
+    other_doctor = _create_doctor(client, other_doctor_headers)
+
+    schedule = client.post(
+        f"/api/v1/doctors/{doctor['id']}/schedules",
+        headers=doctor_headers,
+        json={
+            "day_of_week": "monday",
+            "start_time": "10:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 30,
+            "location_label": "Demo Heart Clinic",
+            "is_active": True,
+        },
+    )
+    assert schedule.status_code == 201
+    assert schedule.json()["doctor_id"] == doctor["id"]
+
+    schedules = client.get(
+        f"/api/v1/doctors/{doctor['id']}/schedules",
+        headers=doctor_headers,
+    )
+    assert schedules.status_code == 200
+    assert schedules.json()[0]["day_of_week"] == "monday"
+
+    forbidden = client.post(
+        f"/api/v1/doctors/{other_doctor['id']}/schedules",
+        headers=doctor_headers,
+        json={
+            "day_of_week": "tuesday",
+            "start_time": "10:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 30,
+            "location_label": "Other Clinic",
+            "is_active": True,
+        },
+    )
+    assert forbidden.status_code == 403
 
 
 def test_availability_seed_is_idempotent(client: TestClient) -> None:

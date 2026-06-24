@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import type {
+  BodyDiagramTriageRequestDto,
   DoctorSuggestionDto,
   LabValueDto,
   ManagedPatientProfileCreateDto,
@@ -11,7 +12,14 @@ import type {
 } from "../api/dto";
 import { useLanguage } from "../i18n/useLanguage";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import {
+  ALEXANDRIA_AREAS,
+  composeResidenceLocation,
+  EGYPTIAN_GOVERNORATES,
+  splitResidenceLocation,
+} from "../lib/egyptianLocations";
 import { localizeUrgencyLevel } from "../lib/localizedDisplay";
+import BodySymptomSelector from "./BodySymptomSelector";
 import ClarificationPanel from "./ClarificationPanel";
 import DoctorCard from "./DoctorCard";
 import SectionPanel from "./SectionPanel";
@@ -44,6 +52,7 @@ type TriagePanelProps = {
     payload: ManagedPatientProfileCreateDto,
   ) => Promise<void>;
   onSubmit: () => void;
+  onBodyDiagramSubmit: (payload: BodyDiagramTriageRequestDto) => Promise<void>;
   onClarificationComplete: (result: TriageResponseDto) => void;
   onReserveAppointment?: (
     doctor: DoctorSuggestionDto,
@@ -61,6 +70,8 @@ type ManagedPatientFormState = {
   alcoholic: boolean;
   chronic_conditions: string;
 };
+
+type TriageInputMode = "text" | "body";
 
 const EMPTY_PATIENT_FORM: ManagedPatientFormState = {
   full_name: "",
@@ -158,6 +169,9 @@ function StaffPatientLookup({
   );
   const nationalIdInvalid =
     createForm.national_id.trim().length > 0 && parsedNationalId === null;
+  const createResidence = splitResidenceLocation(
+    createForm.current_governorate,
+  );
 
   function handleToggleCreateForm() {
     setShowCreateForm((current) => {
@@ -376,18 +390,53 @@ function StaffPatientLookup({
               <label htmlFor="triage-create-governorate">
                 {t("currentGovernorateResidence")}
               </label>
-              <input
+              <CustomSelect
                 id="triage-create-governorate"
-                value={createForm.current_governorate}
-                onChange={(event) =>
+                value={createResidence.governorate}
+                onChange={(value) =>
                   setCreateForm((current) => ({
                     ...current,
-                    current_governorate: event.target.value,
+                    current_governorate: composeResidenceLocation(value, ""),
                   }))
                 }
-                placeholder={parsedNationalId?.governorate || t("optionalOverride")}
+                options={[
+                  {
+                    value: "",
+                    label: parsedNationalId?.governorate || "Select governorate",
+                  },
+                  ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                    value: governorate,
+                    label: governorate,
+                  })),
+                ]}
               />
             </div>
+
+            {createResidence.governorate === "Alexandria" ? (
+              <div className="field">
+                <label htmlFor="triage-create-area">Area</label>
+                <CustomSelect
+                  id="triage-create-area"
+                  value={createResidence.area}
+                  onChange={(value) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      current_governorate: composeResidenceLocation(
+                        "Alexandria",
+                        value,
+                      ),
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "Select area" },
+                    ...ALEXANDRIA_AREAS.map((area) => ({
+                      value: area,
+                      label: area,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
 
             <div className="field field--full">
               <label htmlFor="triage-create-conditions">{t("medicalHistory")}</label>
@@ -486,16 +535,13 @@ export default function TriagePanel({
   onClearLinkedPatient,
   onCreatePatientProfile,
   onSubmit,
+  onBodyDiagramSubmit,
   onClarificationComplete,
   onReserveAppointment,
 }: TriagePanelProps) {
-  const { t } = useLanguage();
-  const urgencyLabel =
-    ["low", "medium", "high"].includes(
-      result?.urgency_label.trim().toLowerCase() ?? "",
-    )
-      ? localizeUrgencyLevel(result?.urgency_label ?? "", t)
-      : result?.urgency_label ?? "";
+  const { t, language } = useLanguage();
+  const [inputMode, setInputMode] = useState<TriageInputMode>("text");
+  const activePatientId = patientProfile?.id ?? linkedPatient?.id ?? null;
 
   return (
     <SectionPanel
@@ -550,16 +596,54 @@ export default function TriagePanel({
         />
       )}
 
-      <TriageForm
-        query={query}
-        loading={loading}
-        labValues={labValues}
-        labLoading={labLoading}
-        labError={labError}
-        onQueryChange={onQueryChange}
-        onLabFileChange={onLabFileChange}
-        onSubmit={onSubmit}
-      />
+      <section className="result-card triage-input-switcher">
+        <div className="result-card__meta">
+          <div>
+            <p className="micro-label">Assessment method</p>
+            <h3>
+              {inputMode === "text"
+                ? "Describe symptoms in your own words"
+                : "Use the body symptom checker"}
+            </h3>
+          </div>
+          <div className="segmented-control" aria-label="Choose triage input method">
+            <button
+              type="button"
+              className={inputMode === "text" ? "is-active" : ""}
+              onClick={() => setInputMode("text")}
+            >
+              Text
+            </button>
+            <button
+              type="button"
+              className={inputMode === "body" ? "is-active" : ""}
+              onClick={() => setInputMode("body")}
+            >
+              Body checker
+            </button>
+          </div>
+        </div>
+
+        {inputMode === "text" ? (
+          <TriageForm
+            query={query}
+            loading={loading}
+            labValues={labValues}
+            labLoading={labLoading}
+            labError={labError}
+            onQueryChange={onQueryChange}
+            onLabFileChange={onLabFileChange}
+            onSubmit={onSubmit}
+          />
+        ) : (
+          <BodySymptomSelector
+            loading={loading}
+            patientId={activePatientId}
+            language={language}
+            onSubmit={onBodyDiagramSubmit}
+          />
+        )}
+      </section>
 
       {error ? <div className="notice notice--error">{error}</div> : null}
 
@@ -585,10 +669,9 @@ export default function TriagePanel({
             <div className="stack-md">
               <div>
                 <p className="micro-label">{t("status")}</p>
-                <h3 className="result-title" dir="auto">
-                  {urgencyLabel}
-                </h3>
-                <p dir="auto">{result.patient_friendly_explanation}</p>
+                <p className="result-title" dir="auto">
+                  {result.patient_friendly_explanation}
+                </p>
               </div>
 
               {result.urgency_reason ? (
@@ -619,6 +702,18 @@ export default function TriagePanel({
               ) : null}
             </div>
           </section>
+
+          {result.urgency_level === "high" ? (
+            <section className="result-card result-card--emergency">
+              <p className="micro-label">Emergency priority</p>
+              <h3>Seek emergency care now</h3>
+              <p dir="auto">
+                These symptoms include high-risk features. Use doctor booking only
+                after urgent care is arranged or if a clinician tells you outpatient
+                follow-up is appropriate.
+              </p>
+            </section>
+          ) : null}
 
           <div className="result-grid">
             <section className="result-card">

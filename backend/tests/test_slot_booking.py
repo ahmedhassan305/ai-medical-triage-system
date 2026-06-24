@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -8,6 +8,23 @@ from app.db.models import AppointmentSlot, Clinic, DoctorClinic, DoctorSchedule
 from app.db.session import SessionLocal
 
 DEFAULT_PASSWORD = "password123"
+
+
+def _future_date(days: int = 1) -> date:
+    return date.today() + timedelta(days=days)
+
+
+def _future_demo_workday() -> date:
+    candidate = _future_date()
+    while candidate.strftime("%A").lower() not in {
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+    }:
+        candidate += timedelta(days=1)
+    return candidate
 
 
 def _register_and_login(
@@ -114,7 +131,7 @@ def test_doctor_slots_are_generated_from_schedule(client: TestClient) -> None:
         role="doctor",
     )
     doctor = _create_doctor_profile(client, doctor_headers, specialty="Cardiology")
-    target_date = date.today()
+    target_date = _future_date()
     _configure_schedule(doctor["id"], target_date=target_date)
 
     patient_headers = _register_and_login(
@@ -147,7 +164,7 @@ def test_doctor_slots_use_deterministic_demo_fallback_when_no_schedule(
         role="doctor",
     )
     doctor = _create_doctor_profile(client, doctor_headers, specialty="Pediatrics")
-    target_date = date(2026, 5, 18)
+    target_date = _future_demo_workday()
 
     patient_headers = _register_and_login(
         client,
@@ -166,11 +183,76 @@ def test_doctor_slots_use_deterministic_demo_fallback_when_no_schedule(
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 16
-    assert payload[0]["start_at"] == "2026-05-18T09:00:00"
-    assert payload[-1]["end_at"] == "2026-05-18T17:00:00"
+    assert payload[0]["start_at"] == f"{target_date.isoformat()}T09:00:00"
+    assert payload[-1]["end_at"] == f"{target_date.isoformat()}T17:00:00"
 
 
-def test_slot_booking_reserves_slot_and_blocks_double_booking(
+def test_expired_open_slots_are_removed_and_not_returned(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="expired-slot-doctor@example.com",
+        role="doctor",
+    )
+    doctor = _create_doctor_profile(client, doctor_headers, specialty="Cardiology")
+    _configure_schedule(doctor["id"], target_date=_future_date())
+
+    patient_headers = _register_and_login(
+        client,
+        email="expired-slot-patient@example.com",
+        role="patient",
+    )
+
+    expired_start = datetime.now() - timedelta(hours=2)
+    expired_end = expired_start + timedelta(minutes=30)
+    db = SessionLocal()
+    try:
+        doctor_clinic = (
+            db.query(DoctorClinic)
+            .filter(DoctorClinic.doctor_id == doctor["id"])
+            .first()
+        )
+        assert doctor_clinic is not None
+        expired_slot = AppointmentSlot(
+            doctor_clinic_id=doctor_clinic.id,
+            start_at=expired_start,
+            end_at=expired_end,
+            status="open",
+        )
+        db.add(expired_slot)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/api/v1/doctors/{doctor['id']}/slots",
+        headers=patient_headers,
+        params={
+            "start_date": expired_start.date().isoformat(),
+            "end_date": _future_date().isoformat(),
+        },
+    )
+
+    assert response.status_code == 200
+    assert all(
+        datetime.fromisoformat(slot["start_at"]) > datetime.now()
+        for slot in response.json()
+    )
+
+    db = SessionLocal()
+    try:
+        assert (
+            db.query(AppointmentSlot)
+            .filter(AppointmentSlot.start_at == expired_start)
+            .first()
+            is None
+        )
+    finally:
+        db.close()
+
+
+def test_slot_booking_confirms_slot_and_blocks_double_booking(
     client: TestClient,
 ) -> None:
     doctor_headers = _register_and_login(
@@ -179,7 +261,7 @@ def test_slot_booking_reserves_slot_and_blocks_double_booking(
         role="doctor",
     )
     doctor = _create_doctor_profile(client, doctor_headers, specialty="Neurology")
-    target_date = date.today()
+    target_date = _future_date()
     _configure_schedule(doctor["id"], target_date=target_date)
 
     patient_headers = _register_and_login(
@@ -213,7 +295,8 @@ def test_slot_booking_reserves_slot_and_blocks_double_booking(
     booking_payload = booking_response.json()
     assert booking_payload["slot_id"] == slot["id"]
     assert booking_payload["clinic"]["name"] == "Alex Clinic"
-    assert booking_payload["slot"]["status"] == "reserved"
+    assert booking_payload["status"] == "approved"
+    assert booking_payload["slot"]["status"] == "booked"
     assert booking_payload["scheduled_for"] == slot["start_at"]
 
     db = SessionLocal()
@@ -222,7 +305,7 @@ def test_slot_booking_reserves_slot_and_blocks_double_booking(
             db.query(AppointmentSlot).filter(AppointmentSlot.id == slot["id"]).first()
         )
         assert stored_slot is not None
-        assert stored_slot.status == "reserved"
+        assert stored_slot.status == "booked"
     finally:
         db.close()
 
@@ -238,19 +321,84 @@ def test_slot_booking_reserves_slot_and_blocks_double_booking(
         json={
             "patient_id": second_patient["id"],
             "doctor_id": doctor["id"],
-            "reason": "Trying to take a reserved slot",
+            "reason": "Trying to take a booked slot",
             "slot_id": slot["id"],
         },
     )
     assert second_booking_response.status_code == 409
 
-    approval_response = client.patch(
-        f"/api/v1/appointments/{booking_payload['id']}/status",
-        headers=doctor_headers,
-        json={"status": "approved"},
+
+def test_doctor_can_book_selected_patient_into_own_slot_only(
+    client: TestClient,
+) -> None:
+    doctor_headers = _register_and_login(
+        client,
+        email="doctor-books-own-slot@example.com",
+        role="doctor",
     )
-    assert approval_response.status_code == 200
-    assert approval_response.json()["slot"]["status"] == "booked"
+    doctor = _create_doctor_profile(
+        client,
+        doctor_headers,
+        specialty="Internal Medicine",
+    )
+    target_date = _future_date()
+    _configure_schedule(doctor["id"], target_date=target_date)
+
+    other_doctor_headers = _register_and_login(
+        client,
+        email="doctor-books-other-slot@example.com",
+        role="doctor",
+    )
+    other_doctor = _create_doctor_profile(
+        client,
+        other_doctor_headers,
+        specialty="Internal Medicine",
+    )
+
+    patient_headers = _register_and_login(
+        client,
+        email="doctor-booked-patient@example.com",
+        role="patient",
+    )
+    patient = _get_my_patient_profile(client, patient_headers)
+
+    slots_response = client.get(
+        f"/api/v1/doctors/{doctor['id']}/slots",
+        headers=doctor_headers,
+        params={
+            "start_date": target_date.isoformat(),
+            "end_date": target_date.isoformat(),
+        },
+    )
+    assert slots_response.status_code == 200
+    slot = slots_response.json()[0]
+
+    booking_response = client.post(
+        "/api/v1/appointments/",
+        headers=doctor_headers,
+        json={
+            "patient_id": patient["id"],
+            "doctor_id": doctor["id"],
+            "reason": "Doctor scheduled follow-up",
+            "slot_id": slot["id"],
+        },
+    )
+    assert booking_response.status_code == 200
+    payload = booking_response.json()
+    assert payload["patient_id"] == patient["id"]
+    assert payload["doctor_id"] == doctor["id"]
+    assert payload["status"] == "approved"
+
+    forbidden_response = client.post(
+        "/api/v1/appointments/",
+        headers=doctor_headers,
+        json={
+            "patient_id": patient["id"],
+            "doctor_id": other_doctor["id"],
+            "reason": "Trying another doctor's schedule",
+        },
+    )
+    assert forbidden_response.status_code == 403
 
 
 def test_booking_slot_rejects_wrong_clinic(client: TestClient) -> None:
@@ -260,7 +408,7 @@ def test_booking_slot_rejects_wrong_clinic(client: TestClient) -> None:
         role="doctor",
     )
     doctor = _create_doctor_profile(client, doctor_headers, specialty="ENT")
-    target_date = date.today()
+    target_date = _future_date()
     _configure_schedule(doctor["id"], target_date=target_date)
 
     patient_headers = _register_and_login(
@@ -303,7 +451,7 @@ def test_legacy_booking_rejects_time_outside_doctor_availability(
         role="doctor",
     )
     doctor = _create_doctor_profile(client, doctor_headers, specialty="Cardiology")
-    target_date = date.today()
+    target_date = _future_date()
     _configure_schedule(doctor["id"], target_date=target_date)
 
     patient_headers = _register_and_login(
@@ -335,7 +483,7 @@ def test_legacy_appointment_creation_keeps_working_and_includes_clinic_info(
         role="doctor",
     )
     doctor = _create_doctor_profile(client, doctor_headers, specialty="Dermatology")
-    target_date = date.today()
+    target_date = _future_date()
     clinic_id = _configure_schedule(doctor["id"], target_date=target_date)
 
     patient_headers = _register_and_login(
@@ -358,5 +506,6 @@ def test_legacy_appointment_creation_keeps_working_and_includes_clinic_info(
     assert response.status_code == 200
     payload = response.json()
     assert payload["slot_id"] is None
+    assert payload["status"] == "approved"
     assert payload["clinic_id"] == clinic_id
     assert payload["clinic"]["name"] == "Alex Clinic"

@@ -28,15 +28,6 @@ export const MEDICAL_SPECIALTY_GROUPS = [
     ],
   },
   {
-    label: "Neurosurgery",
-    scopes: [
-      "General Neurosurgery",
-      "Spine Surgery",
-      "Brain Tumor Surgery",
-      "Functional Neurosurgery",
-    ],
-  },
-  {
     label: "Gastroenterology",
     scopes: [
       "General Gastroenterology",

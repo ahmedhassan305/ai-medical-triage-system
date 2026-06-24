@@ -219,6 +219,21 @@ export default function VisitsPanel({
                         <strong>{t("notes")}:</strong> {visit.prescriptions}
                       </p>
                     ) : null}
+                    {visit.follow_up_due_on ? (
+                      <p>
+                        <strong>Follow-up due:</strong> {visit.follow_up_due_on}
+                      </p>
+                    ) : null}
+                    {visit.follow_up_recommendations?.length ? (
+                      <div className="callout callout--next-step">
+                        <p className="micro-label">Follow-up plan</p>
+                        <ul className="list">
+                          {visit.follow_up_recommendations.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </article>
                 ))
               )}
@@ -274,6 +289,21 @@ export default function VisitsPanel({
                     <p>
                       <strong>{t("notes")}:</strong> {visit.prescriptions}
                     </p>
+                  ) : null}
+                  {visit.follow_up_due_on ? (
+                    <p>
+                      <strong>Follow-up due:</strong> {visit.follow_up_due_on}
+                    </p>
+                  ) : null}
+                  {visit.follow_up_recommendations?.length ? (
+                    <div className="callout callout--next-step">
+                      <p className="micro-label">Follow-up plan</p>
+                      <ul className="list">
+                        {visit.follow_up_recommendations.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
                   ) : null}
                 </article>
               ))

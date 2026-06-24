@@ -64,9 +64,10 @@ def get_optional_current_user(
 def require_roles(*allowed_roles: str) -> Callable[[User], User]:
     def _dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in allowed_roles:
+            allowed = ", ".join(allowed_roles)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions.",
+                detail=f"This action is available only for: {allowed}.",
             )
         return current_user
 

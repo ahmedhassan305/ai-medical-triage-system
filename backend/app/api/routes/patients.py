@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from app.schemas.patient import (
     ManagedPatientProfileCreate,
     PatientMedicalHistoryEntryCreate,
     PatientMedicalHistoryEntryResponse,
+    PatientMedicalHistoryReportExtractionResponse,
     PatientProfileResponse,
     PatientProfileUpsert,
 )
@@ -20,8 +21,14 @@ from app.services.egyptian_national_id import (
     calculate_age,
     parse_egyptian_national_id,
 )
+from app.services.medical_report_extraction import (
+    draft_medical_history_from_report_text,
+    extract_report_text,
+)
 
 router = APIRouter(prefix="/patients", tags=["patients"])
+
+MAX_REPORT_UPLOAD_BYTES = 8 * 1024 * 1024
 
 
 @router.get("/", response_model=list[PatientProfileResponse])
@@ -234,6 +241,40 @@ def create_patient_medical_history(
     return PatientMedicalHistoryEntryResponse.model_validate(
         entry,
         from_attributes=True,
+    )
+
+
+@router.post(
+    "/{patient_id}/medical-history/extract-report",
+    response_model=PatientMedicalHistoryReportExtractionResponse,
+)
+async def extract_patient_medical_history_report(
+    patient_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("patient", "doctor", "admin")),
+) -> PatientMedicalHistoryReportExtractionResponse:
+    ensure_patient_profile_access(db, current_user, patient_id)
+    content = await file.read()
+    if len(content) > MAX_REPORT_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Report file is too large.")
+
+    try:
+        text, warning = extract_report_text(
+            content,
+            filename=file.filename or "report",
+            content_type=file.content_type,
+        )
+        draft = draft_medical_history_from_report_text(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return PatientMedicalHistoryReportExtractionResponse(
+        filename=file.filename or "report",
+        category=draft.category,
+        title=draft.title,
+        notes=draft.notes,
+        warning=warning or draft.warning,
     )
 
 

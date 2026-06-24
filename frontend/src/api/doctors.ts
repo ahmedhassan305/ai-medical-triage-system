@@ -52,9 +52,16 @@ export async function updateDoctorProfile(
 
 export async function listDoctorSlots(
   doctorId: number,
+  filters: { startDate?: string; endDate?: string } = {},
 ): Promise<AppointmentSlotDto[]> {
   const response = await api.get<AppointmentSlotDto[]>(
     apiPaths.doctors.slots(doctorId),
+    {
+      params: {
+        start_date: filters.startDate,
+        end_date: filters.endDate,
+      },
+    },
   );
   return response.data;
 }
