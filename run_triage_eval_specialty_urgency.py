@@ -23,6 +23,29 @@ from app.services.specialties import (  # noqa: E402
 DATASET_PATH = ROOT / "triage_eval_all_specialties_cases.json"
 RESULTS_CSV = ROOT / "triage_eval_results.csv"
 SUMMARY_JSON = ROOT / "triage_eval_summary.json"
+RESULT_FIELDNAMES = [
+    "case_id",
+    "specialty_group",
+    "difficulty",
+    "patient_age",
+    "patient_gender",
+    "expected_specialty",
+    "predicted_specialty",
+    "expected_urgency",
+    "predicted_urgency",
+    "specialty_match",
+    "urgency_match",
+    "exact_match",
+    "needs_clarification",
+    "clarification_followed",
+    "clarification_question_count",
+    "api_error",
+    "status",
+    "input_text",
+    "expected_condition_hint",
+    "red_flags_present",
+    "reason_for_label",
+]
 
 # Edit these constants or set env vars when your backend uses another host/port.
 BASE_URL = os.getenv("TRIAGE_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
@@ -287,77 +310,79 @@ def run_eval() -> None:
 
     rows: list[dict[str, Any]] = []
     started = time.time()
-    for index, case in enumerate(cases, start=1):
-        expected_specialty = case["expected_specialty"]
-        expected_urgency = case["expected_urgency"]
-        predicted_specialty = None
-        predicted_urgency = None
-        error = ""
-        status = "ok"
-        needs_clarification = False
-        clarification_followed = False
-        clarification_question_count = 0
-
-        try:
-            response = post_triage(case)
-            needs_clarification = bool(response.get("needs_clarification"))
-            questions = response.get("questions")
-            clarification_question_count = (
-                len(questions) if isinstance(questions, list) else 0
-            )
-            response, clarification_followed = final_response_for_scoring(
-                case, response
-            )
-            predicted_specialty = extract_predicted_specialty(response)
-            predicted_urgency = extract_predicted_urgency(response)
-        except (
-            urllib.error.URLError,
-            TimeoutError,
-            ValueError,
-            json.JSONDecodeError,
-        ) as exc:
-            status = "api_error"
-            error = str(exc)
-        except Exception as exc:  # noqa: BLE001
-            status = "api_error"
-            error = f"{type(exc).__name__}: {exc}"
-
-        specialty_match = predicted_specialty == expected_specialty
-        urgency_match = predicted_urgency == expected_urgency
-        row = {
-            "case_id": case["case_id"],
-            "specialty_group": case["specialty_group"],
-            "difficulty": case["difficulty"],
-            "patient_age": case["patient_age"],
-            "patient_gender": case["patient_gender"],
-            "expected_specialty": expected_specialty,
-            "predicted_specialty": predicted_specialty or "",
-            "expected_urgency": expected_urgency,
-            "predicted_urgency": predicted_urgency or "",
-            "specialty_match": specialty_match,
-            "urgency_match": urgency_match,
-            "exact_match": specialty_match and urgency_match,
-            "needs_clarification": needs_clarification,
-            "clarification_followed": clarification_followed,
-            "clarification_question_count": clarification_question_count,
-            "api_error": error,
-            "status": status,
-            "input_text": case["input_text"],
-            "expected_condition_hint": case["expected_condition_hint"],
-            "red_flags_present": case["red_flags_present"],
-            "reason_for_label": case["reason_for_label"],
-        }
-        rows.append(row)
-
-        if index % 25 == 0 or index == len(cases):
-            elapsed = time.time() - started
-            print(f"Processed {index}/{len(cases)} cases in {elapsed:.1f}s")
-
-    fieldnames = list(rows[0]) if rows else []
     with RESULTS_CSV.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=RESULT_FIELDNAMES)
         writer.writeheader()
-        writer.writerows(rows)
+        handle.flush()
+        print(f"Streaming case results to {RESULTS_CSV.name}")
+
+        for index, case in enumerate(cases, start=1):
+            expected_specialty = case["expected_specialty"]
+            expected_urgency = case["expected_urgency"]
+            predicted_specialty = None
+            predicted_urgency = None
+            error = ""
+            status = "ok"
+            needs_clarification = False
+            clarification_followed = False
+            clarification_question_count = 0
+
+            try:
+                response = post_triage(case)
+                needs_clarification = bool(response.get("needs_clarification"))
+                questions = response.get("questions")
+                clarification_question_count = (
+                    len(questions) if isinstance(questions, list) else 0
+                )
+                response, clarification_followed = final_response_for_scoring(
+                    case, response
+                )
+                predicted_specialty = extract_predicted_specialty(response)
+                predicted_urgency = extract_predicted_urgency(response)
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
+                status = "api_error"
+                error = str(exc)
+            except Exception as exc:  # noqa: BLE001
+                status = "api_error"
+                error = f"{type(exc).__name__}: {exc}"
+
+            specialty_match = predicted_specialty == expected_specialty
+            urgency_match = predicted_urgency == expected_urgency
+            row = {
+                "case_id": case["case_id"],
+                "specialty_group": case["specialty_group"],
+                "difficulty": case["difficulty"],
+                "patient_age": case["patient_age"],
+                "patient_gender": case["patient_gender"],
+                "expected_specialty": expected_specialty,
+                "predicted_specialty": predicted_specialty or "",
+                "expected_urgency": expected_urgency,
+                "predicted_urgency": predicted_urgency or "",
+                "specialty_match": specialty_match,
+                "urgency_match": urgency_match,
+                "exact_match": specialty_match and urgency_match,
+                "needs_clarification": needs_clarification,
+                "clarification_followed": clarification_followed,
+                "clarification_question_count": clarification_question_count,
+                "api_error": error,
+                "status": status,
+                "input_text": case["input_text"],
+                "expected_condition_hint": case["expected_condition_hint"],
+                "red_flags_present": case["red_flags_present"],
+                "reason_for_label": case["reason_for_label"],
+            }
+            rows.append(row)
+            writer.writerow(row)
+            handle.flush()
+
+            if index % 25 == 0 or index == len(cases):
+                elapsed = time.time() - started
+                print(f"Processed {index}/{len(cases)} cases in {elapsed:.1f}s")
 
     summary = summarize(rows)
     with SUMMARY_JSON.open("w", encoding="utf-8", newline="\n") as handle:
