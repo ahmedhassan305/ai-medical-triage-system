@@ -13,7 +13,7 @@
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4_K_M}
       REASONER_MODE: ${REASONER_MODE:-ollama}
       STRICT_REASONER: ${STRICT_REASONER:-false}
       RAG_RETRIEVER: ${RAG_RETRIEVER:-tfidf}
@@ -49,7 +49,7 @@
               count: all
               capabilities: [gpu]
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3:8b-instruct-q4_K_M}
       OLLAMA_KEEP_ALIVE: -1
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -64,7 +64,11 @@
           fi
           wait "$$pid"
     healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q \"$${OLLAMA_MODEL:-llama3.2}\""]
+      test:
+        [
+          "CMD-SHELL",
+          "ollama list | grep -q \"$${OLLAMA_MODEL:-llama3:8b-instruct-q4_K_M}\"",
+        ]
       interval: 20s
       timeout: 10s
       retries: 15

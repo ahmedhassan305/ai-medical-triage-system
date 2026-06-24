@@ -21,10 +21,17 @@ import {
   upsertMyPatientProfile,
 } from "../api/patients";
 import { importRecords } from "../api/records";
-import { extractLabPdf, triage, type TriageResponse } from "../api/triage";
+import {
+  extractLabPdf,
+  triage,
+  triageBodyDiagram,
+  type TriageResponse,
+} from "../api/triage";
 import { createVisit, listPatientVisits, listWorkspaceVisits } from "../api/visits";
 import type {
   AppointmentResponseDto,
+  BodyDiagramTriageRequestDto,
+  DoctorProfileUpsertDto,
   DoctorSuggestionDto,
   DoctorProfileResponseDto,
   LabValueDto,
@@ -49,6 +56,7 @@ import {
   buildAppointmentPrefill,
   type AppointmentPrefill,
 } from "../lib/appointmentPrefill";
+import { summarizeBodyDiagramInput } from "../lib/bodySymptomMap";
 import { useLanguage } from "../i18n/useLanguage";
 import { clearSession, readSession, writeSession } from "../lib/session";
 
@@ -109,30 +117,6 @@ export default function HomePage() {
     useState(false);
   const [triagePatientCreateError, setTriagePatientCreateError] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    if (user.role === "patient" && selectedTab === "records") {
-      setSelectedTab("overview");
-    }
-  }, [selectedTab, user]);
-
-  useEffect(() => {
-    if (!user || user.role === "patient") {
-      return;
-    }
-    if (!selectedPatientId) {
-      setTriageLinkedPatient(null);
-      setTriageLinkedPatientLatestVisit(null);
-      return;
-    }
-    const matchedPatient =
-      patients.find((patient) => patient.id === selectedPatientId) ?? null;
-    setTriageLinkedPatient(matchedPatient);
-  }, [patients, selectedPatientId, user]);
 
   function resetWorkspace() {
     clearSession();
@@ -367,13 +351,7 @@ export default function HomePage() {
     }
   }
 
-  async function handleSaveDoctorProfile(payload: {
-    full_name: string;
-    specialty: string;
-    clinic: string;
-    area?: string | null;
-    city?: string | null;
-  }) {
+  async function handleSaveDoctorProfile(payload: DoctorProfileUpsertDto) {
     if (!session) {
       return;
     }
@@ -404,6 +382,25 @@ export default function HomePage() {
       setTriageResult(result);
     } catch (error) {
       setTriageError(getErrorMessage(error, "Failed to run triage."));
+    } finally {
+      setTriageLoading(false);
+    }
+  }
+
+  async function handleRunBodyDiagramTriage(
+    payload: BodyDiagramTriageRequestDto,
+  ) {
+    setTriageLoading(true);
+    setTriageError(null);
+    setTriageResult(null);
+    setTriageQuery(summarizeBodyDiagramInput(payload));
+    try {
+      const result = await triageBodyDiagram(payload);
+      setTriageResult(result);
+    } catch (error) {
+      setTriageError(
+        getErrorMessage(error, "Failed to run body symptom triage."),
+      );
     } finally {
       setTriageLoading(false);
     }
@@ -498,10 +495,28 @@ export default function HomePage() {
     doctor_id: number;
     reason: string;
     notes?: string;
-    scheduled_for?: string | null;
-    clinic_id?: number | null;
     slot_id?: number | null;
+    visit_type: "clinic" | "video";
+    video_url?: string | null;
   }) {
+    if (user?.role === "doctor" && payload.doctor_id !== doctorProfile?.id) {
+      setAppointmentsError(
+        "Doctors can only book patients into their own schedule.",
+      );
+      return;
+    }
+
+    if (
+      user?.role !== "patient" &&
+      user?.role !== "admin" &&
+      user?.role !== "doctor"
+    ) {
+      setAppointmentsError(
+        "Only patient, doctor, and admin accounts can create bookings.",
+      );
+      return;
+    }
+
     setAppointmentsLoading(true);
     setAppointmentsError(null);
     try {
@@ -582,6 +597,18 @@ export default function HomePage() {
   }
 
   function handleSelectTab(tab: DashboardTab) {
+    if (currentUser.role === "patient" && tab === "records") {
+      startTransition(() => setSelectedTab("overview"));
+      return;
+    }
+    if (tab === "appointments") {
+      void listDoctors()
+        .then(setDoctors)
+        .catch(() => undefined);
+      void listAppointments()
+        .then(setAppointments)
+        .catch(() => undefined);
+    }
     startTransition(() => setSelectedTab(tab));
   }
 
@@ -599,9 +626,23 @@ export default function HomePage() {
   }
 
   const currentUser: UserResponseDto = user;
+  const activeSelectedTab =
+    currentUser.role === "patient" && selectedTab === "records"
+      ? "overview"
+      : selectedTab;
 
   const currentPatientId =
     currentUser.role === "patient" ? patientProfile?.id ?? null : selectedPatientId;
+  const selectedWorkspacePatient = selectedPatientId
+    ? patients.find((patient) => patient.id === selectedPatientId) ?? null
+    : null;
+  const currentTriageLinkedPatient =
+    currentUser.role === "patient"
+      ? patientProfile
+      : triageLinkedPatient ?? selectedWorkspacePatient;
+  const currentTriageLinkedPatientLatestVisit = currentTriageLinkedPatient
+    ? triageLinkedPatientLatestVisit
+    : null;
 
   const tabMeta: Record<
     DashboardTab,
@@ -642,7 +683,7 @@ export default function HomePage() {
   };
 
   function renderPanel() {
-    switch (selectedTab) {
+    switch (activeSelectedTab) {
       case "overview":
         return (
           <OverviewPanel
@@ -686,8 +727,8 @@ export default function HomePage() {
             error={triageError}
             result={triageResult}
             patientProfile={patientProfile}
-            linkedPatient={currentUser.role === "patient" ? patientProfile : triageLinkedPatient}
-            linkedPatientLatestVisit={triageLinkedPatientLatestVisit}
+            linkedPatient={currentTriageLinkedPatient}
+            linkedPatientLatestVisit={currentTriageLinkedPatientLatestVisit}
             patientLookupNationalId={triagePatientNationalId}
             patientLookupLoading={triagePatientLookupLoading}
             patientLookupError={triagePatientLookupError}
@@ -704,6 +745,7 @@ export default function HomePage() {
             onClearLinkedPatient={handleClearLinkedTriagePatient}
             onCreatePatientProfile={handleCreateManagedPatientProfile}
             onSubmit={handleRunTriage}
+            onBodyDiagramSubmit={handleRunBodyDiagramTriage}
             onClarificationComplete={setTriageResult}
             onReserveAppointment={
               currentUser.role === "doctor" ? undefined : handleReserveAppointment
@@ -718,6 +760,8 @@ export default function HomePage() {
             doctors={doctors}
             patients={patients}
             currentPatientId={currentPatientId}
+            currentPatientProfile={patientProfile}
+            currentDoctorId={doctorProfile?.id ?? null}
             appointments={appointments}
             loading={appointmentsLoading}
             error={appointmentsError}
@@ -767,11 +811,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="page-shell">
+    <div className={`page-shell ${currentUser.role === "patient" ? "role-patient" : ""}`}>
       <div className="dashboard-shell">
         <DashboardNav
           user={currentUser}
-          selectedTab={selectedTab}
+          selectedTab={activeSelectedTab}
           onSelectTab={handleSelectTab}
           onLogout={handleLogout}
         />
@@ -780,15 +824,10 @@ export default function HomePage() {
           <header className="dashboard-main__header">
             <div>
               <p className="dashboard-main__eyebrow">{t("liveCareWorkspace")}</p>
-              <h2>{tabMeta[selectedTab].title}</h2>
+              <h2>{tabMeta[activeSelectedTab].title}</h2>
               <p className="dashboard-main__copy">
-                {tabMeta[selectedTab].description}
+                {tabMeta[activeSelectedTab].description}
               </p>
-            </div>
-
-            <div className="status-bubble">
-              <span>{currentUser.role.toUpperCase()}</span>
-              <strong>{t("apiConnected")}</strong>
             </div>
           </header>
 

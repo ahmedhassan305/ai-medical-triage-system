@@ -105,7 +105,7 @@ class OllamaReasoner:
         self.host = (host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip(
             "/"
         )
-        self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
+        self.model = model or os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")
         self.timeout_seconds = timeout_seconds
 
     def ping(self) -> bool:
@@ -137,18 +137,21 @@ class OllamaReasoner:
             "prompt": prompt,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.0},
+            "options": {"temperature": 0.0, "num_predict": 1100},
         }
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.post(f"{self.host}/api/generate", json=payload)
                 response.raise_for_status()
             generated = str(response.json().get("response", "")).strip()
-            logger.info("reasoner_raw_json=%s", generated)
+            logger.info("reasoner_response_received length=%s", len(generated))
             parsed = _parse_reasoner_payload(generated)
             if parsed is not None:
                 return parsed
-            logger.warning("reasoner_parse_failed raw=%s", generated[:1000])
+            logger.warning(
+                "reasoner_parse_failed length=%s fallback=unavailable",
+                len(generated),
+            )
             raise TriageSystemUnavailable(
                 "The triage AI system is unresponsive right now. "
                 "Please try again shortly."
@@ -171,29 +174,29 @@ class OllamaReasoner:
         example_payload = {
             "urgency_level": "medium",
             "clinical_summary": (
-                "Respiratory symptoms with fever could reflect an acute lower "
-                "respiratory infection. The patient reports productive cough and "
-                "elevated temperature, consistent with pneumonia or acute "
-                "bronchitis based on retrieved medical literature."
+                "Chest tightness with shortness of breath and wheezing suggests "
+                "an acute breathing problem such as bronchospasm or an asthma-like "
+                "flare. Pneumonia is less supported if fever and cough are not "
+                "reported."
             ),
             "patient_friendly_explanation": (
-                "Your symptoms may be related to a chest or breathing infection. "
-                "Because you have fever and cough, it would be safer to speak "
-                "with a doctor soon rather than waiting several days."
+                "Your symptoms may be related to airway narrowing or irritation. "
+                "Because breathing symptoms can worsen, it would be safer to "
+                "speak with a doctor soon rather than waiting several days."
             ),
             "possible_conditions": [
                 {
-                    "name": "Pneumonia",
+                    "name": "Bronchospasm",
                     "explanation": (
-                        "Fever with persistent productive cough and respiratory "
-                        "findings can fit this pattern."
+                        "Wheezing with chest tightness and shortness of breath "
+                        "can fit airway narrowing."
                     ),
                 },
                 {
-                    "name": "Acute Bronchitis",
+                    "name": "Asthma exacerbation",
                     "explanation": (
-                        "Fever and productive cough are classic findings. "
-                        "Usually self-limited but medical review is prudent."
+                        "An asthma-like flare can cause wheezing and trouble "
+                        "breathing, even if asthma history is not yet known."
                     ),
                 },
             ],
@@ -204,18 +207,29 @@ class OllamaReasoner:
             ],
             "red_flags": ["trouble breathing", "blue lips", "coughing up blood"],
             "clinical_features": {
-                "chief_complaint": "cough",
-                "symptoms": ["cough", "fever"],
+                "chief_complaint": "breathing difficulty",
+                "symptoms": ["chest discomfort", "breathing difficulty", "wheezing"],
                 "body_systems": ["respiratory"],
                 "onset": "recent",
-                "duration": "2 days",
+                "duration": "since this morning",
                 "severity": "moderate",
                 "progression": "unknown",
                 "red_flags_present": [],
                 "red_flags_denied": [],
                 "risk_factors": [],
-                "missing_critical_details": ["whether breathing is difficult"],
+                "missing_critical_details": ["how severe the breathing difficulty is"],
             },
+            "clarification_questions": [
+                {
+                    "id": "breathing_severity",
+                    "question": "How severe is the breathing difficulty?",
+                    "options": [
+                        "Mild (can talk normally)",
+                        "Moderate (short sentences)",
+                        "Severe (can barely speak)",
+                    ],
+                }
+            ],
         }
         context_text = (
             "\n\n".join(contexts[:3]) if contexts else "No retrieved evidence."
@@ -254,7 +268,7 @@ class OllamaReasoner:
             '    "chief_complaint": "plain clinical concept or null",\n'
             '    "symptoms": ["normalized symptom 1", "normalized symptom 2"],\n'
             '    "body_systems": ["cardiac|respiratory|neurologic|"'
-            '"gastrointestinal|musculoskeletal|skin|mental_health|"'
+            '"gastrointestinal|genitourinary|musculoskeletal|skin|mental_health|"'
             '"ent|eye|general"],\n'
             '    "onset": "sudden|recent|longstanding|unknown",\n'
             '    "duration": "brief free-text duration or null",\n'
@@ -265,12 +279,20 @@ class OllamaReasoner:
             '    "risk_factors": ["risk factor"],\n'
             '    "missing_critical_details": ["missing detail that would "'
             '"change urgency or routing"]\n'
-            "  }\n"
+            "  },\n"
+            '  "clarification_questions": [\n'
+            '    {"id": "short_stable_id", "question": "one patient-facing "'
+            'question", "options": ["option 1", "option 2", "option 3"]}\n'
+            "  ]\n"
             "}\n\n"
             "Rules:\n"
             "- Treat retrieved evidence as supporting material, not as truth.\n"
             "- Use retrieved evidence ONLY when it clearly matches the "
             "patient's symptoms and context.\n"
+            "- Never copy symptoms from the example or references into the case. "
+            "Do not mention fever, productive cough, blood, palpitations, or "
+            "radiating pain unless the patient states them or patient context "
+            "clearly contains them.\n"
             "- If a retrieved article is weakly related, irrelevant, or "
             "conflicts with the symptoms, ignore it.\n"
             "- Do not list a condition only because it appears in retrieved "
@@ -283,8 +305,34 @@ class OllamaReasoner:
             "the differential broad.\n"
             "- Gastroenterology is ONLY for: vomiting blood, blood in stool, "
             "jaundice/yellow skin, liver disease, severe abdominal pain, "
-            "colonoscopy-related, bowel disease. Weight loss, fatigue, "
-            "general stomach discomfort = Internal Medicine.\n"
+            "colonoscopy-related, bowel disease, and anorectal symptoms such "
+            "as rectal/anal pain with hard stools or straining. Weight loss, "
+            "fatigue, general stomach discomfort = Internal Medicine.\n"
+            "- Pain during or after hard bowel movements, straining, or stool "
+            "passing most strongly suggests anorectal causes such as "
+            "hemorrhoids or anal fissure. Do not call this hip pain, hip "
+            "dysplasia, or chronic pelvic pain unless the patient explicitly "
+            "describes hip/pelvic location or walking-related hip symptoms.\n"
+            "- Jaundice/yellow eyes with abdominal swelling/ascites, dark urine, "
+            "confusion, bleeding, severe abdominal pain, or heavy alcohol/liver "
+            "context is potentially urgent. Do not describe it as needing "
+            "'immediate attention' while setting urgency_level to low or medium; "
+            "use high when emergency liver complications are suspected.\n"
+            "- Yellow eyes/yellowing of the eyes means jaundice unless the "
+            "patient describes a direct eye complaint such as eye pain, redness, "
+            "vision loss, or injury. Jaundice belongs to Gastroenterology, not "
+            "Ophthalmology.\n"
+            "- Do not list Esophageal varices unless there is vomiting blood, "
+            "black/bloody stool, known cirrhosis, or portal hypertension. "
+            "Varices with bleeding is an emergency.\n"
+            "- Do not list Acute liver failure unless there is a liver-danger "
+            "pattern such as jaundice plus confusion, bleeding/bruising, severe "
+            "abdominal pain, or rapidly worsening illness; if listed, urgency "
+            "must be high with emergency care actions.\n"
+            "- Do not list lung-only conditions for fatigue in a liver-first "
+            "presentation unless cough, wheeze, or shortness of breath is stated.\n"
+            "- Do not list Biliary atresia unless the patient is a newborn or "
+            "young infant. It should not be used for adult jaundice.\n"
             "- recommended_specialty MUST be exactly one of: "
             f"{allowed_specialties_prompt()}. No other values are allowed.\n"
             "- recommended_specialty is your preliminary best-fit specialty. "
@@ -293,6 +341,34 @@ class OllamaReasoner:
             "condition in the differential.\n"
             "- If the best doctor type is not in that list, choose the closest "
             "available specialty from the list. Do not invent specialties.\n"
+            "- Differentiate specialties by the dominant clinical problem, not "
+            "by isolated words or risk factors:\n"
+            "  * Family Medicine: mild common viral/primary-care symptoms, "
+            "low-grade fever, mild sore throat/runny nose, mild body aches, "
+            "or several mild non-specific symptoms without red flags.\n"
+            "  * Pediatrics: children, infants, toddlers, or patient age under "
+            "13 unless a specific urgent adult-style specialty clearly dominates.\n"
+            "  * ENT: ear pain/reduced hearing, nosebleed, sinus/facial pressure, "
+            "blocked nose with thick discharge, or painful swallowing when the "
+            "ENT complaint is the main problem.\n"
+            "  * Dermatology: rash, itching, hives, blisters, peeling skin, "
+            "skin infection signs, or changing mole when skin is the main problem.\n"
+            "  * Psychiatry: panic, severe anxiety, depression, hallucinations, "
+            "paranoia, self-harm thoughts, or unsafe behavior.\n"
+            "  * Internal Medicine: systemic/metabolic presentations such as "
+            "marked fatigue, unexplained weight loss, night sweats, diabetes-like "
+            "thirst/frequent urination/weight loss, severe blood-pressure concerns, "
+            "kidney/liver/endocrine concerns, or unclear multi-system illness.\n"
+            "- Do not route a mild runny nose/sore throat/low fever case to ENT "
+            "unless the ear/sinus/throat feature is clearly dominant or persistent.\n"
+            "- Do not route rash/itching to Pulmonology unless there is breathing "
+            "difficulty, wheezing, or allergic airway swelling.\n"
+            "- Do not route isolated knee, joint, or limb pain to Cardiology "
+            "because of smoking or alcohol history. Use Orthopedics unless "
+            "cardiac symptoms are stated.\n"
+            "- Do not route isolated mild abdominal pain to Neurology. Use "
+            "Gastroenterology for digestive/anorectal patterns or Internal "
+            "Medicine when vague/systemic.\n"
             "- For breathing/lung complaints such as wheezing, cough, asthma, "
             "bronchitis, pneumonia, or chest tightness with breathing trouble, "
             "use Pulmonology unless there is a clear heart-attack pattern.\n"
@@ -308,9 +384,14 @@ class OllamaReasoner:
             "- Chest tightness with wheezing, cough, fever, or breathing trouble "
             "should be treated as respiratory unless heart-pattern evidence is "
             "also present.\n"
+            "- Do not list Pneumonitis unless there is exposure/medication/"
+            "radiation context or several matching features such as dry cough, "
+            "fever, fatigue, appetite loss, or weight loss. Wheezing and "
+            "shortness of breath alone fit bronchospasm/asthma-like flare "
+            "better than pneumonitis.\n"
             "- Back, joint, muscle, sprain, strain, fracture, or non-emergency "
-            "spine pain should usually use Orthopedics; use Neurosurgery only "
-            "when there are major neurologic/spinal danger signs.\n"
+            "spine pain should usually use Orthopedics; use Neurology when "
+            "major neurologic deficits dominate.\n"
             "- possible_conditions must contain 1 to 3 specific medical conditions.\n"
             ""
             "- ALWAYS include the most likely specific condition name (e.g., "
@@ -324,10 +405,33 @@ class OllamaReasoner:
             "when the patient clearly says a warning sign is absent.\n"
             "- Keep clinical_features.missing_critical_details focused on "
             "information that would change urgency or specialty.\n"
+            "- clarification_questions must contain 0 to 3 targeted questions "
+            "that would change urgency, likely condition, or specialty.\n"
+            "- Do not ask a clarification question for information already "
+            "present in the patient's text. For example, if they say 'since "
+            "this morning', do not ask when it started.\n"
+            "- Do not ask breathing-severity questions for itching/rash unless "
+            "the patient reports swelling, wheezing, throat tightness, or "
+            "breathing difficulty.\n"
+            "- Do not ask duplicate questions. Prefer severity, danger signs, "
+            "spread/radiation, or function-limiting details when timing is known.\n"
+            "- For high urgency cases, clarification_questions should usually "
+            "be an empty list because the next step is urgent care.\n"
             "- Use wording such as 'possible condition' or 'may be related to'.\n"
             "- Do not overstate certainty.\n"
             "- Keep patient_friendly_explanation to 3 or 4 short sentences.\n"
-            "- If symptoms sound dangerous, set urgency_level to high.\n"
+            "- Urgency must match the actual danger pattern: mild rash/itching, "
+            "mild runny nose/sore throat, intermittent anorectal pain, or mild "
+            "brief abdominal discomfort without red flags is usually low; "
+            "function-limiting pain, fever with localized infection, child noisy "
+            "breathing, concerning skin infection, psychosis, or significant ENT "
+            "infection is usually medium; chest pain with breathlessness/sweating/"
+            "arm or jaw pain, stroke-like symptoms, self-harm risk, allergic "
+            "airway swelling, bowel/bladder loss with back pain, severe abdominal "
+            "pain with fever/vomiting/blood, or serious liver danger signs is high.\n"
+            "- If symptoms sound dangerous, set urgency_level to high. If they "
+            "do not contain a high-risk pattern, do not inflate urgency to high "
+            "just because a dangerous condition exists somewhere in the references.\n"
             "- Be explicit about clinical reasoning - name the specific "
             "conditions you are considering.\n\n"
             "Example JSON:\n"
@@ -358,6 +462,7 @@ def _parse_reasoner_payload(raw_text: str) -> StructuredReasoningOutput | None:
 
     try:
         payload = json.loads(candidate)
+        _normalize_reasoner_payload(payload)
         parsed = StructuredReasoningOutput.model_validate(payload)
         parsed.recommended_specialty = canonicalize_specialty(
             parsed.recommended_specialty
@@ -365,6 +470,88 @@ def _parse_reasoner_payload(raw_text: str) -> StructuredReasoningOutput | None:
         return parsed
     except Exception:
         return None
+
+
+def _normalize_reasoner_payload(payload: dict) -> None:
+    features = payload.get("clinical_features")
+    if isinstance(features, dict):
+        features["onset"] = _normalize_feature_choice(
+            features.get("onset"),
+            {
+                "sudden": ("sudden", "suddenly", "right now", "acute onset"),
+                "recent": (
+                    "recent",
+                    "today",
+                    "this morning",
+                    "yesterday",
+                    "hour",
+                    "hours",
+                    "day",
+                    "days",
+                    "week",
+                    "over several",
+                    "past few",
+                ),
+                "longstanding": ("longstanding", "chronic", "months", "years"),
+            },
+            "unknown",
+        )
+        features["severity"] = _normalize_feature_choice(
+            features.get("severity"),
+            {
+                "mild": ("mild", "slight"),
+                "moderate": ("moderate", "medium"),
+                "severe": ("severe", "bad", "intense", "cannot", "can't"),
+            },
+            "unknown",
+        )
+        features["progression"] = _normalize_feature_choice(
+            features.get("progression"),
+            {
+                "worsening": ("worsening", "worse", "getting worse"),
+                "improving": ("improving", "better", "getting better"),
+            },
+            "unknown",
+        )
+
+    for condition in payload.get("possible_conditions", []) or []:
+        if not isinstance(condition, dict):
+            continue
+        condition["likelihood"] = _normalize_feature_choice(
+            condition.get("likelihood"),
+            {
+                "more likely": ("more likely", "likely", "most likely"),
+                "possible": ("possible", "consider", "may"),
+                "less likely": ("less likely", "unlikely"),
+            },
+            "possible",
+        )
+
+    for index, question in enumerate(payload.get("clarification_questions", []) or []):
+        if not isinstance(question, dict):
+            continue
+        if not str(question.get("id") or "").strip():
+            question_text = str(question.get("question") or "clarification").lower()
+            slug = "".join(
+                character if character.isalnum() else "_" for character in question_text
+            ).strip("_")
+            question["id"] = (slug or f"clarification_{index + 1}")[:60]
+
+
+def _normalize_feature_choice(
+    value: object,
+    choices: dict[str, tuple[str, ...]],
+    default: str,
+) -> str:
+    text = str(value or "").strip().lower().replace("_", " ")
+    if not text:
+        return default
+    if text in choices:
+        return text
+    for normalized, terms in choices.items():
+        if any(term in text for term in terms):
+            return normalized
+    return default
 
 
 def _guess_conditions(query: str) -> list[ReasonerCondition]:

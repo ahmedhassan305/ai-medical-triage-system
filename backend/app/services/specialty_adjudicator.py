@@ -107,7 +107,7 @@ class OllamaSpecialtyAdjudicator:
         self.host = (host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip(
             "/"
         )
-        self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
+        self.model = model or os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")
         self.timeout_seconds = timeout_seconds
 
     def ping(self) -> bool:
@@ -146,16 +146,22 @@ class OllamaSpecialtyAdjudicator:
                         "prompt": prompt,
                         "stream": False,
                         "format": "json",
-                        "options": {"temperature": 0.0},
+                        "options": {"temperature": 0.0, "num_predict": 450},
                     },
                 )
                 response.raise_for_status()
             raw = str(response.json().get("response", "")).strip()
-            logger.info("specialty_adjudicator_raw_json=%s", raw)
+            logger.info(
+                "specialty_adjudicator_response_received length=%s",
+                len(raw),
+            )
             parsed = _parse_adjudication_payload(raw)
             if parsed and parsed.final_specialty:
                 return parsed
-            logger.warning("specialty_adjudicator_parse_failed raw=%s", raw[:1000])
+            logger.warning(
+                "specialty_adjudicator_parse_failed length=%s fallback=unavailable",
+                len(raw),
+            )
             raise TriageSystemUnavailable(
                 "The triage AI system is unresponsive right now. "
                 "Please try again shortly."
@@ -226,10 +232,33 @@ class OllamaSpecialtyAdjudicator:
             "features, or known acute coronary concern.\n"
             "- Back, joint, bone, muscle, strain, sprain, and non-emergency spine "
             "pain usually belong to Orthopedics. Spine symptoms with bladder/bowel "
-            "loss or major neurologic deficit may belong to Neurosurgery.\n"
+            "loss or major neurologic deficit need urgent care and may route to "
+            "Neurology depending on the dominant neurologic pattern.\n"
+            "- Isolated knee, limb, joint, or muscle symptoms should not be moved "
+            "to Cardiology because of smoking, alcohol, age, or risk factors alone.\n"
+            "- Rash, itching, hives, blisters, peeling skin, skin infection signs, "
+            "or changing mole belong to Dermatology unless allergic airway symptoms "
+            "or another dominant non-skin system is clearly present.\n"
+            "- Mild runny nose, mild sore throat, low-grade fever, mild body aches, "
+            "or several mild common viral symptoms usually belong to Family "
+            "Medicine, not ENT, unless a specific ear/sinus/throat problem clearly "
+            "dominates.\n"
+            "- ENT is best for ear pain/reduced hearing, nosebleed, sinus/facial "
+            "pressure, blocked nose with thick discharge, or painful swallowing "
+            "when that is the main complaint.\n"
+            "- Psychiatry is best for panic, severe anxiety, depression, "
+            "hallucinations, paranoia, self-harm thoughts, or unsafe behavior.\n"
+            "- Pediatrics is best when the patient is a child, infant, toddler, "
+            "or age under 13 unless a specific urgent specialty clearly dominates.\n"
             "- General, vague, multi-system, metabolic, diabetes-like, blood "
             "pressure, kidney, pregnancy, or unclear cases may belong to Internal "
             "Medicine or Family Medicine depending on specificity.\n"
+            "- Digestive, anorectal, liver, gallbladder, bowel, vomiting, stool, "
+            "or abdominal patterns usually belong to Gastroenterology; do not route "
+            "isolated abdominal symptoms to Neurology without neurologic signs.\n"
+            "- Yellow eyes/yellowing of the eyes should be treated as jaundice and "
+            "routed to Gastroenterology unless there is a direct eye complaint "
+            "such as eye pain, redness, vision loss, or eye injury.\n"
             "- Mark reference titles relevant only if they match the main likely "
             "condition/body system, not merely a shared word such as fever.\n\n"
             f"Patient symptoms/follow-up text:\n{query}\n\n"

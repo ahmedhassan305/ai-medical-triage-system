@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,8 @@ class VisitCreate(BaseModel):
     notes: str | None = None
     prescriptions: str | None = None
     attachments: list[str] | None = None
+    follow_up_recommendations: list[str] | None = None
+    follow_up_due_on: date | None = None
 
 
 class VisitResponse(VisitCreate):

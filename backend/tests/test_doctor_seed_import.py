@@ -176,7 +176,6 @@ def test_canonical_seed_file_has_expanded_public_directory_coverage() -> None:
     for required_specialty in {
         "Cardiology",
         "Neurology",
-        "Neurosurgery",
         "Internal Medicine",
         "Gastroenterology",
         "Dermatology",

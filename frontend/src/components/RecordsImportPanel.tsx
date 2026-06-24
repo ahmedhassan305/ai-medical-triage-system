@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { PatientProfileResponseDto } from "../api/dto";
 import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type RecordsImportPanelProps = {
   patients: PatientProfileResponseDto[];
@@ -89,22 +90,20 @@ export default function RecordsImportPanel({
         </div>
         <div className="field">
           <label htmlFor="records-patient">{t("patient")}</label>
-          <select
+          <CustomSelect
             id="records-patient"
-            value={selectedPatientId ?? ""}
-            onChange={(event) =>
-              onSelectPatient(
-                event.target.value ? Number(event.target.value) : null,
-              )
-            }
-          >
-            <option value="">{t("selectPatient")}</option>
-            {filteredPatients.map((patient) => (
-              <option key={patient.id} value={patient.id}>
-                {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
-              </option>
-            ))}
-          </select>
+            value={selectedPatientId ? String(selectedPatientId) : ""}
+            onChange={(value) => {
+              onSelectPatient(value ? Number(value) : null);
+            }}
+            options={[
+              { value: "", label: t("selectPatient") },
+              ...filteredPatients.map((patient) => ({
+                value: String(patient.id),
+                label: patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`,
+              })),
+            ]}
+          />
         </div>
 
         <div className="field">

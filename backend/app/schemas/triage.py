@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 TriageLevel = Literal["low", "medium", "high"]
+Language = Literal["en", "ar"]
 ConditionLikelihood = Literal[
     "more_likely",
     "more likely",
@@ -27,6 +28,11 @@ class DoctorSuggestion(BaseModel):
     booking_url: str | None = None
     earliest_available_slot: str | None = None
     rating: float | None = None
+    review_count: int = 0
+    offers_telemedicine: bool = False
+    consultation_fee: float | None = None
+    insurance_providers: list[str] = Field(default_factory=list)
+    payment_methods: list[str] = Field(default_factory=list)
     recommendation_reason: str | None = None
     distance_km: float | None = None
     specialty_match_reason: str | None = None
@@ -48,7 +54,45 @@ class SuspectedCondition(BaseModel):
 class TriageRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     patient_id: int | None = None
+    patient_age: int | None = Field(default=None, ge=0, le=130)
+    patient_gender: str | None = Field(default=None, max_length=20)
     lab_values: list[dict[str, str | None]] = Field(default_factory=list)
+    language: Language = "en"
+
+
+BodyRegion = Literal[
+    "head",
+    "face",
+    "neck",
+    "chest",
+    "abdomen",
+    "pelvis_urinary",
+    "back",
+    "shoulder",
+    "arm",
+    "hand_wrist",
+    "hip",
+    "leg",
+    "knee",
+    "foot_ankle",
+    "skin",
+]
+BodySeverity = Literal["mild", "moderate", "severe"]
+BodyOnset = Literal["sudden", "gradual", "after injury", "unknown"]
+BodyDuration = Literal["less than 1 hour", "today", "few days", "more than a week"]
+
+
+class BodyDiagramTriageRequest(BaseModel):
+    input_method: Literal["body_diagram"] = "body_diagram"
+    selected_body_region: BodyRegion
+    main_symptoms: list[str] = Field(min_length=1, max_length=8)
+    severity: BodySeverity
+    onset: BodyOnset
+    duration: BodyDuration
+    associated_symptoms: list[str] = Field(default_factory=list, max_length=8)
+    patient_free_text: str = Field(default="", max_length=800)
+    patient_id: int | None = None
+    language: Language = "en"
 
 
 class LabValue(BaseModel):
@@ -116,6 +160,9 @@ class ClarificationRequest(BaseModel):
     original_query: str
     answers: list[ClarificationAnswer]
     patient_id: int | None = None
+    patient_age: int | None = Field(default=None, ge=0, le=130)
+    patient_gender: str | None = Field(default=None, max_length=20)
+    language: Language = "en"
 
 
 class TriageAssessmentResponse(TriageResponse):
@@ -157,6 +204,7 @@ class StructuredReasoningOutput(BaseModel):
     recommended_actions: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)
     clinical_features: ClinicalFeatures | None = None
+    clarification_questions: list[ClarificationQuestion] = Field(default_factory=list)
 
 
 class RejectedSpecialty(BaseModel):

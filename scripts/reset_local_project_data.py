@@ -166,17 +166,6 @@ SPECIALTY_TEMPLATES = {
             "prescriptions": "Short NSAID course and posture modification.",
         },
     ],
-    "Neurosurgery": [
-        {
-            "reason": "Persistent lower back pain radiating to the leg",
-            "symptoms": (
-                "Lower back pain radiating to the right leg with prolonged sitting."
-            ),
-            "diagnosis": "Lumbar disc prolapse review",
-            "notes": "No motor deficit on exam, conservative management reviewed.",
-            "prescriptions": "Pain control and physiotherapy referral.",
-        },
-    ],
     "Internal Medicine": [
         {
             "reason": "Fatigue and recurrent low-grade fever",
@@ -294,7 +283,6 @@ SPECIALTY_WEIGHTS = {
     "Family Medicine": 6,
     "Ophthalmology": 5,
     "Psychiatry": 4,
-    "Neurosurgery": 3,
 }
 
 

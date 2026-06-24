@@ -66,6 +66,10 @@ export type DoctorProfileUpsertDto = {
   clinic: string;
   area?: string | null;
   city?: string | null;
+  consultation_fee?: number | null;
+  insurance_providers: string[];
+  payment_methods: string[];
+  offers_telemedicine: boolean;
 };
 
 export type DoctorProfileResponseDto = DoctorProfileUpsertDto & {
@@ -108,6 +112,8 @@ export type AppointmentCreateDto = {
   scheduled_for?: string | null;
   clinic_id?: number | null;
   slot_id?: number | null;
+  visit_type: "clinic" | "video";
+  video_url?: string | null;
 };
 
 export type AppointmentStatusUpdateDto = {
@@ -123,6 +129,15 @@ export type AppointmentResponseDto = AppointmentCreateDto & {
   requested_at: string;
   slot?: AppointmentSlotDto | null;
   clinic?: ClinicDto | null;
+  triage_summary?: {
+    triage_level: TriageLevel;
+    urgency_level: TriageLevel;
+    chief_complaint: string;
+    clinical_summary: string;
+    recommended_specialty?: string | null;
+    red_flags: string[];
+    suspected_conditions: SuspectedConditionDto[];
+  } | null;
 };
 
 export type VisitCreateDto = {
@@ -134,6 +149,8 @@ export type VisitCreateDto = {
   notes?: string | null;
   prescriptions?: string | null;
   attachments?: string[] | null;
+  follow_up_recommendations?: string[] | null;
+  follow_up_due_on?: string | null;
 };
 
 export type VisitResponseDto = VisitCreateDto & {
@@ -149,7 +166,39 @@ export type RecordsImportResultDto = {
 export type TriageRequestDto = {
   query: string;
   patient_id?: number;
+  patient_age?: number | null;
+  patient_gender?: string | null;
   lab_values?: LabValueDto[];
+  language?: "en" | "ar";
+};
+
+export type BodyRegionDto =
+  | "head"
+  | "face"
+  | "neck"
+  | "chest"
+  | "abdomen"
+  | "pelvis_urinary"
+  | "back"
+  | "shoulder"
+  | "arm"
+  | "hand_wrist"
+  | "hip"
+  | "leg"
+  | "knee"
+  | "foot_ankle"
+  | "skin";
+
+export type BodyDiagramTriageRequestDto = {
+  input_method: "body_diagram";
+  selected_body_region: BodyRegionDto;
+  main_symptoms: string[];
+  severity: "mild" | "moderate" | "severe";
+  onset: "sudden" | "gradual" | "after injury" | "unknown";
+  duration: "less than 1 hour" | "today" | "few days" | "more than a week";
+  associated_symptoms: string[];
+  patient_free_text: string;
+  patient_id?: number;
   language?: "en" | "ar";
 };
 
@@ -190,6 +239,14 @@ export type PatientMedicalHistoryEntryResponseDto =
     updated_at: string;
   };
 
+export type PatientMedicalHistoryReportExtractionDto = {
+  filename: string;
+  category: string;
+  title: string;
+  notes: string;
+  warning?: string | null;
+};
+
 export type LabValueDto = {
   lab_name: string;
   value: string;
@@ -217,6 +274,10 @@ export type DoctorSuggestionDto = {
   booking_url?: string | null;
   rating?: number | null;
   review_count?: number;
+  offers_telemedicine?: boolean;
+  consultation_fee?: number | null;
+  insurance_providers?: string[];
+  payment_methods?: string[];
   recommendation_reason?: string | null;
   distance_km?: number | null;
   specialty_match_reason?: string | null;

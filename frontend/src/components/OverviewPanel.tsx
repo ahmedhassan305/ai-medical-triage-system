@@ -33,7 +33,6 @@ type QuickAction = {
 const REQUIRED_SPECIALTIES = [
   "Cardiology",
   "Neurology",
-  "Neurosurgery",
   "Internal Medicine",
   "Gastroenterology",
   "Dermatology",
@@ -427,7 +426,7 @@ function PatientOverview({
                   <span>{formatDateTime(nextAppointment.scheduled_for)}</span>
                 </div>
               </div>
-              <div className="detail-list">
+              <div className="detail-list detail-list--appointment-summary">
                 <div>
                   <span>{t("doctor")}</span>
                   <strong>
@@ -438,7 +437,7 @@ function PatientOverview({
                   <span>{t("specialty")}</span>
                   <strong>{nextDoctor?.specialty || "Specialty pending"}</strong>
                 </div>
-                <div>
+                <div className="detail-list__wide">
                   <span>{t("reason")}</span>
                   <strong>{summarize(nextAppointment.reason)}</strong>
                 </div>
@@ -1313,39 +1312,6 @@ function AdminOverview({
             >
               View all profiles
             </button>
-          </div>
-        </section>
-
-        <section className="workspace-card">
-          <div className="workspace-card__header">
-            <div>
-              <p className="micro-label">{t("workspaceStatus")}</p>
-              <h3>{t("systemReadiness")}</h3>
-            </div>
-          </div>
-          <div className="status-grid">
-            <article className="status-card">
-              <span>{t("backendConnection")}</span>
-              <strong>{t("connected")}</strong>
-              <p>The frontend is currently operating against the live API workspace.</p>
-            </article>
-            <article className="status-card">
-              <span>{t("doctorDataset")}</span>
-              <strong>{doctors.length >= 80 ? t("seedTargetReached") : t("seedTargetPending")}</strong>
-              <p>
-                {doctors.length} doctors currently available for matching and booking
-                handoff.
-              </p>
-            </article>
-            <article className="status-card">
-              <span>{t("coverageReview")}</span>
-              <strong>{weakCoverage.length === 0 ? t("balanced") : t("needsFollowUp")}</strong>
-              <p>
-                {weakCoverage.length === 0
-                  ? "No required specialty is currently uncovered."
-                  : `Review these specialties next: ${weakCoverage.slice(0, 4).join(", ")}.`}
-              </p>
-            </article>
           </div>
         </section>
       </div>

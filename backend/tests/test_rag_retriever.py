@@ -62,6 +62,18 @@ def test_tfidf_retriever_chunks_include_metadata() -> None:
     assert first.text
 
 
+def test_tfidf_retriever_drops_zero_score_noise() -> None:
+    retriever = TfidfRetriever(
+        data_dir=_fixture_data_dir(),
+        max_features=1000,
+        ngram_range=(1, 2),
+    )
+
+    chunks = retriever.retrieve_chunks("zzzxxy unrelated nonsense", top_k=2)
+
+    assert chunks == []
+
+
 def test_missing_data_dir_falls_back_to_stub(monkeypatch, tmp_path) -> None:
     missing_dir = tmp_path / "missing_dataset"
     monkeypatch.setenv("RAG_RETRIEVER", "tfidf")

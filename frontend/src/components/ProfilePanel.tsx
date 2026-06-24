@@ -22,10 +22,17 @@ import {
 } from "../api/doctors";
 import {
   createPatientMedicalHistoryEntry,
+  extractPatientMedicalHistoryReport,
   listPatientMedicalHistory,
 } from "../api/patients";
 import { useLanguage } from "../i18n/useLanguage";
 import { parseEgyptianNationalId } from "../lib/egyptianNationalId";
+import {
+  ALEXANDRIA_AREAS,
+  composeResidenceLocation,
+  EGYPTIAN_GOVERNORATES,
+  splitResidenceLocation,
+} from "../lib/egyptianLocations";
 import {
   localizeAppointmentStatus,
   localizeSlotStatus,
@@ -37,6 +44,7 @@ import {
 } from "../lib/medicalSpecialties";
 import type { DashboardTab } from "./DashboardNav";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type ProfilePanelProps = {
   role: RoleType;
@@ -57,6 +65,23 @@ type PatientProfileFormState = Omit<PatientProfileUpsertDto, "sex"> & {
   sex: "" | PatientProfileUpsertDto["sex"];
 };
 
+type DoctorEditFormState = {
+  doctorId: number;
+  values: DoctorProfileUpsertDto;
+};
+
+type DoctorScheduleWorkspaceState = {
+  doctorId: number;
+  schedules: DoctorScheduleDto[];
+  slots: AppointmentSlotDto[];
+  loading: boolean;
+};
+
+type PatientHistoryState = {
+  patientId: number;
+  entries: PatientMedicalHistoryEntryResponseDto[];
+};
+
 const EMPTY_PATIENT_FORM: PatientProfileFormState = {
   full_name: "",
   age: 0,
@@ -70,6 +95,15 @@ const EMPTY_PATIENT_FORM: PatientProfileFormState = {
 
 const ADMIN_PROFILE_PAGE_SIZE = 8;
 const ADMIN_RELATED_RECORD_LIMIT = 5;
+const WEEKDAY_OPTIONS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
 
 const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
   doctor_clinic_id: null,
@@ -82,6 +116,33 @@ const EMPTY_SCHEDULE_FORM: DoctorScheduleCreateDto = {
   location_label: "",
   is_active: true,
 };
+
+function todayDateInputValue(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function toDoctorEditForm(doctor: DoctorProfileResponseDto): DoctorProfileUpsertDto {
+  return {
+    full_name: doctor.full_name,
+    specialty: doctor.specialty,
+    clinic: doctor.clinic,
+    area: doctor.area ?? "",
+    city: doctor.city ?? "",
+    consultation_fee: doctor.consultation_fee ?? null,
+    insurance_providers: doctor.insurance_providers ?? [],
+    payment_methods: doctor.payment_methods ?? [],
+    offers_telemedicine: doctor.offers_telemedicine ?? false,
+  };
+}
+
+function splitCommaList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 function formatDateTime(dateValue?: string | null): string {
   if (!dateValue) {
@@ -97,6 +158,26 @@ function formatDateTime(dateValue?: string | null): string {
   } catch {
     return dateValue;
   }
+}
+
+function weekdayFromDateInput(dateValue: string): string {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  if (!year || !month || !day) {
+    return "sunday";
+  }
+  return WEEKDAY_OPTIONS[new Date(year, month - 1, day).getDay()] ?? "sunday";
+}
+
+function describeScheduleRule(schedule: DoctorScheduleDto): string {
+  const timeRange = `${schedule.start_time.slice(0, 5)}-${schedule.end_time.slice(0, 5)}`;
+  if (
+    schedule.valid_from &&
+    schedule.valid_to &&
+    schedule.valid_from === schedule.valid_to
+  ) {
+    return `${schedule.valid_from} · ${timeRange}`;
+  }
+  return `${schedule.day_of_week} · ${timeRange}`;
 }
 
 function summarize(text?: string | null, fallback = "No summary available."): string {
@@ -131,15 +212,14 @@ function AdminOperationsPanel({
   const [patientPage, setPatientPage] = useState(1);
   const [doctorPage, setDoctorPage] = useState(1);
   const [doctorEditForm, setDoctorEditForm] =
-    useState<DoctorProfileUpsertDto | null>(null);
-  const [doctorSchedules, setDoctorSchedules] = useState<DoctorScheduleDto[]>([]);
-  const [doctorSlots, setDoctorSlots] = useState<AppointmentSlotDto[]>([]);
+    useState<DoctorEditFormState | null>(null);
+  const [doctorScheduleWorkspace, setDoctorScheduleWorkspace] =
+    useState<DoctorScheduleWorkspaceState | null>(null);
   const [scheduleForm, setScheduleForm] =
     useState<DoctorScheduleCreateDto>(EMPTY_SCHEDULE_FORM);
   const [doctorManagementMessage, setDoctorManagementMessage] = useState<
     string | null
   >(null);
-  const [doctorManagementLoading, setDoctorManagementLoading] = useState(false);
 
   const completedAppointments = appointments.filter(
     (appointment) =>
@@ -186,43 +266,52 @@ function AdminOperationsPanel({
   const doctorAppointments = selectedDoctor
     ? appointments.filter((a) => a.doctor_id === selectedDoctor.id)
     : [];
+  const selectedDoctorEditForm =
+    selectedDoctor && doctorEditForm?.doctorId === selectedDoctor.id
+      ? doctorEditForm.values
+      : selectedDoctor
+        ? toDoctorEditForm(selectedDoctor)
+        : null;
+  const doctorSchedules =
+    selectedDoctor && doctorScheduleWorkspace?.doctorId === selectedDoctor.id
+      ? doctorScheduleWorkspace.schedules
+      : [];
+  const doctorSlots =
+    selectedDoctor && doctorScheduleWorkspace?.doctorId === selectedDoctor.id
+      ? doctorScheduleWorkspace.slots
+      : [];
+  const doctorManagementLoading = selectedDoctor
+    ? !doctorScheduleWorkspace ||
+      doctorScheduleWorkspace.doctorId !== selectedDoctor.id ||
+      doctorScheduleWorkspace.loading
+    : false;
 
   useEffect(() => {
     if (!selectedDoctor) {
-      setDoctorEditForm(null);
-      setDoctorSchedules([]);
-      setDoctorSlots([]);
-      setDoctorManagementMessage(null);
       return;
     }
 
-    setDoctorEditForm({
-      full_name: selectedDoctor.full_name,
-      specialty: selectedDoctor.specialty,
-      clinic: selectedDoctor.clinic,
-      area: selectedDoctor.area ?? "",
-      city: selectedDoctor.city ?? "",
-    });
-    setScheduleForm({
-      ...EMPTY_SCHEDULE_FORM,
-      location_label: selectedDoctor.clinic,
-    });
-    setDoctorManagementLoading(true);
-    setDoctorManagementMessage(null);
     Promise.all([
       listDoctorSchedules(selectedDoctor.id),
       listDoctorSlots(selectedDoctor.id),
     ])
       .then(([schedules, slots]) => {
-        setDoctorSchedules(schedules);
-        setDoctorSlots(slots);
+        setDoctorScheduleWorkspace({
+          doctorId: selectedDoctor.id,
+          schedules,
+          slots,
+          loading: false,
+        });
       })
       .catch(() => {
-        setDoctorSchedules([]);
-        setDoctorSlots([]);
+        setDoctorScheduleWorkspace({
+          doctorId: selectedDoctor.id,
+          schedules: [],
+          slots: [],
+          loading: false,
+        });
         setDoctorManagementMessage("Could not load schedules or slots.");
-      })
-      .finally(() => setDoctorManagementLoading(false));
+      });
   }, [selectedDoctor]);
 
   async function refreshDoctorScheduleWorkspace(doctorId: number) {
@@ -230,28 +319,42 @@ function AdminOperationsPanel({
       listDoctorSchedules(doctorId),
       listDoctorSlots(doctorId),
     ]);
-    setDoctorSchedules(schedules);
-    setDoctorSlots(slots);
+    setDoctorScheduleWorkspace({
+      doctorId,
+      schedules,
+      slots,
+      loading: false,
+    });
   }
 
   async function submitDoctorAdminUpdate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedDoctor || !doctorEditForm) {
+    if (!selectedDoctor || !selectedDoctorEditForm) {
       return;
     }
-    setDoctorManagementLoading(true);
+    setDoctorScheduleWorkspace((current) => ({
+      doctorId: selectedDoctor.id,
+      schedules:
+        current?.doctorId === selectedDoctor.id ? current.schedules : doctorSchedules,
+      slots: current?.doctorId === selectedDoctor.id ? current.slots : doctorSlots,
+      loading: true,
+    }));
     setDoctorManagementMessage(null);
     try {
       await updateDoctorProfile(selectedDoctor.id, {
-        ...doctorEditForm,
-        area: doctorEditForm.area?.trim() || null,
-        city: doctorEditForm.city?.trim() || null,
+        ...selectedDoctorEditForm,
+        area: selectedDoctorEditForm.area?.trim() || null,
+        city: selectedDoctorEditForm.city?.trim() || null,
       });
       setDoctorManagementMessage("Doctor details saved.");
     } catch {
       setDoctorManagementMessage("Could not save doctor details.");
     } finally {
-      setDoctorManagementLoading(false);
+      setDoctorScheduleWorkspace((current) =>
+        current?.doctorId === selectedDoctor.id
+          ? { ...current, loading: false }
+          : current,
+      );
     }
   }
 
@@ -260,7 +363,13 @@ function AdminOperationsPanel({
     if (!selectedDoctor) {
       return;
     }
-    setDoctorManagementLoading(true);
+    setDoctorScheduleWorkspace((current) => ({
+      doctorId: selectedDoctor.id,
+      schedules:
+        current?.doctorId === selectedDoctor.id ? current.schedules : doctorSchedules,
+      slots: current?.doctorId === selectedDoctor.id ? current.slots : doctorSlots,
+      loading: true,
+    }));
     setDoctorManagementMessage(null);
     try {
       await createDoctorSchedule(selectedDoctor.id, {
@@ -276,7 +385,11 @@ function AdminOperationsPanel({
     } catch {
       setDoctorManagementMessage("Could not add schedule rule.");
     } finally {
-      setDoctorManagementLoading(false);
+      setDoctorScheduleWorkspace((current) =>
+        current?.doctorId === selectedDoctor.id
+          ? { ...current, loading: false }
+          : current,
+      );
     }
   }
 
@@ -284,7 +397,13 @@ function AdminOperationsPanel({
     if (!selectedDoctor) {
       return;
     }
-    setDoctorManagementLoading(true);
+    setDoctorScheduleWorkspace((current) => ({
+      doctorId: selectedDoctor.id,
+      schedules:
+        current?.doctorId === selectedDoctor.id ? current.schedules : doctorSchedules,
+      slots: current?.doctorId === selectedDoctor.id ? current.slots : doctorSlots,
+      loading: true,
+    }));
     setDoctorManagementMessage(null);
     try {
       await updateDoctorSchedule(selectedDoctor.id, schedule.id, {
@@ -305,7 +424,11 @@ function AdminOperationsPanel({
     } catch {
       setDoctorManagementMessage("Could not update schedule status.");
     } finally {
-      setDoctorManagementLoading(false);
+      setDoctorScheduleWorkspace((current) =>
+        current?.doctorId === selectedDoctor.id
+          ? { ...current, loading: false }
+          : current,
+      );
     }
   }
 
@@ -706,9 +829,23 @@ function AdminOperationsPanel({
                     <strong>{t("governoratePending")}</strong>
                     <span>{selectedDoctor.city || "Not specified"}</span>
                   </div>
+                  <div>
+                    <strong>Consultation fee</strong>
+                    <span>
+                      {selectedDoctor.consultation_fee != null
+                        ? `${selectedDoctor.consultation_fee} EGP`
+                        : "Not specified"}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Video visits</strong>
+                    <span>
+                      {selectedDoctor.offers_telemedicine ? "Available" : "Clinic only"}
+                    </span>
+                  </div>
                 </div>
 
-                {doctorEditForm ? (
+                {selectedDoctorEditForm ? (
                   <form
                     className="form-grid admin-management-panel"
                     onSubmit={submitDoctorAdminUpdate}
@@ -717,13 +854,15 @@ function AdminOperationsPanel({
                       <label htmlFor="admin-doctor-name">{t("fullName")}</label>
                       <input
                         id="admin-doctor-name"
-                        value={doctorEditForm.full_name}
+                        value={selectedDoctorEditForm.full_name}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, full_name: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              full_name: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -733,13 +872,15 @@ function AdminOperationsPanel({
                       </label>
                       <input
                         id="admin-doctor-specialty"
-                        value={doctorEditForm.specialty}
+                        value={selectedDoctorEditForm.specialty}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, specialty: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              specialty: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
@@ -749,44 +890,144 @@ function AdminOperationsPanel({
                       </label>
                       <input
                         id="admin-doctor-clinic"
-                        value={doctorEditForm.clinic}
+                        value={selectedDoctorEditForm.clinic}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, clinic: event.target.value }
-                              : current,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="admin-doctor-area">{t("area")}</label>
-                      <input
-                        id="admin-doctor-area"
-                        value={doctorEditForm.area ?? ""}
-                        onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, area: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              clinic: event.target.value,
+                            },
+                          })
                         }
                       />
                     </div>
                     <div className="field">
                       <label htmlFor="admin-doctor-city">{t("city")}</label>
-                      <input
+                      <CustomSelect
                         id="admin-doctor-city"
-                        value={doctorEditForm.city ?? ""}
+                        value={selectedDoctorEditForm.city ?? ""}
+                        onChange={(value) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              city: value,
+                              area:
+                                value === "Alexandria"
+                                  ? selectedDoctorEditForm.area
+                                  : "",
+                            },
+                          })
+                        }
+                        options={[
+                          { value: "", label: "Select governorate" },
+                          ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                            value: governorate,
+                            label: governorate,
+                          })),
+                        ]}
+                      />
+                    </div>
+                    {selectedDoctorEditForm.city === "Alexandria" ? (
+                      <div className="field">
+                        <label htmlFor="admin-doctor-area">{t("area")}</label>
+                        <CustomSelect
+                          id="admin-doctor-area"
+                          value={selectedDoctorEditForm.area ?? ""}
+                          onChange={(value) =>
+                            setDoctorEditForm({
+                              doctorId: selectedDoctor.id,
+                              values: {
+                                ...selectedDoctorEditForm,
+                                area: value,
+                              },
+                            })
+                          }
+                          options={[
+                            { value: "", label: "Select area" },
+                            ...ALEXANDRIA_AREAS.map((area) => ({
+                              value: area,
+                              label: area,
+                            })),
+                          ]}
+                        />
+                      </div>
+                    ) : null}
+                    <div className="field">
+                      <label htmlFor="admin-doctor-fee">Consultation fee</label>
+                      <input
+                        id="admin-doctor-fee"
+                        type="number"
+                        min="0"
+                        value={selectedDoctorEditForm.consultation_fee ?? ""}
                         onChange={(event) =>
-                          setDoctorEditForm((current) =>
-                            current
-                              ? { ...current, city: event.target.value }
-                              : current,
-                          )
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              consultation_fee: event.target.value
+                                ? Number(event.target.value)
+                                : null,
+                            },
+                          })
                         }
                       />
                     </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-insurance">
+                        Accepted insurance
+                      </label>
+                      <input
+                        id="admin-doctor-insurance"
+                        value={selectedDoctorEditForm.insurance_providers.join(", ")}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              insurance_providers: splitCommaList(
+                                event.target.value,
+                              ),
+                            },
+                          })
+                        }
+                        placeholder="Bupa, Allianz,..."
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="admin-doctor-payments">Payment methods</label>
+                      <input
+                        id="admin-doctor-payments"
+                        value={selectedDoctorEditForm.payment_methods.join(", ")}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              payment_methods: splitCommaList(event.target.value),
+                            },
+                          })
+                        }
+                        placeholder="Cash, Card, Insurance"
+                      />
+                    </div>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={selectedDoctorEditForm.offers_telemedicine}
+                        onChange={(event) =>
+                          setDoctorEditForm({
+                            doctorId: selectedDoctor.id,
+                            values: {
+                              ...selectedDoctorEditForm,
+                              offers_telemedicine: event.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>Offers video consultations</span>
+                    </label>
                     <button
                       type="submit"
                       className="button button--primary"
@@ -816,31 +1057,53 @@ function AdminOperationsPanel({
 
                   <form className="form-grid" onSubmit={submitDoctorSchedule}>
                     <div className="field">
-                      <label htmlFor="schedule-day">{t("dayOfWeek")}</label>
-                      <select
-                        id="schedule-day"
-                        value={scheduleForm.day_of_week}
-                        onChange={(event) =>
+                      <label htmlFor="schedule-specific-date">
+                        {t("specificDate")}
+                      </label>
+                      <input
+                        id="schedule-specific-date"
+                        type="date"
+                        min={todayDateInputValue()}
+                        value={
+                          scheduleForm.valid_from === scheduleForm.valid_to
+                            ? (scheduleForm.valid_from ?? "")
+                            : ""
+                        }
+                        onChange={(event) => {
+                          const value = event.target.value;
                           setScheduleForm((current) => ({
                             ...current,
-                            day_of_week: event.target.value,
+                            day_of_week: value
+                              ? weekdayFromDateInput(value)
+                              : current.day_of_week,
+                            valid_from: value || null,
+                            valid_to: value || null,
+                          }));
+                        }}
+                      />
+                      <small className="field__hint">
+                        {t("specificDateHint")}
+                      </small>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="schedule-day">{t("dayOfWeek")}</label>
+                      <CustomSelect
+                        id="schedule-day"
+                        value={scheduleForm.day_of_week}
+                        onChange={(value) =>
+                          setScheduleForm((current) => ({
+                            ...current,
+                            day_of_week: value,
                           }))
                         }
-                      >
-                        {[
-                          "sunday",
-                          "monday",
-                          "tuesday",
-                          "wednesday",
-                          "thursday",
-                          "friday",
-                          "saturday",
-                        ].map((day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
+                        disabled={Boolean(scheduleForm.valid_from)}
+                        options={[
+                          ...WEEKDAY_OPTIONS.map((day) => ({
+                            value: day,
+                            label: day,
+                          })),
+                        ]}
+                      />
                     </div>
                     <div className="field">
                       <label htmlFor="schedule-start">{t("startTime")}</label>
@@ -923,7 +1186,7 @@ function AdminOperationsPanel({
                               {schedule.day_of_week} · {schedule.start_time.slice(0, 5)}
                               -{schedule.end_time.slice(0, 5)}
                             </strong>
-                            <p>
+                            <p title={describeScheduleRule(schedule)}>
                               {schedule.slot_minutes} {t("minutes")} ·{" "}
                               {schedule.location_label ||
                                 selectedDoctor?.clinic ||
@@ -1181,6 +1444,10 @@ export default function ProfilePanel({
           clinic: doctorProfile.clinic,
           area: doctorProfile.area ?? "",
           city: doctorProfile.city ?? "",
+          consultation_fee: doctorProfile.consultation_fee ?? null,
+          insurance_providers: doctorProfile.insurance_providers ?? [],
+          payment_methods: doctorProfile.payment_methods ?? [],
+          offers_telemedicine: doctorProfile.offers_telemedicine ?? false,
         }
       : {
           full_name: "",
@@ -1188,7 +1455,21 @@ export default function ProfilePanel({
           clinic: "",
           area: "",
           city: "",
+          consultation_fee: null,
+          insurance_providers: [],
+          payment_methods: [],
+          offers_telemedicine: false,
         },
+  );
+  const [ownScheduleWorkspace, setOwnScheduleWorkspace] =
+    useState<DoctorScheduleWorkspaceState | null>(null);
+  const [ownScheduleForm, setOwnScheduleForm] =
+    useState<DoctorScheduleCreateDto>({
+      ...EMPTY_SCHEDULE_FORM,
+      location_label: doctorProfile?.clinic ?? "",
+    });
+  const [ownScheduleMessage, setOwnScheduleMessage] = useState<string | null>(
+    null,
   );
   const [chronicConditionsInput, setChronicConditionsInput] = useState(
     patientProfile?.chronic_conditions.join(", ") ?? "",
@@ -1197,14 +1478,19 @@ export default function ProfilePanel({
   const [historyTitle, setHistoryTitle] = useState("");
   const [historyNotes, setHistoryNotes] = useState("");
   const [historySaving, setHistorySaving] = useState(false);
+  const [historyReportLoading, setHistoryReportLoading] = useState(false);
   const [historyMessage, setHistoryMessage] = useState<string | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<
-    PatientMedicalHistoryEntryResponseDto[]
-  >([]);
+  const [patientHistory, setPatientHistory] =
+    useState<PatientHistoryState | null>(null);
+  const historyEntries =
+    role === "patient" &&
+    patientProfile &&
+    patientHistory?.patientId === patientProfile.id
+      ? patientHistory.entries
+      : [];
 
   useEffect(() => {
     if (role !== "patient" || !patientProfile) {
-      setHistoryEntries([]);
       return;
     }
 
@@ -1212,12 +1498,12 @@ export default function ProfilePanel({
     listPatientMedicalHistory(patientProfile.id)
       .then((entries) => {
         if (!cancelled) {
-          setHistoryEntries(entries);
+          setPatientHistory({ patientId: patientProfile.id, entries });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setHistoryEntries([]);
+          setPatientHistory({ patientId: patientProfile.id, entries: [] });
           setHistoryMessage("Could not load saved medical history entries.");
         }
       });
@@ -1226,6 +1512,55 @@ export default function ProfilePanel({
       cancelled = true;
     };
   }, [patientProfile, role]);
+
+  useEffect(() => {
+    if (role !== "doctor" || !doctorProfile) {
+      setOwnScheduleWorkspace(null);
+      return;
+    }
+
+    let cancelled = false;
+    setOwnScheduleWorkspace({
+      doctorId: doctorProfile.id,
+      schedules: [],
+      slots: [],
+      loading: true,
+    });
+    setOwnScheduleForm((current) => ({
+      ...current,
+      location_label: current.location_label || doctorProfile.clinic,
+    }));
+
+    Promise.all([
+      listDoctorSchedules(doctorProfile.id),
+      listDoctorSlots(doctorProfile.id),
+    ])
+      .then(([schedules, slots]) => {
+        if (!cancelled) {
+          setOwnScheduleWorkspace({
+            doctorId: doctorProfile.id,
+            schedules,
+            slots,
+            loading: false,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOwnScheduleWorkspace({
+            doctorId: doctorProfile.id,
+            schedules: [],
+            slots: [],
+            loading: false,
+          });
+          setOwnScheduleMessage("Could not load your schedule.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doctorProfile, role]);
 
   const parsedNationalId = useMemo(
     () =>
@@ -1269,7 +1604,105 @@ export default function ProfilePanel({
       specialty,
       area: doctorForm.area?.trim() || null,
       city: doctorForm.city?.trim() || null,
+      consultation_fee:
+        doctorForm.consultation_fee === null ||
+        doctorForm.consultation_fee === undefined
+          ? null
+          : Number(doctorForm.consultation_fee),
+      insurance_providers: doctorForm.insurance_providers,
+      payment_methods: doctorForm.payment_methods,
+      offers_telemedicine: doctorForm.offers_telemedicine,
     });
+  }
+
+  async function refreshOwnScheduleWorkspace(doctorId: number) {
+    const [schedules, slots] = await Promise.all([
+      listDoctorSchedules(doctorId),
+      listDoctorSlots(doctorId),
+    ]);
+    setOwnScheduleWorkspace({
+      doctorId,
+      schedules,
+      slots,
+      loading: false,
+    });
+  }
+
+  async function submitOwnDoctorSchedule(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!doctorProfile) {
+      return;
+    }
+    setOwnScheduleWorkspace((current) => ({
+      doctorId: doctorProfile.id,
+      schedules:
+        current?.doctorId === doctorProfile.id ? current.schedules : [],
+      slots: current?.doctorId === doctorProfile.id ? current.slots : [],
+      loading: true,
+    }));
+    setOwnScheduleMessage(null);
+    try {
+      await createDoctorSchedule(doctorProfile.id, {
+        ...ownScheduleForm,
+        location_label: ownScheduleForm.location_label || doctorProfile.clinic,
+      });
+      await refreshOwnScheduleWorkspace(doctorProfile.id);
+      setOwnScheduleForm({
+        ...EMPTY_SCHEDULE_FORM,
+        location_label: doctorProfile.clinic,
+      });
+      setOwnScheduleMessage("Availability added and appointment slots refreshed.");
+    } catch {
+      setOwnScheduleMessage("Could not add availability.");
+    } finally {
+      setOwnScheduleWorkspace((current) =>
+        current?.doctorId === doctorProfile.id
+          ? { ...current, loading: false }
+          : current,
+      );
+    }
+  }
+
+  async function toggleOwnSchedule(
+    schedule: DoctorScheduleDto,
+    isActive: boolean,
+  ) {
+    if (!doctorProfile) {
+      return;
+    }
+    setOwnScheduleWorkspace((current) => ({
+      doctorId: doctorProfile.id,
+      schedules:
+        current?.doctorId === doctorProfile.id ? current.schedules : [],
+      slots: current?.doctorId === doctorProfile.id ? current.slots : [],
+      loading: true,
+    }));
+    setOwnScheduleMessage(null);
+    try {
+      await updateDoctorSchedule(doctorProfile.id, schedule.id, {
+        doctor_clinic_id: schedule.doctor_clinic_id ?? null,
+        day_of_week: schedule.day_of_week,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        slot_minutes: schedule.slot_minutes,
+        valid_from: schedule.valid_from ?? null,
+        valid_to: schedule.valid_to ?? null,
+        location_label: schedule.location_label ?? doctorProfile.clinic,
+        is_active: isActive,
+      });
+      await refreshOwnScheduleWorkspace(doctorProfile.id);
+      setOwnScheduleMessage(
+        isActive ? "Availability activated." : "Availability deactivated.",
+      );
+    } catch {
+      setOwnScheduleMessage("Could not update availability.");
+    } finally {
+      setOwnScheduleWorkspace((current) =>
+        current?.doctorId === doctorProfile.id
+          ? { ...current, loading: false }
+          : current,
+      );
+    }
   }
 
   async function submitMedicalHistoryEntry(
@@ -1288,7 +1721,13 @@ export default function ProfilePanel({
         notes: historyNotes.trim() || null,
         status: "active",
       });
-      setHistoryEntries((current) => [created, ...current]);
+      setPatientHistory((current) => ({
+        patientId: patientProfile.id,
+        entries:
+          current?.patientId === patientProfile.id
+            ? [created, ...current.entries]
+            : [created],
+      }));
       setHistoryTitle("");
       setHistoryNotes("");
       setHistoryMessage("Medical history entry saved.");
@@ -1296,6 +1735,38 @@ export default function ProfilePanel({
       setHistoryMessage("Could not save medical history entry.");
     } finally {
       setHistorySaving(false);
+    }
+  }
+
+  async function handleMedicalHistoryReportUpload(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !patientProfile) {
+      return;
+    }
+
+    setHistoryReportLoading(true);
+    setHistoryMessage(null);
+    try {
+      const extracted = await extractPatientMedicalHistoryReport(
+        patientProfile.id,
+        file,
+      );
+      setHistoryCategory(extracted.category);
+      setHistoryTitle(extracted.title);
+      setHistoryNotes(extracted.notes);
+      setHistoryMessage(
+        extracted.warning ||
+          "Report read successfully. Review the fields before saving.",
+      );
+    } catch {
+      setHistoryMessage(
+        "Could not read this report. Try a text PDF, or enter the details manually.",
+      );
+    } finally {
+      setHistoryReportLoading(false);
     }
   }
 
@@ -1307,8 +1778,25 @@ export default function ProfilePanel({
     parsedNationalId?.governorate ??
     patientProfile?.inferred_governorate ??
     "Will be inferred from the national ID";
+  const patientResidence = splitResidenceLocation(
+    patientForm.current_governorate,
+  );
   const nationalIdHasValue = Boolean(patientForm.national_id?.trim());
   const nationalIdInvalid = nationalIdHasValue && !parsedNationalId;
+  const ownDoctorSchedules =
+    doctorProfile && ownScheduleWorkspace?.doctorId === doctorProfile.id
+      ? ownScheduleWorkspace.schedules
+      : [];
+  const ownDoctorSlots =
+    doctorProfile && ownScheduleWorkspace?.doctorId === doctorProfile.id
+      ? ownScheduleWorkspace.slots
+      : [];
+  const ownScheduleLoading = Boolean(
+    doctorProfile &&
+      (!ownScheduleWorkspace ||
+        ownScheduleWorkspace.doctorId !== doctorProfile.id ||
+        ownScheduleWorkspace.loading),
+  );
 
   if (role === "admin") {
     return (
@@ -1347,20 +1835,21 @@ export default function ProfilePanel({
 
             <div className="field">
               <label htmlFor="patient-sex">Gender</label>
-              <select
+              <CustomSelect
                 id="patient-sex"
                 value={patientForm.sex}
-                onChange={(event) =>
+                onChange={(value) =>
                   setPatientForm((current) => ({
                     ...current,
-                    sex: event.target.value as PatientProfileFormState["sex"],
+                    sex: value as PatientProfileFormState["sex"],
                   }))
                 }
-              >
-                <option value="">{t("selectGender")}</option>
-                <option value="Male">{t("male")}</option>
-                <option value="Female">{t("female")}</option>
-              </select>
+                options={[
+                  { value: "", label: t("selectGender") },
+                  { value: "Male", label: t("male") },
+                  { value: "Female", label: t("female") },
+                ]}
+              />
             </div>
 
             <div className="field">
@@ -1434,17 +1923,50 @@ export default function ProfilePanel({
               <label htmlFor="patient-current-governorate">
                 Current governorate / residence
               </label>
-              <input
+              <CustomSelect
                 id="patient-current-governorate"
-                value={patientForm.current_governorate ?? ""}
-                onChange={(event) =>
+                value={patientResidence.governorate}
+                onChange={(value) =>
                   setPatientForm((current) => ({
                     ...current,
-                    current_governorate: event.target.value,
+                    current_governorate: composeResidenceLocation(value, ""),
                   }))
                 }
+                options={[
+                  { value: "", label: "Select governorate" },
+                  ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                    value: governorate,
+                    label: governorate,
+                  })),
+                ]}
               />
             </div>
+
+            {patientResidence.governorate === "Alexandria" ? (
+              <div className="field">
+                <label htmlFor="patient-current-area">Area</label>
+                <CustomSelect
+                  id="patient-current-area"
+                  value={patientResidence.area}
+                  onChange={(value) =>
+                    setPatientForm((current) => ({
+                      ...current,
+                      current_governorate: composeResidenceLocation(
+                        "Alexandria",
+                        value,
+                      ),
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "Select area" },
+                    ...ALEXANDRIA_AREAS.map((area) => ({
+                      value: area,
+                      label: area,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
 
             <div className="field field--full">
               <label htmlFor="patient-conditions">{t("medicalHistory")}</label>
@@ -1514,22 +2036,41 @@ export default function ProfilePanel({
           description="Add structured details that should inform future triage, such as diagnosed conditions, injuries, surgeries, allergies, medications, hospitalizations, and family history."
         >
           <form className="form-grid" onSubmit={submitMedicalHistoryEntry}>
+            <div className="field field--full">
+              <label htmlFor="history-report-upload">
+                Doctor report photo or PDF
+              </label>
+              <input
+                id="history-report-upload"
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+                onChange={handleMedicalHistoryReportUpload}
+                disabled={historyReportLoading}
+              />
+              <small className="field__hint">
+                {historyReportLoading
+                  ? "Reading report..."
+                  : "Upload a text PDF, or an image if OCR is available, to draft the fields below."}
+              </small>
+            </div>
+
             <div className="field">
               <label htmlFor="history-category">{t("status")}</label>
-              <select
+              <CustomSelect
                 id="history-category"
                 value={historyCategory}
-                onChange={(event) => setHistoryCategory(event.target.value)}
-              >
-                <option value="diagnosed_condition">Diagnosed condition</option>
-                <option value="injury">Injury</option>
-                <option value="surgery">Surgery</option>
-                <option value="allergy">Allergy</option>
-                <option value="medication">Current medication</option>
-                <option value="hospitalization">Past hospitalization</option>
-                <option value="family_history">Family history</option>
-                <option value="note">Important note</option>
-              </select>
+                onChange={(value) => setHistoryCategory(value)}
+                options={[
+                  { value: "diagnosed_condition", label: "Diagnosed condition" },
+                  { value: "injury", label: "Injury" },
+                  { value: "surgery", label: "Surgery" },
+                  { value: "allergy", label: "Allergy" },
+                  { value: "medication", label: "Current medication" },
+                  { value: "hospitalization", label: "Past hospitalization" },
+                  { value: "family_history", label: "Family history" },
+                  { value: "note", label: "Important note" },
+                ]}
+              />
             </div>
 
             <div className="field">
@@ -1560,7 +2101,9 @@ export default function ProfilePanel({
             <button
               type="submit"
               className="button button--primary"
-              disabled={historySaving || !historyTitle.trim()}
+              disabled={
+                historySaving || historyReportLoading || !historyTitle.trim()
+              }
             >
               {historySaving ? "Saving..." : "Add history entry"}
             </button>
@@ -1617,76 +2160,100 @@ export default function ProfilePanel({
 
             <div className="field">
               <label htmlFor="doctor-primary-specialty">{t("primarySpecialty")}</label>
-              <select
+              <CustomSelect
                 id="doctor-primary-specialty"
                 value={doctorPrimarySpecialty}
-                onChange={(event) => {
-                  const nextPrimary = event.target.value;
-                  setDoctorPrimarySpecialty(nextPrimary);
+                onChange={(value) => {
+                  setDoctorPrimarySpecialty(value);
                   setDoctorSpecialtyScope("");
                   setDoctorForm((current) => ({
                     ...current,
-                    specialty: nextPrimary,
+                    specialty: value,
                   }));
                 }}
-              >
-                <option value="">{t("selectSpecialty")}</option>
-                {MEDICAL_SPECIALTY_GROUPS.map((option) => (
-                  <option key={option.label} value={option.label}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: t("selectSpecialty") },
+                  ...MEDICAL_SPECIALTY_GROUPS.map((option) => ({
+                    value: option.label,
+                    label: option.label,
+                  })),
+                ]}
+              />
             </div>
 
             <div className="field">
               <label htmlFor="doctor-specialty-scope">
                 Specific scope (optional)
               </label>
-              <input
+              <CustomSelect
                 id="doctor-specialty-scope"
-                list="doctor-specialty-scope-options"
                 value={doctorSpecialtyScope}
-                onChange={(event) => setDoctorSpecialtyScope(event.target.value)}
+                onChange={(value) => {
+                  setDoctorSpecialtyScope(value);
+                  setDoctorForm((current) => ({
+                    ...current,
+                    specialty: composeDoctorSpecialty(
+                      doctorPrimarySpecialty,
+                      value,
+                    ),
+                  }));
+                }}
+                options={[
+                  { value: "", label: "No specific scope" },
+                  ...specialtyOptions.map((scope) => ({
+                    value: scope,
+                    label: scope,
+                  })),
+                ]}
                 placeholder="Optional narrower scope"
                 disabled={!doctorPrimarySpecialty}
               />
-              <datalist id="doctor-specialty-scope-options">
-                {specialtyOptions.map((scope) => (
-                  <option key={scope} value={scope} />
-                ))}
-              </datalist>
             </div>
 
             <div className="field">
               <label htmlFor="doctor-city">{t("governoratePending")}</label>
-              <input
+              <CustomSelect
                 id="doctor-city"
                 value={doctorForm.city ?? ""}
-                onChange={(event) =>
+                onChange={(value) =>
                   setDoctorForm((current) => ({
                     ...current,
-                    city: event.target.value,
+                    city: value,
+                    area: value === "Alexandria" ? current.area : "",
                   }))
                 }
-                placeholder="Alexandria"
+                options={[
+                  { value: "", label: "Select governorate" },
+                  ...EGYPTIAN_GOVERNORATES.map((governorate) => ({
+                    value: governorate,
+                    label: governorate,
+                  })),
+                ]}
               />
             </div>
 
-            <div className="field">
-              <label htmlFor="doctor-area">Area</label>
-              <input
-                id="doctor-area"
-                value={doctorForm.area ?? ""}
-                onChange={(event) =>
-                  setDoctorForm((current) => ({
-                    ...current,
-                    area: event.target.value,
-                  }))
-                }
-                placeholder="Smouha"
-              />
-            </div>
+            {doctorForm.city === "Alexandria" ? (
+              <div className="field">
+                <label htmlFor="doctor-area">Area</label>
+                <CustomSelect
+                  id="doctor-area"
+                  value={doctorForm.area ?? ""}
+                  onChange={(value) =>
+                    setDoctorForm((current) => ({
+                      ...current,
+                      area: value,
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "Select area" },
+                    ...ALEXANDRIA_AREAS.map((area) => ({
+                      value: area,
+                      label: area,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
 
             <div className="field field--full">
               <label htmlFor="doctor-clinic">Clinic / hospital</label>
@@ -1701,6 +2268,69 @@ export default function ProfilePanel({
                 }
               />
             </div>
+
+            <div className="field">
+              <label htmlFor="doctor-consultation-fee">Consultation fee</label>
+              <input
+                id="doctor-consultation-fee"
+                type="number"
+                min="0"
+                value={doctorForm.consultation_fee ?? ""}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    consultation_fee: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  }))
+                }
+                placeholder="EGP"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-payment-methods">Payment methods</label>
+              <input
+                id="doctor-payment-methods"
+                value={doctorForm.payment_methods.join(", ")}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    payment_methods: splitCommaList(event.target.value),
+                  }))
+                }
+                placeholder="Cash, Card, Insurance"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="doctor-insurance">Accepted insurance</label>
+              <input
+                id="doctor-insurance"
+                value={doctorForm.insurance_providers.join(", ")}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    insurance_providers: splitCommaList(event.target.value),
+                  }))
+                }
+                placeholder="Bupa, Allianz,..."
+              />
+            </div>
+
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={doctorForm.offers_telemedicine}
+                onChange={(event) =>
+                  setDoctorForm((current) => ({
+                    ...current,
+                    offers_telemedicine: event.target.checked,
+                  }))
+                }
+              />
+              <span>Offer video consultations</span>
+            </label>
 
             <div className="callout field--full">
               <p className="micro-label">{t("connected")}</p>
@@ -1723,6 +2353,214 @@ export default function ProfilePanel({
               {savingDoctor ? "Saving..." : "Save doctor profile"}
             </button>
           </form>
+        </SectionPanel>
+      ) : null}
+
+      {role === "doctor" && doctorProfile ? (
+        <SectionPanel
+          eyebrow={t("doctorSchedules")}
+          title={t("scheduleManagement")}
+          description="Add your clinic availability so patients can book real confirmed appointment slots."
+        >
+          <div className="schedule-management-panel">
+            <div className="workspace-card__header">
+              <div>
+                <p className="micro-label">{t("availableSlots")}</p>
+                <h3>{doctorProfile.clinic}</h3>
+              </div>
+              <span className="badge">
+                {ownDoctorSlots.length} {t("availableSlots")}
+              </span>
+            </div>
+
+            {ownScheduleMessage ? (
+              <div className="notice">{ownScheduleMessage}</div>
+            ) : null}
+
+            <form className="form-grid" onSubmit={submitOwnDoctorSchedule}>
+              <div className="field">
+                <label htmlFor="own-schedule-specific-date">
+                  {t("specificDate")}
+                </label>
+                <input
+                  id="own-schedule-specific-date"
+                  type="date"
+                  min={todayDateInputValue()}
+                  value={
+                    ownScheduleForm.valid_from === ownScheduleForm.valid_to
+                      ? (ownScheduleForm.valid_from ?? "")
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      day_of_week: value
+                        ? weekdayFromDateInput(value)
+                        : current.day_of_week,
+                      valid_from: value || null,
+                      valid_to: value || null,
+                    }));
+                  }}
+                />
+                <small className="field__hint">{t("specificDateHint")}</small>
+              </div>
+              <div className="field">
+                <label htmlFor="own-schedule-day">{t("dayOfWeek")}</label>
+                <CustomSelect
+                  id="own-schedule-day"
+                  value={ownScheduleForm.day_of_week}
+                  onChange={(value) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      day_of_week: value,
+                    }))
+                  }
+                  disabled={Boolean(ownScheduleForm.valid_from)}
+                  options={WEEKDAY_OPTIONS.map((day) => ({
+                    value: day,
+                    label: day,
+                  }))}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-start">{t("startTime")}</label>
+                <input
+                  id="own-schedule-start"
+                  type="time"
+                  value={ownScheduleForm.start_time.slice(0, 5)}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      start_time: `${event.target.value}:00`,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-end">{t("endTime")}</label>
+                <input
+                  id="own-schedule-end"
+                  type="time"
+                  value={ownScheduleForm.end_time.slice(0, 5)}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      end_time: `${event.target.value}:00`,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-minutes">{t("slotMinutes")}</label>
+                <input
+                  id="own-schedule-minutes"
+                  type="number"
+                  min={5}
+                  max={240}
+                  value={ownScheduleForm.slot_minutes}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      slot_minutes: Number(event.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="own-schedule-location">{t("clinicReview")}</label>
+                <input
+                  id="own-schedule-location"
+                  value={ownScheduleForm.location_label ?? ""}
+                  onChange={(event) =>
+                    setOwnScheduleForm((current) => ({
+                      ...current,
+                      location_label: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="button button--primary"
+                disabled={ownScheduleLoading}
+              >
+                {ownScheduleLoading ? t("working") : t("addSchedule")}
+              </button>
+            </form>
+
+            <div className="activity-list compact">
+              {ownDoctorSchedules.length === 0 ? (
+                <div className="empty-state">{t("noSchedulesRecorded")}</div>
+              ) : (
+                ownDoctorSchedules.map((schedule) => (
+                  <article key={schedule.id} className="activity-item">
+                    <div>
+                      <strong>
+                        {schedule.day_of_week} ·{" "}
+                        {schedule.start_time.slice(0, 5)}-
+                        {schedule.end_time.slice(0, 5)}
+                      </strong>
+                      <p title={describeScheduleRule(schedule)}>
+                        {schedule.slot_minutes} {t("minutes")} ·{" "}
+                        {schedule.location_label || doctorProfile.clinic}
+                      </p>
+                    </div>
+                    <div className="activity-meta">
+                      <span
+                        className={`badge ${
+                          schedule.is_active
+                            ? "badge--status-approved"
+                            : "badge--status-rejected"
+                        }`}
+                      >
+                        {schedule.is_active ? t("active") : t("inactive")}
+                      </span>
+                      <button
+                        type="button"
+                        className="button button--ghost button--small"
+                        disabled={ownScheduleLoading}
+                        onClick={() =>
+                          toggleOwnSchedule(schedule, !schedule.is_active)
+                        }
+                      >
+                        {schedule.is_active ? t("deactivate") : t("activate")}
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+
+            <div className="activity-list compact">
+              <p className="micro-label">{t("availableSlots")}</p>
+              {ownDoctorSlots.length === 0 ? (
+                <div className="empty-state">{t("noSlotsAvailable")}</div>
+              ) : (
+                ownDoctorSlots.slice(0, 8).map((slot) => (
+                  <article key={slot.id} className="activity-item">
+                    <div>
+                      <strong>{formatDateTime(slot.start_at)}</strong>
+                      <p>
+                        {slot.clinic?.name || doctorProfile.clinic} ·{" "}
+                        {slot.clinic?.area || doctorProfile.area}
+                      </p>
+                    </div>
+                    <div className="activity-meta">
+                      <span className="badge">
+                        {localizeSlotStatus(slot.status, t)}
+                      </span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
         </SectionPanel>
       ) : null}
     </div>

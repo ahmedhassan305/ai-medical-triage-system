@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { useLanguage } from "../i18n/useLanguage";
+import { splitResidenceLocation } from "../lib/egyptianLocations";
 import { formatLocalizedDateTime } from "../lib/localizedDisplay";
 import type { DoctorSuggestionDto } from "../api/dto";
 
@@ -111,7 +112,16 @@ function getFallbackReasons(
     });
   }
 
-  if (patientLocation && [doctor.area, doctor.city].some((part) => part === patientLocation)) {
+  const residence = splitResidenceLocation(patientLocation);
+  if (
+    patientLocation &&
+    [doctor.area, doctor.city].some(
+      (part) =>
+        part === patientLocation ||
+        part === residence.governorate ||
+        part === residence.area,
+    )
+  ) {
     reasons.push({
       text: t("nearYourLocation"),
       icon: "📍",
@@ -225,6 +235,22 @@ export default function DoctorCard({
             : null}
         </p>
       ) : null}
+
+      <div className="doctor-card__service-strip">
+        {doctor.distance_km != null ? (
+          <span>{doctor.distance_km.toFixed(1)} km away</span>
+        ) : null}
+        {doctor.consultation_fee != null ? (
+          <span>{doctor.consultation_fee} EGP</span>
+        ) : null}
+        {doctor.offers_telemedicine ? <span>Video available</span> : null}
+        {(doctor.payment_methods ?? []).slice(0, 2).map((method) => (
+          <span key={`payment-${method}`}>{method}</span>
+        ))}
+        {(doctor.insurance_providers ?? []).slice(0, 2).map((provider) => (
+          <span key={`insurance-${provider}`}>{provider}</span>
+        ))}
+      </div>
 
       {reasons.length > 0 ? (
         <div className="doctor-card__why-recommended">

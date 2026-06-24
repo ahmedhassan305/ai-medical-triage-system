@@ -29,14 +29,21 @@ def get_current_user(
             detail="Invalid authentication credentials.",
         ) from exc
 
-    subject = payload.get("sub")
-    if not subject:
+    raw_subject = payload.get("sub")
+    if raw_subject is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials.",
         )
+    try:
+        subject = int(raw_subject)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials.",
+        ) from exc
 
-    user = db.query(User).filter(User.id == int(subject)).first()
+    user = db.query(User).filter(User.id == subject).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,9 +64,10 @@ def get_optional_current_user(
 def require_roles(*allowed_roles: str) -> Callable[[User], User]:
     def _dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in allowed_roles:
+            allowed = ", ".join(allowed_roles)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions.",
+                detail=f"This action is available only for: {allowed}.",
             )
         return current_user
 

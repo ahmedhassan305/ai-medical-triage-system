@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { RoleType } from "../api/dto";
 import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type PatientSexOption = "" | "Male" | "Female";
 
@@ -166,23 +167,23 @@ export default function AuthPanel({
             <>
               <div className="field">
                 <label htmlFor="auth-role">{t("accountType")}</label>
-                <select
+                <CustomSelect
                   id="auth-role"
                   value={role}
-                  onChange={(event) => {
-                    setRole(event.target.value as RoleType);
-                    // Clear patient fields when switching roles
-                    if (event.target.value !== "patient") {
+                  onChange={(value) => {
+                    setRole(value as RoleType);
+                    if (value !== "patient") {
                       setFullName("");
                       setNationalId("");
                       setSex("");
                     }
                   }}
-                >
-                  <option value="patient">{t("patient")}</option>
-                  <option value="doctor">{t("doctor")}</option>
-                  <option value="admin">Admin</option>
-                </select>
+                  options={[
+                    { value: "patient", label: t("patient") },
+                    { value: "doctor", label: t("doctor") },
+                    { value: "admin", label: "Admin" },
+                  ]}
+                />
               </div>
 
               {isPatientMode ? (
@@ -225,18 +226,18 @@ export default function AuthPanel({
 
                   <div className="field">
                     <label htmlFor="auth-sex">{t("gender")}</label>
-                    <select
+                    <CustomSelect
                       id="auth-sex"
                       value={sex}
-                      onChange={(event) =>
-                        setSex(event.target.value as PatientSexOption)
+                      onChange={(value) =>
+                        setSex(value as PatientSexOption)
                       }
-                      required
-                    >
-                      <option value="">{t("selectGender")}</option>
-                      <option value="Male">{t("male")}</option>
-                      <option value="Female">{t("female")}</option>
-                    </select>
+                      options={[
+                        { value: "", label: t("selectGender") },
+                        { value: "Male", label: t("male") },
+                        { value: "Female", label: t("female") },
+                      ]}
+                    />
                   </div>
                 </>
               ) : null}

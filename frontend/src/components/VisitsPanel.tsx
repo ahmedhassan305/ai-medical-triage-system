@@ -7,6 +7,7 @@ import type {
 } from "../api/dto";
 import { useLanguage } from "../i18n/useLanguage";
 import SectionPanel from "./SectionPanel";
+import CustomSelect from "./CustomSelect";
 
 type VisitsPanelProps = {
   role: RoleType;
@@ -105,22 +106,24 @@ export default function VisitsPanel({
               </div>
               <div className="field">
                 <label htmlFor="visit-patient">{t("patient")}</label>
-                <select
+                <CustomSelect
                   id="visit-patient"
-                  value={patientId}
-                  onChange={(event) => {
-                    const nextValue = event.target.value ? Number(event.target.value) : null;
+                  value={String(patientId)}
+                  onChange={(value) => {
+                    const nextValue = value ? Number(value) : null;
                     setPatientId(nextValue ?? "");
                     onSelectPatient(nextValue);
                   }}
-                >
-                  <option value="">{t("selectPatient")}</option>
-                  {filteredPatientOptions.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.national_id ? `${patient.national_id} — ${patient.full_name}` : `#${patient.id} — ${patient.full_name}`}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: t("selectPatient") },
+                    ...filteredPatientOptions.map((patient) => ({
+                      value: String(patient.id),
+                      label: patient.national_id
+                        ? `${patient.national_id} — ${patient.full_name}`
+                        : `#${patient.id} — ${patient.full_name}`,
+                    })),
+                  ]}
+                />
               </div>
 
               <div className="field field--full">
@@ -216,6 +219,21 @@ export default function VisitsPanel({
                         <strong>{t("notes")}:</strong> {visit.prescriptions}
                       </p>
                     ) : null}
+                    {visit.follow_up_due_on ? (
+                      <p>
+                        <strong>Follow-up due:</strong> {visit.follow_up_due_on}
+                      </p>
+                    ) : null}
+                    {visit.follow_up_recommendations?.length ? (
+                      <div className="callout callout--next-step">
+                        <p className="micro-label">Follow-up plan</p>
+                        <ul className="list">
+                          {visit.follow_up_recommendations.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </article>
                 ))
               )}
@@ -272,6 +290,21 @@ export default function VisitsPanel({
                       <strong>{t("notes")}:</strong> {visit.prescriptions}
                     </p>
                   ) : null}
+                  {visit.follow_up_due_on ? (
+                    <p>
+                      <strong>Follow-up due:</strong> {visit.follow_up_due_on}
+                    </p>
+                  ) : null}
+                  {visit.follow_up_recommendations?.length ? (
+                    <div className="callout callout--next-step">
+                      <p className="micro-label">Follow-up plan</p>
+                      <ul className="list">
+                        {visit.follow_up_recommendations.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </article>
               ))
             )}
@@ -281,4 +314,3 @@ export default function VisitsPanel({
     </SectionPanel>
   );
 }
-

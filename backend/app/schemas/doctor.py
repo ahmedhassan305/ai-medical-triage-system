@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DoctorProfileUpsert(BaseModel):
@@ -11,6 +11,21 @@ class DoctorProfileUpsert(BaseModel):
     clinic: str = Field(min_length=1, max_length=200)
     area: str | None = Field(default=None, max_length=120)
     city: str | None = Field(default=None, max_length=120)
+    consultation_fee: float | None = Field(default=None, ge=0)
+    insurance_providers: list[str] = Field(default_factory=list)
+    payment_methods: list[str] = Field(default_factory=list)
+    offers_telemedicine: bool = False
+
+    @field_validator("insurance_providers", "payment_methods", mode="before")
+    @classmethod
+    def _coerce_text_list(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return []
 
 
 class DoctorProfileResponse(DoctorProfileUpsert):
@@ -21,6 +36,25 @@ class DoctorProfileResponse(DoctorProfileUpsert):
     source_name: str | None = None
     source_url: str | None = None
     booking_url: str | None = None
+    rating: float | None = None
+    review_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class DoctorReviewCreate(BaseModel):
+    doctor_id: int
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=1000)
+    appointment_id: int | None = None
+    visit_id: int | None = None
+
+
+class DoctorReviewResponse(DoctorReviewCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
     created_at: datetime
     updated_at: datetime
 
